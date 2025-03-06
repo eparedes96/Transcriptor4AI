@@ -31,21 +31,16 @@ def transcribir_codigo(
     if patrones_incluir is None:
         patrones_incluir = [".*"]
     if patrones_excluir is None:
-        # Se incluyen ahora patrones para .git, .idea y _pycache_
+        # Se excluyen archivos __init__.py, .pyc y directorios ocultos o de configuración
         patrones_excluir = ["^__init__\\.py$", ".*\\.pyc$", "^(\\.git|\\.idea|_pycache_)", "^\\."]
 
-    # Normalizamos la ruta base
     ruta_base = os.path.abspath(ruta_base)
-
-    # Determinamos qué salidas debemos generar
     generar_tests = (modo == "solo_tests" or modo == "todo")
     generar_modulos = (modo == "solo_modulos" or modo == "todo")
 
-    # Nombres de salida (se crean en la carpeta de salida)
     path_tests = os.path.join(output_folder, f"{archivo_salida}_tests.txt")
     path_modulos = os.path.join(output_folder, f"{archivo_salida}_modulos.txt")
 
-    # Inicializamos archivos de salida (sobrescribiendo contenido previo)
     if generar_tests:
         with open(path_tests, "w", encoding="utf-8") as f:
             f.write("CODIGO:\n")
@@ -54,8 +49,6 @@ def transcribir_codigo(
             f.write("CODIGO:\n")
 
     def es_test(file_name):
-        # Se considera test si:
-        # - empieza con 'test_'  O  termina con '_test.py'
         pattern = r'^test_.*|.*_test\.py$'
         return re.match(pattern, file_name) is not None
 
@@ -65,22 +58,15 @@ def transcribir_codigo(
         for file_name in files:
             file_path = os.path.join(root, file_name)
             rel_path = os.path.relpath(file_path, ruta_base)
-
-            # 1) Comprobamos la extensión
             _, ext = os.path.splitext(file_name)
             if ext not in extensiones:
                 continue
-
-            # 2) Verificamos patrones de exclusión
             if any(re.match(px, file_name) for px in patrones_excluir):
                 continue
-
-            # 3) Verificamos patrones de inclusión
             if not any(re.match(pi, file_name) for pi in patrones_incluir):
                 continue
 
             archivo_es_test = es_test(file_name)
-
             if modo == "solo_tests" and not archivo_es_test:
                 continue
             if modo == "solo_modulos" and archivo_es_test:
@@ -97,7 +83,6 @@ def transcribir_codigo(
                     out.write("-" * 200 + "\n")
                     out.write(f"{rel_path}\n")
                     out.write(contenido + "\n")
-
             if not archivo_es_test and generar_modulos:
                 with open(path_modulos, "a", encoding="utf-8") as out:
                     out.write("-" * 200 + "\n")

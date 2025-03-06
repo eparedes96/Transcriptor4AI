@@ -17,7 +17,6 @@ def generar_arbol_directorios(
     """
     Genera una visualización jerárquica de archivos y, opcionalmente,
     muestra las funciones y clases definidas en cada archivo.
-
     Si 'guardar_archivo' no es cadena vacía, se guarda el árbol en ese archivo.
     """
     if extensiones is None:
@@ -55,17 +54,14 @@ def generar_arbol_directorios(
 
 def construir_estructura(ruta_base, modo, extensiones, patrones_incluir, patrones_excluir, es_test_func):
     estructura = {}
-
     for root, dirs, files in os.walk(ruta_base):
-        # Excluir directorios no deseados
+        # Excluir directorios que coincidan con los patrones de exclusión
         dirs[:] = [d for d in dirs if not any(re.match(px, d) for px in patrones_excluir)]
         dirs.sort()
         files.sort()
-
         rel_root = os.path.relpath(root, ruta_base)
         if rel_root == ".":
             rel_root = ""
-
         nodos_carpeta = estructura
         if rel_root:
             partes = rel_root.split(os.sep)
@@ -73,29 +69,21 @@ def construir_estructura(ruta_base, modo, extensiones, patrones_incluir, patrone
                 if p not in nodos_carpeta:
                     nodos_carpeta[p] = {}
                 nodos_carpeta = nodos_carpeta[p]
-
         for file_name in files:
             _, ext = os.path.splitext(file_name)
             if ext not in extensiones:
                 continue
-
             if any(re.match(px, file_name) for px in patrones_excluir):
                 continue
-
             if not any(re.match(pi, file_name) for pi in patrones_incluir):
                 continue
-
             archivo_es_test = es_test_func(file_name)
-
             if modo == "solo_tests" and not archivo_es_test:
                 continue
             if modo == "solo_modulos" and archivo_es_test:
                 continue
-
-            nodos_carpeta[file_name] = {
-                "tipo": "archivo"
-            }
-
+            # Se almacena la ruta completa del archivo en el nodo
+            nodos_carpeta[file_name] = {"tipo": "archivo", "path": os.path.join(root, file_name)}
     return estructura
 
 
@@ -105,35 +93,38 @@ def generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=Fal
     for i, entry in enumerate(entries):
         is_last = (i == total - 1)
         connector = "└── " if is_last else "├── "
-
         if isinstance(estructura[entry], dict):
             if "tipo" in estructura[entry] and estructura[entry]["tipo"] == "archivo":
                 lines.append(prefix + connector + entry)
-                if mostrar_funciones or mostrar_clases:
-                    info_fc = extraer_funciones_clases_dummy(entry, mostrar_funciones, mostrar_clases)
+                file_path = estructura[entry].get("path", "")
+                if file_path and (mostrar_funciones or mostrar_clases):
+                    info_fc = extraer_funciones_clases(file_path, mostrar_funciones, mostrar_clases)
                     for linea_info in info_fc:
                         lines.append(prefix + ("    " if is_last else "│   ") + linea_info)
             else:
                 lines.append(prefix + connector + entry)
                 new_prefix = prefix + ("    " if is_last else "│   ")
-                generar_estructura_texto(
-                    estructura[entry],
-                    lines,
-                    prefix=new_prefix,
-                    mostrar_funciones=mostrar_funciones,
-                    mostrar_clases=mostrar_clases,
-                    level=level + 1
-                )
+                generar_estructura_texto(estructura[entry], lines, prefix=new_prefix,
+                                         mostrar_funciones=mostrar_funciones, mostrar_clases=mostrar_clases,
+                                         level=level + 1)
         else:
             lines.append(prefix + connector + entry)
 
 
-def extraer_funciones_clases_dummy(nombre_archivo, mostrar_funciones, mostrar_clases):
+def extraer_funciones_clases(file_path, mostrar_funciones, mostrar_clases):
+    """
+    Usa el módulo ast para extraer definiciones de funciones y clases de nivel superior.
+    """
     resultados = []
-    if mostrar_funciones:
-        resultados.append("función_ejemplo_1()")
-        resultados.append("función_ejemplo_2()")
-    if mostrar_clases:
-        resultados.append("ClaseEjemplo1")
-        resultados.append("ClaseEjemplo2")
-    return [f"  -> {r}" for r in resultados] if resultados else []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            source = f.read()
+        tree = ast.parse(source, filename=file_path)
+        for node in tree.body:
+            if mostrar_funciones and isinstance(node, ast.FunctionDef):
+                resultados.append(f"Función: {node.name}()")
+            if mostrar_clases and isinstance(node, ast.ClassDef):
+                resultados.append(f"Clase: {node.name}")
+    except Exception as e:
+        resultados.append(f"Error al extraer: {e}")
+    return resultados

@@ -1,10 +1,10 @@
-# Transcriptor4AI_interface.py
+# main.py
 import os
 import json
 import PySimpleGUI as sg
 
-from code_transcriptor import transcribir_codigo
-from tree_generator import generar_arbol_directorios
+from transcriptor.code_transcriptor import transcribir_codigo
+from transcriptor.tree_generator import generar_arbol_directorios
 
 CONFIG_FILE = "config.json"
 

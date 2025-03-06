@@ -13,32 +13,28 @@ CONFIG_FILE = "config.json"
 def cargar_configuracion_por_defecto():
     """
     Retorna los valores por defecto de la configuración.
-    La ruta de carpeta es la del proyecto actual (la carpeta donde se encuentra este script).
+    La ruta de entrada es la del proyecto actual (la carpeta donde se encuentra este script).
+    La carpeta de salida por defecto se llama "transcripcion".
     """
     return {
-        "ruta_carpetas": os.path.dirname(os.path.abspath(__file__)),  # Ruta del proyecto actual
-        "modo_procesamiento": "todo",  # Valores posibles: todo, solo_modulos, solo_tests
-        "archivo_salida": "transcripcion",
+        "ruta_carpetas": os.path.dirname(os.path.abspath(__file__)),
+        "modo_procesamiento": "todo",  # Valores: todo, solo_modulos, solo_tests
+        "carpeta_salida": "transcripcion",
         "extensiones": [".py"],
         "patrones_incluir": [".*"],
-        "patrones_excluir": ["^__init__\\.py$", ".*\\.pyc$", "^\\."],
+        "patrones_excluir": ["^__init__\\.py$", ".*\\.pyc$", "^(\\.git|\\.idea|_pycache_)", "^\\."],
         "mostrar_funciones": False,
         "mostrar_clases": False,
-        "guardar_archivo_arbol": ""
+        "generar_arbol": False  # Si True, se generará el archivo txt del árbol
     }
 
 
 def cargar_configuracion():
-    """
-    Carga la configuración desde un archivo JSON si existe,
-    de lo contrario retorna la configuración por defecto.
-    """
     defaults = cargar_configuracion_por_defecto()
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # Mezclamos data con defaults para rellenar ausentes
             defaults.update(data)
         except:
             pass
@@ -46,24 +42,23 @@ def cargar_configuracion():
 
 
 def guardar_configuracion(config):
-    """
-    Guarda la configuración en un archivo JSON.
-    """
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
 
 
 def main():
-    sg.theme("SystemDefault")  # Escoge el tema que quieras
+    sg.theme("SystemDefault")
 
-    # Cargamos la configuración previa o la por defecto
     config = cargar_configuracion()
 
-    # Definimos el layout de la ventana
     layout = [
         [sg.Text("Ruta de la carpeta a procesar:"),
-         sg.Input(size=(40, 1), key="ruta_carpetas"),
-         sg.FolderBrowse("Explorar")],
+         sg.Input(default_text=config["ruta_carpetas"], size=(40, 1), key="ruta_carpetas"),
+         sg.Button("Explorar", key="btn_explorar")],
+
+        [sg.Text("Carpeta de salida:"),
+         sg.Input(default_text=config["carpeta_salida"], size=(40, 1), key="carpeta_salida"),
+         sg.Button("Examinar", key="btn_examinar")],
 
         [sg.Text("Modo de procesamiento:")],
         [sg.Radio("Todo (módulos + tests)", "RADIO1", key="modo_todo",
@@ -72,18 +67,18 @@ def main():
                   default=(config["modo_procesamiento"] == "solo_modulos")),
          sg.Radio("Solo Tests", "RADIO1", key="modo_tests", default=(config["modo_procesamiento"] == "solo_tests"))],
 
-        [sg.Text("Archivo de salida (prefijo para .txt):"), sg.Input(size=(40, 1), key="archivo_salida")],
+        [sg.Text("Extensiones (separadas por coma):"),
+         sg.Input(",".join(config["extensiones"]), size=(40, 1), key="extensiones")],
 
-        [sg.Text("Extensiones (separadas por coma):"), sg.Input(size=(40, 1), key="extensiones")],
+        [sg.Text("Patrones Incluir (lista separada por comas):"),
+         sg.Input(",".join(config["patrones_incluir"]), size=(40, 1), key="patrones_incluir")],
+        [sg.Text("Patrones Excluir (lista separada por comas):"),
+         sg.Input(",".join(config["patrones_excluir"]), size=(40, 1), key="patrones_excluir")],
 
-        [sg.Text("Patrones Incluir (lista separada por comas):"), sg.Input(size=(40, 1), key="patrones_incluir")],
-        [sg.Text("Patrones Excluir (lista separada por comas):"), sg.Input(size=(40, 1), key="patrones_excluir")],
+        [sg.Checkbox("Mostrar funciones", key="mostrar_funciones", default=config["mostrar_funciones"]),
+         sg.Checkbox("Mostrar clases", key="mostrar_clases", default=config["mostrar_clases"])],
 
-        [sg.Checkbox("Mostrar funciones", key="mostrar_funciones")],
-        [sg.Checkbox("Mostrar clases", key="mostrar_clases")],
-
-        [sg.Text("Guardar archivo árbol (opcional):"), sg.Input(size=(40, 1), key="guardar_archivo_arbol"),
-         sg.FileSaveAs("Examinar")],
+        [sg.Checkbox("Generar archivo de árbol", key="generar_arbol", default=config["generar_arbol"])],
 
         [sg.Button("Procesar", button_color=("white", "green")),
          sg.Button("Guardar Configuración"),
@@ -93,64 +88,81 @@ def main():
 
     window = sg.Window("Herramienta de Transcripción y Árbol de Directorios", layout, finalize=True)
 
-    # Inicializamos campos con la config actual
-    window["ruta_carpetas"].update(config["ruta_carpetas"])
-    window["archivo_salida"].update(config["archivo_salida"])
-    window["extensiones"].update(",".join(config["extensiones"]))
-    window["patrones_incluir"].update(",".join(config["patrones_incluir"]))
-    window["patrones_excluir"].update(",".join(config["patrones_excluir"]))
-    window["mostrar_funciones"].update(config["mostrar_funciones"])
-    window["mostrar_clases"].update(config["mostrar_clases"])
-    window["guardar_archivo_arbol"].update(config["guardar_archivo_arbol"])
-
     while True:
         event, values = window.read()
 
         if event in (sg.WIN_CLOSED, "Salir"):
             break
 
+        # Botón Explorar: usar ruta de "ruta_carpetas" como directorio inicial
+        if event == "btn_explorar":
+            initial = values["ruta_carpetas"] if values["ruta_carpetas"] else os.path.dirname(os.path.abspath(__file__))
+            folder = sg.popup_get_folder("Seleccione la carpeta a procesar", default_path=initial)
+            if folder:
+                window["ruta_carpetas"].update(folder)
+
+        # Botón Examinar: usar la ruta de "ruta_carpetas" como directorio inicial para la carpeta de salida
+        if event == "btn_examinar":
+            initial = values["ruta_carpetas"] if values["ruta_carpetas"] else os.path.dirname(os.path.abspath(__file__))
+            folder = sg.popup_get_folder("Seleccione la carpeta de salida", default_path=initial)
+            if folder:
+                window["carpeta_salida"].update(folder)
+
         if event == "Guardar Configuración":
-            # Actualizamos el dict config con los valores de la ventana
-            actualizar_config_desde_gui(config, values, window)
+            actualizar_config_desde_gui(config, values)
             guardar_configuracion(config)
             sg.popup("Configuración guardada en config.json")
 
         if event == "Resetear Configuración":
-            # Cargamos la configuración por defecto
             def_conf = cargar_configuracion_por_defecto()
-            # Actualizamos la ventana
             window["ruta_carpetas"].update(def_conf["ruta_carpetas"])
+            window["carpeta_salida"].update(def_conf["carpeta_salida"])
             window["modo_todo"].update(def_conf["modo_procesamiento"] == "todo")
             window["modo_modulos"].update(def_conf["modo_procesamiento"] == "solo_modulos")
             window["modo_tests"].update(def_conf["modo_procesamiento"] == "solo_tests")
-            window["archivo_salida"].update(def_conf["archivo_salida"])
             window["extensiones"].update(",".join(def_conf["extensiones"]))
             window["patrones_incluir"].update(",".join(def_conf["patrones_incluir"]))
             window["patrones_excluir"].update(",".join(def_conf["patrones_excluir"]))
             window["mostrar_funciones"].update(def_conf["mostrar_funciones"])
             window["mostrar_clases"].update(def_conf["mostrar_clases"])
-            window["guardar_archivo_arbol"].update(def_conf["guardar_archivo_arbol"])
-            # Actualizamos la configuración en memoria y la guardamos en el JSON
+            window["generar_arbol"].update(def_conf["generar_arbol"])
             config = def_conf
             guardar_configuracion(config)
             sg.popup("Se ha restaurado la configuración por defecto.")
 
         if event == "Procesar":
-            # 1) Actualizar config con datos de la ventana
-            actualizar_config_desde_gui(config, values, window)
+            actualizar_config_desde_gui(config, values)
 
-            # 2) Llamar al code_transcriptor para generar los .txt
+            # Determinar la carpeta de salida
+            salida_input = values["carpeta_salida"]
+            if not os.path.isabs(salida_input):
+                salida_input = os.path.join(os.path.dirname(__file__), salida_input)
+            if os.path.exists(salida_input):
+                resp = sg.popup_yes_no(
+                    f"La carpeta de salida\n{salida_input}\nya existe. ¿Desea continuar y sobrescribir archivos?")
+                if resp != "Yes":
+                    continue
+            else:
+                os.makedirs(salida_input)
+
             modo_final = config["modo_procesamiento"]
+            # Llamamos al transcriptor usando la carpeta de salida
             transcribir_codigo(
                 ruta_base=config["ruta_carpetas"],
                 modo=modo_final,
                 extensiones=config["extensiones"],
                 patrones_incluir=config["patrones_incluir"],
                 patrones_excluir=config["patrones_excluir"],
-                archivo_salida=config["archivo_salida"]
+                archivo_salida=config["carpeta_salida"],
+                output_folder=salida_input
             )
 
-            # 3) Generar el árbol de directorios en consola (y opcionalmente a archivo)
+            # Si se ha seleccionado generar el archivo de árbol, se guarda con la nomenclatura <carpeta_salida>_arbol.txt
+            if config["generar_arbol"]:
+                ruta_arbol = os.path.join(salida_input, f"{config['carpeta_salida']}_arbol.txt")
+            else:
+                ruta_arbol = ""
+
             generar_arbol_directorios(
                 ruta_base=config["ruta_carpetas"],
                 modo=modo_final,
@@ -159,20 +171,18 @@ def main():
                 patrones_excluir=config["patrones_excluir"],
                 mostrar_funciones=config["mostrar_funciones"],
                 mostrar_clases=config["mostrar_clases"],
-                guardar_archivo=config["guardar_archivo_arbol"]
+                guardar_archivo=ruta_arbol
             )
 
             sg.popup(
-                "¡Procesamiento finalizado!\nRevisa la consola para ver el árbol.\nSe han generado (según el modo) los archivos de transcripción de código.")
+                "¡Procesamiento finalizado!\nRevisa la consola para ver el árbol.\nSe han generado los archivos en la carpeta de salida.")
 
     window.close()
 
 
-def actualizar_config_desde_gui(config, values, window):
-    """
-    Toma los valores del formulario y los vuelca en el dict config.
-    """
+def actualizar_config_desde_gui(config, values):
     config["ruta_carpetas"] = values["ruta_carpetas"]
+    config["carpeta_salida"] = values["carpeta_salida"]
 
     if values["modo_todo"]:
         config["modo_procesamiento"] = "todo"
@@ -181,15 +191,13 @@ def actualizar_config_desde_gui(config, values, window):
     elif values["modo_tests"]:
         config["modo_procesamiento"] = "solo_tests"
 
-    config["archivo_salida"] = values["archivo_salida"]
-    # Convertimos las listas separadas por comas a lista real
     config["extensiones"] = [ext.strip() for ext in values["extensiones"].split(",") if ext.strip()]
     config["patrones_incluir"] = [pat.strip() for pat in values["patrones_incluir"].split(",") if pat.strip()]
     config["patrones_excluir"] = [pat.strip() for pat in values["patrones_excluir"].split(",") if pat.strip()]
 
     config["mostrar_funciones"] = values["mostrar_funciones"]
     config["mostrar_clases"] = values["mostrar_clases"]
-    config["guardar_archivo_arbol"] = values["guardar_archivo_arbol"]
+    config["generar_arbol"] = values["generar_arbol"]
 
 
 if __name__ == "__main__":

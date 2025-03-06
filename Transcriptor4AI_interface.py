@@ -1,4 +1,4 @@
-# main.py
+# Transcriptor4AI_interface.py
 import os
 import json
 import PySimpleGUI as sg

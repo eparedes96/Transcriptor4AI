@@ -1,42 +1,64 @@
 # src/transcriptor4ai/logging.py
 from __future__ import annotations
 
+"""
+Centralized logging configuration for Transcriptor4AI.
+
+Design goals:
+- Entrypoint-owned: only CLI/GUI call configure_logging().
+- Idempotent: avoid duplicated handlers across re-entrancy/tests.
+- Fail-safe: logging must never break the main flow.
+- GUI-friendly: default rotating log file in an OS-appropriate location.
+"""
+
 import logging
 import os
 import sys
 from dataclasses import dataclass
+from logging.handlers import RotatingFileHandler
 from typing import Optional
 
 
 # =============================================================================
-# Modelo de configuración de logging
+# Configuration model
 # =============================================================================
 
 @dataclass(frozen=True)
 class LoggingConfig:
     """
-    Configuración simple y estable para centralizar logging.
+    Stable logging configuration.
 
     - level: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL"
-    - log_file: ruta a archivo (opcional). Si se define, añade FileHandler.
-    - console: si True, añade StreamHandler (stderr).
-    - fmt: formato del log (opcional).
+    - console: enable stderr console output
+    - log_file: file path (optional). When provided, a rotating file handler is used.
+    - max_bytes / backup_count: rotation parameters for file logging
+    - console_fmt / file_fmt: formats for console and file
+    - datefmt: timestamp format for file logs
     """
     level: str = "INFO"
-    log_file: Optional[str] = None
     console: bool = True
-    fmt: str = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    log_file: Optional[str] = None
+
+    max_bytes: int = 2 * 1024 * 1024  # 2 MB
+    backup_count: int = 3
+
+    console_fmt: str = "%(levelname)s | %(message)s"
+    file_fmt: str = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    datefmt: str = "%Y-%m-%d %H:%M:%S"
 
 
 # =============================================================================
-# Helpers internos
+# Internal state and helpers
 # =============================================================================
+
+_CONFIGURED_FLAG_ATTR = "_transcriptor4ai_configured"
+_HANDLER_TAG_ATTR = "_transcriptor4ai_handler"
 
 _LEVEL_MAP = {
     "DEBUG": logging.DEBUG,
     "INFO": logging.INFO,
     "WARNING": logging.WARNING,
-    "WARN": logging.WARNING,  # tolerancia
+    "WARN": logging.WARNING,  # tolerance
     "ERROR": logging.ERROR,
     "CRITICAL": logging.CRITICAL,
 }
@@ -45,7 +67,7 @@ _LEVEL_MAP = {
 def _parse_level(level: str) -> int:
     if not level:
         return logging.INFO
-    return _LEVEL_MAP.get(level.strip().upper(), logging.INFO)
+    return _LEVEL_MAP.get(str(level).strip().upper(), logging.INFO)
 
 
 def _ensure_parent_dir(path: str) -> None:
@@ -54,84 +76,190 @@ def _ensure_parent_dir(path: str) -> None:
         os.makedirs(parent, exist_ok=True)
 
 
-def _safe_add_file_handler(
-    logger: logging.Logger,
+def _tag_handler(handler: logging.Handler) -> None:
+    try:
+        setattr(handler, _HANDLER_TAG_ATTR, True)
+    except Exception:
+        pass
+
+
+def _is_our_handler(handler: logging.Handler) -> bool:
+    return bool(getattr(handler, _HANDLER_TAG_ATTR, False))
+
+
+def _remove_our_handlers(root: logging.Logger) -> None:
+    for h in list(root.handlers):
+        if _is_our_handler(h):
+            root.removeHandler(h)
+            try:
+                h.close()
+            except Exception:
+                pass
+
+
+def _add_console_handler(
+    root: logging.Logger,
+    level_int: int,
+    formatter: logging.Formatter,
+) -> None:
+    sh = logging.StreamHandler(sys.stderr)
+    sh.setLevel(level_int)
+    sh.setFormatter(formatter)
+    _tag_handler(sh)
+    root.addHandler(sh)
+
+
+def _safe_add_rotating_file_handler(
+    root: logging.Logger,
     log_file: str,
-    fmt: logging.Formatter,
-    level: int,
+    level_int: int,
+    formatter: logging.Formatter,
+    max_bytes: int,
+    backup_count: int,
 ) -> None:
     """
-    Intenta añadir FileHandler. Si falla, no rompe la app: cae a consola.
+    Attempt to add a rotating file handler. If it fails, fall back to stderr.
+
+    This function must never raise.
     """
     try:
         _ensure_parent_dir(log_file)
-        fh = logging.FileHandler(log_file, encoding="utf-8")
-        fh.setLevel(level)
-        fh.setFormatter(fmt)
-        logger.addHandler(fh)
-    except OSError:
-        sh = logging.StreamHandler(sys.stderr)
-        sh.setLevel(level)
-        sh.setFormatter(fmt)
-        logger.addHandler(sh)
-        logger.warning("No se pudo escribir el log en archivo; se usa consola. log_file=%s", log_file)
+        fh = RotatingFileHandler(
+            log_file,
+            maxBytes=int(max_bytes),
+            backupCount=int(backup_count),
+            encoding="utf-8",
+        )
+        fh.setLevel(level_int)
+        fh.setFormatter(formatter)
+        _tag_handler(fh)
+        root.addHandler(fh)
+    except Exception:
+        fallback_fmt = logging.Formatter("%(levelname)s | %(message)s")
+        _add_console_handler(root, level_int, fallback_fmt)
+        root.warning(
+            "Failed to initialize file logging; falling back to console. log_file=%s",
+            log_file,
+        )
 
 
 # =============================================================================
-# API pública
+# Public API
 # =============================================================================
+
+def get_default_gui_log_path(
+    app_name: str = "Transcriptor4AI",
+    file_name: str = "transcriptor4ai.log",
+) -> str:
+    """
+    Return a default GUI log path.
+
+    Windows: %LOCALAPPDATA%\\<app_name>\\logs\\<file_name>
+    Fallback: ~/.transcriptor4ai/logs/<file_name>
+    """
+    try:
+        if os.name == "nt":
+            base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+            if base:
+                return os.path.join(base, app_name, "logs", file_name)
+    except Exception:
+        pass
+
+    # Cross-platform fallback
+    home = os.path.expanduser("~")
+    return os.path.join(home, ".transcriptor4ai", "logs", file_name)
+
 
 def build_config_from_dict(d: dict) -> LoggingConfig:
     """
-    Construye LoggingConfig desde dict (típicamente config.json).
+    Build LoggingConfig from a dict (e.g. config.json).
 
-    Se aceptan claves esperables (tolerante a faltantes):
-      - logging_level (str)
-      - logging_file (str)
-      - logging_console (bool)
-
-    Nota: si tu config actual no tiene estas claves, esto no rompe nada.
+    Accepted keys (tolerant):
+      - logging_level / log_level
+      - logging_console
+      - logging_file / log_file
     """
     level = str(d.get("logging_level") or d.get("log_level") or "INFO")
-    log_file = d.get("logging_file") or d.get("log_file") or None
     console = bool(d.get("logging_console", True))
-    return LoggingConfig(level=level, log_file=log_file, console=console)
+    log_file = d.get("logging_file") or d.get("log_file") or None
+    return LoggingConfig(level=level, console=console, log_file=log_file)
 
 
-def configure_logging(cfg: LoggingConfig) -> logging.Logger:
+def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Logger:
     """
-    Configura el root logger de forma idempotente (sin duplicar handlers).
+    Configure the root logger in an idempotent way.
 
-    - Limpia handlers existentes del root logger para evitar duplicados (útil en CLI/tests).
-    - Añade StreamHandler (stderr) y/o FileHandler si aplica.
-    - Devuelve el root logger.
+    Behavior:
+    - If already configured by Transcriptor4AI and force=False: no-op.
+    - Otherwise: remove only handlers previously added by Transcriptor4AI and
+      (re)apply config.
+    - Never raises.
+
+    Note:
+    - This is meant to be called ONLY from entrypoints (CLI/GUI).
+    - Core/services should call get_logger(__name__) only.
     """
     root = logging.getLogger()
-    level_int = _parse_level(cfg.level)
-    root.setLevel(level_int)
 
-    # Evitar logs duplicados en re-entradas
-    for h in list(root.handlers):
-        root.removeHandler(h)
+    try:
+        already = bool(getattr(root, _CONFIGURED_FLAG_ATTR, False))
+        if already and not force:
+            return root
 
-    formatter = logging.Formatter(cfg.fmt)
+        level_int = _parse_level(cfg.level)
+        root.setLevel(level_int)
 
-    # Consola
-    if cfg.console:
-        sh = logging.StreamHandler(sys.stderr)
-        sh.setLevel(level_int)
-        sh.setFormatter(formatter)
-        root.addHandler(sh)
+        # Remove only our handlers to avoid breaking external logging setup.
+        _remove_our_handlers(root)
 
-    # Archivo
-    if cfg.log_file:
-        _safe_add_file_handler(root, cfg.log_file, formatter, level_int)
+        # Prepare formatters
+        console_formatter = logging.Formatter(cfg.console_fmt)
+        file_formatter = logging.Formatter(cfg.file_fmt, datefmt=cfg.datefmt)
 
-    return root
+        # Console
+        if cfg.console:
+            _add_console_handler(root, level_int, console_formatter)
+
+        # File (rotating)
+        if cfg.log_file:
+            _safe_add_rotating_file_handler(
+                root=root,
+                log_file=cfg.log_file,
+                level_int=level_int,
+                formatter=file_formatter,
+                max_bytes=cfg.max_bytes,
+                backup_count=cfg.backup_count,
+            )
+
+        try:
+            setattr(root, _CONFIGURED_FLAG_ATTR, True)
+        except Exception:
+            pass
+
+        return root
+
+    except Exception:
+        try:
+            fallback = logging.getLogger()
+            fallback.setLevel(logging.INFO)
+            _remove_our_handlers(fallback)
+            _add_console_handler(
+                fallback,
+                logging.INFO,
+                logging.Formatter("%(levelname)s | %(message)s"),
+            )
+            try:
+                setattr(fallback, _CONFIGURED_FLAG_ATTR, True)
+            except Exception:
+                pass
+            fallback.warning("Logging configuration failed; using emergency console logger.")
+            return fallback
+        except Exception:
+            return root
 
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Conveniencia: obtener logger nombrado.
+    Convenience helper to obtain a named logger.
     """
     return logging.getLogger(name)

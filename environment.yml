@@ -1,0 +1,8 @@
+﻿name: Transcriptor4AI
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - pytest
+  - pysimplegui

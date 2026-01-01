@@ -104,6 +104,18 @@ def _run(
     )
 
 
+def _separator_lines(text: str) -> list[str]:
+    """
+    Extract exact separator lines (lines made only of '-') from text.
+    This avoids substring pitfalls (e.g., 200 dashes contain 199 as substring).
+    """
+    out: list[str] = []
+    for line in text.splitlines():
+        if line and set(line) == {"-"}:
+            out.append(line)
+    return out
+
+
 # -----------------------------------------------------------------------------
 # File selection / filtering
 # -----------------------------------------------------------------------------
@@ -242,7 +254,6 @@ def test_output_has_header_and_separator_and_relpath(tmp_path):
     assert text.startswith("CODIGO:\n")
     assert ("-" * 200 + "\n") in text
 
-    # rel paths should appear (root file and nested)
     assert "\na.py\n" in text
     assert "\npkg{}c.py\n".format(os.sep) in text or "\npkg/c.py\n" in text
 
@@ -255,8 +266,9 @@ def test_output_separator_is_200_dashes(tmp_path):
     _run(base, out, prefix="fmt2")
     text = _read_text(out / "fmt2_modulos.txt")
 
-    assert ("-" * 200 + "\n") in text
-    assert ("-" * 199 + "\n") not in text
+    seps = _separator_lines(text)
+    assert any(len(s) == 200 for s in seps)
+    assert not any(len(s) == 199 for s in seps)
 
 
 def test_output_content_newlines_are_normalized(tmp_path):
@@ -268,7 +280,6 @@ def test_output_content_newlines_are_normalized(tmp_path):
     _run(base, out, prefix="fmt3")
 
     text = _read_text(out / "fmt3_modulos.txt")
-    # Ensure at least one newline at the end and no crash; exact policy is minimal here
     assert text.endswith("\n")
 
 
@@ -299,7 +310,6 @@ def test_read_oserror_is_logged_and_counted(monkeypatch, tmp_path):
     real_open = builtins.open
 
     def selective_open(path, *args, **kwargs):
-        # Fail reading a specific file
         if str(path).endswith(os.path.join("", "a.py")) and "r" in (args[0] if args else kwargs.get("mode", "r")):
             raise OSError("blocked")
         return real_open(path, *args, **kwargs)
@@ -357,7 +367,6 @@ def test_write_oserror_is_logged_and_counted(monkeypatch, tmp_path):
     real_open = builtins.open
 
     def selective_open(path, *args, **kwargs):
-        # Fail appending to modules output
         if str(path).endswith("e4_modulos.txt") and "a" in (args[0] if args else kwargs.get("mode", "")):
             raise OSError("cannot write")
         return real_open(path, *args, **kwargs)

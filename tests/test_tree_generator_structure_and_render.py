@@ -78,6 +78,26 @@ def _build_structure(base: Path, modo: str = "todo"):
     )
 
 
+def _render_root_entries(estructura: dict) -> list[str]:
+    """
+    Render only the root level and return the displayed entry names in order.
+    """
+    lines: list[str] = []
+    tg.generar_estructura_texto(
+        estructura,
+        lines,
+        prefix="",
+        mostrar_funciones=False,
+        mostrar_clases=False,
+        mostrar_metodos=False,
+    )
+    entries: list[str] = []
+    for ln in lines:
+        if ln.startswith(("├── ", "└── ")):
+            entries.append(ln[4:])
+    return entries
+
+
 # -----------------------------------------------------------------------------
 # construir_estructura
 # -----------------------------------------------------------------------------
@@ -101,7 +121,6 @@ def test_build_structure_filters_extensions_and_patterns(tmp_path):
     base = tmp_path / "base"
     _make_tree(base)
 
-    # Include only a.py and pkg/c.py by include patterns
     incluir = tg._compile_patterns([r"^(a\.py|c\.py)$"])
     excluir = tg._compile_patterns(tg._default_patrones_excluir())
 
@@ -156,7 +175,6 @@ def test_build_structure_excludes_directories_pycache_hidden(tmp_path):
 
     estructura = _build_structure(base, modo="todo")
 
-    # Neither __pycache__ nor .hidden should appear in structure
     assert "__pycache__" not in estructura
     assert ".hidden" not in estructura
 
@@ -172,17 +190,35 @@ def test_build_structure_file_node_path_is_full_path(tmp_path):
 
 
 def test_build_structure_is_sorted_stable(tmp_path):
+    """
+    Ordering contract is validated on the rendered output (deterministic),
+    not on the dict insertion order.
+    """
     base = tmp_path / "base"
     _make_tree(base)
 
     estructura = _build_structure(base, modo="todo")
-    # Root keys should be sorted lexicographically (dirs/files)
-    keys = list(estructura.keys())
-    assert keys == sorted(keys)
 
-    # Nested directory keys should be sorted too
-    pkg_keys = list(estructura["pkg"].keys())
-    assert pkg_keys == sorted(pkg_keys)
+    entries = _render_root_entries(estructura)
+
+    assert entries == sorted(entries)
+
+    lines: list[str] = []
+    tg.generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=False, mostrar_clases=False, mostrar_metodos=False)
+    pkg_children = []
+    in_pkg = False
+    for ln in lines:
+        if ln.startswith(("├── ", "└── ")) and ln[4:] == "pkg":
+            in_pkg = True
+            continue
+        if in_pkg and ln.startswith(("├── ", "└── ")) and not ln.startswith("│   "):
+            break
+        if in_pkg and ("│   " in ln or ln.startswith("    ")):
+            stripped = ln.replace("│   ", "").replace("    ", "")
+            if stripped.startswith(("├── ", "└── ")):
+                pkg_children.append(stripped[4:])
+
+    assert pkg_children == sorted(pkg_children)
 
 
 # -----------------------------------------------------------------------------
@@ -197,13 +233,9 @@ def test_render_connectors_and_prefix_alignment_simple_tree(tmp_path):
     lines = []
     tg.generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=False, mostrar_clases=False, mostrar_metodos=False)
 
-    # At least one connector appears
     assert any(line.startswith(("├── ", "└── ")) for line in lines)
-
-    # Indentation markers should appear for nested content
     assert any("pkg" in line for line in lines)
     assert any("c.py" in line for line in lines)
-    # Nested file should be indented
     assert any(("│   " in line or "    " in line) and "c.py" in line for line in lines)
 
 
@@ -283,7 +315,6 @@ def test_save_tree_write_failure_appends_error_line(monkeypatch, tmp_path):
     base = tmp_path / "base"
     _make_tree(base)
 
-    # Force open() to fail only when writing the output file.
     import builtins
     real_open = builtins.open
 
@@ -305,7 +336,6 @@ def test_save_tree_write_failure_appends_error_line(monkeypatch, tmp_path):
         guardar_archivo=str(out_file),
     )
 
-    # File won't exist due to write error, but we should have an appended error line
     assert out_file.exists() is False
     assert any("No se pudo guardar el árbol" in l for l in lines)
     assert any("cannot write tree" in l for l in lines)

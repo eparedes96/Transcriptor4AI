@@ -2,32 +2,44 @@ from __future__ import annotations
 
 from typing import List
 
-from transcriptor4ai.tree.models import Tree, FileNode
-from transcriptor4ai.tree.ast_symbols import extraer_funciones_clases
+from transcriptor4ai.tree.ast_symbols import extract_definitions
+from transcriptor4ai.tree.models import FileNode, Tree
 
 
 # -----------------------------------------------------------------------------
-# Render del árbol
+# Tree Rendering Logic
 # -----------------------------------------------------------------------------
 def generar_estructura_texto(
-    estructura: Tree,
-    lines: List[str],
-    prefix: str = "",
-    mostrar_funciones: bool = False,
-    mostrar_clases: bool = False,
-    mostrar_metodos: bool = False,
+        estructura: Tree,
+        lines: List[str],
+        prefix: str = "",
+        mostrar_funciones: bool = False,
+        mostrar_clases: bool = False,
+        mostrar_metodos: bool = False,
 ) -> None:
+    """
+    Recursive function to render the dictionary structure into a list of strings.
+
+    Args:
+        estructura: The Tree dictionary (current level).
+        lines: The accumulator list for output lines.
+        prefix: Indentation string for the current level.
+        mostrar_funciones: Flag to enable function parsing.
+        mostrar_clases: Flag to enable class parsing.
+        mostrar_metodos: Flag to enable method parsing.
+    """
     entries = sorted(estructura.keys())
     total = len(entries)
 
     for i, entry in enumerate(entries):
         is_last = (i == total - 1)
         connector = "└── " if is_last else "├── "
+
         node = estructura[entry]
 
-        # Directorio (subárbol)
+        # Case A: Directory (Sub-tree)
         if isinstance(node, dict):
-            lines.append(prefix + connector + entry)
+            lines.append(f"{prefix}{connector}{entry}")
             new_prefix = prefix + ("    " if is_last else "│   ")
             generar_estructura_texto(
                 node,
@@ -39,22 +51,25 @@ def generar_estructura_texto(
             )
             continue
 
-        # Archivo
+        # Case B: File (Leaf)
         if isinstance(node, FileNode):
-            lines.append(prefix + connector + entry)
+            lines.append(f"{prefix}{connector}{entry}")
 
+            # Optional AST analysis
             if mostrar_funciones or mostrar_clases or mostrar_metodos:
-                info_fc = extraer_funciones_clases(
+                symbols = extract_definitions(
                     node.path,
-                    mostrar_funciones=mostrar_funciones,
-                    mostrar_clases=mostrar_clases,
-                    mostrar_metodos=mostrar_metodos,
+                    show_functions=mostrar_funciones,
+                    show_classes=mostrar_classes,
+                    show_methods=mostrar_metodos,
                 )
+
+                # Indent symbols below the file
                 child_prefix = prefix + ("    " if is_last else "│   ")
-                for linea_info in info_fc:
-                    lines.append(child_prefix + linea_info)
+                for item in symbols:
+                    lines.append(f"{child_prefix}{item}")
 
             continue
 
-        # Fallback
-        lines.append(prefix + connector + entry)
+        # Case C: Fallback (Should not happen with correct types)
+        lines.append(f"{prefix}{connector}{entry}")

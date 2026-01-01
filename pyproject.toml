@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transcriptor4ai"
+version = "0.1.0"
+description = "Tool for transcribing codebases and generating directory trees for AI context injection."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [
+  { name = "Enrique Paredes", email = "eparedesbalen@gmail.com" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "PySimpleGUI",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/transcriptor4ai"
+
+[project.scripts]
+# Installs command 'transcriptor-cli' pointing to the CLI module
+transcriptor-cli = "transcriptor4ai.cli:main"
+# Installs command 'transcriptor-gui' pointing to the GUI module
+transcriptor-gui = "transcriptor4ai.ui.gui:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["transcriptor4ai*"]

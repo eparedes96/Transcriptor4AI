@@ -1,28 +1,34 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+from typing import Any, Dict
 
 from transcriptor4ai.paths import DEFAULT_OUTPUT_SUBDIR
 
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
-# Constantes
+# Constants
 # -----------------------------------------------------------------------------
 CONFIG_FILE = "config.json"
 DEFAULT_OUTPUT_PREFIX = "transcripcion"
 
-# -----------------------------------------------------------------------------
-# Configuración: defaults / load / save
-# -----------------------------------------------------------------------------
-def cargar_configuracion_por_defecto() -> dict:
-    """
-    Valores por defecto.
 
-    - ruta_carpetas: carpeta a procesar (por defecto: directorio donde está main.py/app_core.py)
-    - output_base_dir: ruta base de salida (por defecto: igual que ruta_carpetas)
-    - output_subdir_name: subcarpeta que se crea dentro de output_base_dir
-    - output_prefix: prefijo para los archivos generados
+# -----------------------------------------------------------------------------
+# Configuration: Load / Save / Defaults
+# -----------------------------------------------------------------------------
+def cargar_configuracion_por_defecto() -> Dict[str, Any]:
+    """
+    Return the default configuration dictionary.
+
+    Defaults:
+    - ruta_carpetas: Current working directory.
+    - output_base_dir: Current working directory.
+    - output_subdir_name: 'transcript'.
+    - processing mode: 'todo' (all).
+    - exclusions: Common noise files (__init__.py, .git, __pycache__).
     """
     base = os.getcwd()
     return {
@@ -30,7 +36,7 @@ def cargar_configuracion_por_defecto() -> dict:
         "output_base_dir": base,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": DEFAULT_OUTPUT_PREFIX,
-        "modo_procesamiento": "todo",  # Posibles: all, solo_modulos, solo_tests
+        "modo_procesamiento": "todo",  # Options: todo, solo_modulos, solo_tests
         "extensiones": [".py"],
         "patrones_incluir": [".*"],
         "patrones_excluir": [
@@ -48,10 +54,10 @@ def cargar_configuracion_por_defecto() -> dict:
     }
 
 
-def cargar_configuracion() -> dict:
+def cargar_configuracion() -> Dict[str, Any]:
     """
-    Carga config.json si existe y hace merge sobre defaults.
-    Si hay error de parseo, devuelve defaults.
+    Load 'config.json' if it exists and merge with defaults.
+    Returns defaults if the file is missing or invalid.
     """
     defaults = cargar_configuracion_por_defecto()
     if os.path.exists(CONFIG_FILE):
@@ -60,15 +66,23 @@ def cargar_configuracion() -> dict:
                 data = json.load(f)
             if isinstance(data, dict):
                 defaults.update(data)
-        except Exception:
-            pass
+                logger.debug(f"Configuration loaded from {CONFIG_FILE}")
+            else:
+                logger.warning(f"Invalid config file format in {CONFIG_FILE}. Using defaults.")
+        except Exception as e:
+            logger.warning(f"Failed to load {CONFIG_FILE}: {e}. Using defaults.")
     return defaults
 
 
-def guardar_configuracion(config: dict) -> None:
+def guardar_configuracion(config: Dict[str, Any]) -> None:
     """
-    Guarda config.json.
-    Lanza excepción si falla (para que el caller decida cómo informar).
+    Save the configuration to 'config.json'.
+    Raises OSError if writing fails.
     """
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=4)
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        logger.info(f"Configuration saved to {CONFIG_FILE}")
+    except OSError as e:
+        logger.error(f"Failed to save configuration: {e}")
+        raise

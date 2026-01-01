@@ -1,15 +1,6 @@
-# src/transcriptor4ai/pipeline.py
-# -----------------------------------------------------------------------------
-# Orquestador (sin UI) que:
-# - Normaliza/valida config (diccionario)
-# - Resuelve rutas finales de entrada/salida
-# - Detecta sobrescrituras potenciales (lista de ficheros existentes)
-# - Ejecuta: transcribir_codigo + generar_arbol_directorios (opcional)
-# - Devuelve un resultado agregado pensado para GUI/CLI
-# -----------------------------------------------------------------------------
-
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -18,55 +9,56 @@ from transcriptor4ai.config import (
     DEFAULT_OUTPUT_PREFIX,
     cargar_configuracion_por_defecto,
 )
-from transcriptor4ai.paths import (
-    DEFAULT_OUTPUT_SUBDIR,
-    normalizar_dir,
-    ruta_salida_real,
-    archivos_destino,
-    existen_ficheros_destino,
-)
 from transcriptor4ai.filtering import (
     default_extensiones,
-    default_patrones_incluir,
     default_patrones_excluir,
+    default_patrones_incluir,
+)
+from transcriptor4ai.paths import (
+    DEFAULT_OUTPUT_SUBDIR,
+    archivos_destino,
+    existen_ficheros_destino,
+    normalizar_dir,
+    ruta_salida_real,
 )
 from transcriptor4ai.transcription.service import transcribir_codigo
 from transcriptor4ai.tree.service import generar_arbol_directorios
 
+logger = logging.getLogger(__name__)
+
 
 # -----------------------------------------------------------------------------
-# Modelos de resultado
+# Results Models
 # -----------------------------------------------------------------------------
-
 @dataclass(frozen=True)
 class PipelineResult:
+    """Aggregated result of the pipeline execution."""
     ok: bool
     error: str
 
-    # Entradas normalizadas
+    # Normalized Inputs
     ruta_base: str
     output_base_dir: str
     output_subdir_name: str
     output_prefix: str
     modo: str
 
-    # Salidas
+    # Output Paths
     salida_real: str
     existentes: List[str]
 
-    # Resultados parciales
+    # Partial Results
     res_transcripcion: Dict[str, Any]
     res_arbol_lines: List[str]
     ruta_arbol: str
 
-    # Resumen
+    # Summary
     resumen: Dict[str, Any]
 
 
 # -----------------------------------------------------------------------------
-# Helpers de normalización/contratos
+# Normalization Helpers (Internal)
 # -----------------------------------------------------------------------------
-
 def _ensure_list(value: Any, fallback: List[str]) -> List[str]:
     if value is None:
         return list(fallback)
@@ -94,21 +86,21 @@ def _ensure_bool(value: Any, fallback: bool) -> bool:
 
 def _normalize_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Normaliza un dict de configuración sin cambiar el "contrato" externo:
-    sigue siendo dict y tolera valores None / strings.
+    Internal normalization to ensure the pipeline is safe even if called
+    without external validation.
     """
     defaults = cargar_configuracion_por_defecto()
     cfg: Dict[str, Any] = dict(defaults)
     if isinstance(config, dict):
         cfg.update(config)
 
-    # Modo
+    # Mode
     modo = (cfg.get("modo_procesamiento") or "todo").strip()
     if modo not in ("todo", "solo_modulos", "solo_tests"):
         modo = "todo"
     cfg["modo_procesamiento"] = modo
 
-    # Listas
+    # Lists
     cfg["extensiones"] = _ensure_list(cfg.get("extensiones"), default_extensiones())
     cfg["patrones_incluir"] = _ensure_list(cfg.get("patrones_incluir"), default_patrones_incluir())
     cfg["patrones_excluir"] = _ensure_list(cfg.get("patrones_excluir"), default_patrones_excluir())
@@ -121,7 +113,7 @@ def _normalize_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     cfg["mostrar_clases"] = _ensure_bool(cfg.get("mostrar_clases"), False)
     cfg["mostrar_metodos"] = _ensure_bool(cfg.get("mostrar_metodos"), False)
 
-    # Strings esenciales
+    # Strings
     cfg["output_subdir_name"] = (cfg.get("output_subdir_name") or DEFAULT_OUTPUT_SUBDIR).strip() or DEFAULT_OUTPUT_SUBDIR
     cfg["output_prefix"] = (cfg.get("output_prefix") or DEFAULT_OUTPUT_PREFIX).strip() or DEFAULT_OUTPUT_PREFIX
 
@@ -129,57 +121,43 @@ def _normalize_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # -----------------------------------------------------------------------------
-# API pública
+# Public API
 # -----------------------------------------------------------------------------
-
 def run_pipeline(
     config: Optional[Dict[str, Any]],
     *,
     overwrite: bool = False,
     dry_run: bool = False,
+    tree_output_path: Optional[str] = None,
 ) -> PipelineResult:
     """
-    Ejecuta el pipeline completo (sin UI).
+    Execute the full transcription pipeline.
 
     Args:
-        config: dict con claves compatibles con la app (se normaliza).
-        overwrite: si False y hay ficheros existentes, NO ejecuta y devuelve ok=False.
-        dry_run: si True, calcula rutas/existentes pero NO ejecuta escritura.
+        config: Configuration dictionary (will be normalized).
+        overwrite: If False, aborts if output files already exist.
+        dry_run: If True, calculates paths but does not write files.
+        tree_output_path: Optional override for tree output file.
 
     Returns:
-        PipelineResult: resultado agregado.
+        PipelineResult object.
     """
+    logger.info("Pipeline execution started.")
+
     # -------------------------------------------------------------------------
-    # 1) Normalizar config
+    # 1) Config & Path Normalization
     # -------------------------------------------------------------------------
     cfg = _normalize_config(config)
 
-    # -------------------------------------------------------------------------
-    # 2) Normalizar rutas de entrada/salida
-    # -------------------------------------------------------------------------
-    fallback_base = os.path.dirname(os.path.abspath(__file__))
+    fallback_base = os.getcwd()
     ruta_base = normalizar_dir(cfg.get("ruta_carpetas", ""), fallback_base)
 
-    if not os.path.exists(ruta_base):
+    if not os.path.exists(ruta_base) or not os.path.isdir(ruta_base):
+        msg = f"Invalid input directory: {ruta_base}"
+        logger.error(msg)
         return PipelineResult(
             ok=False,
-            error=f"La ruta a procesar no existe: {ruta_base}",
-            ruta_base=ruta_base,
-            output_base_dir="",
-            output_subdir_name=cfg["output_subdir_name"],
-            output_prefix=cfg["output_prefix"],
-            modo=cfg["modo_procesamiento"],
-            salida_real="",
-            existentes=[],
-            res_transcripcion={},
-            res_arbol_lines=[],
-            ruta_arbol="",
-            resumen={},
-        )
-    if not os.path.isdir(ruta_base):
-        return PipelineResult(
-            ok=False,
-            error=f"La ruta a procesar no es un directorio: {ruta_base}",
+            error=msg,
             ruta_base=ruta_base,
             output_base_dir="",
             output_subdir_name=cfg["output_subdir_name"],
@@ -197,15 +175,17 @@ def run_pipeline(
     salida_real = ruta_salida_real(output_base_dir, cfg["output_subdir_name"])
 
     # -------------------------------------------------------------------------
-    # 3) Detectar sobrescrituras
+    # 2) Overwrite Check
     # -------------------------------------------------------------------------
     nombres = archivos_destino(cfg["output_prefix"], cfg["modo_procesamiento"], bool(cfg.get("generar_arbol")))
     existentes = existen_ficheros_destino(salida_real, nombres)
 
     if existentes and not overwrite and not dry_run:
+        msg = "Existing files detected and overwrite=False. Aborting."
+        logger.warning(f"{msg} Files: {existentes}")
         return PipelineResult(
             ok=False,
-            error="Hay ficheros existentes en la salida. Ejecución cancelada (overwrite=False).",
+            error=msg,
             ruta_base=ruta_base,
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
@@ -225,6 +205,7 @@ def run_pipeline(
         )
 
     if dry_run:
+        logger.info("Dry run active. No files will be written.")
         return PipelineResult(
             ok=True,
             error="",
@@ -246,14 +227,16 @@ def run_pipeline(
         )
 
     # -------------------------------------------------------------------------
-    # 4) Asegurar carpeta de salida
+    # 3) Ensure Output Directory
     # -------------------------------------------------------------------------
     try:
         os.makedirs(salida_real, exist_ok=True)
     except OSError as e:
+        msg = f"Failed to create output directory {salida_real}: {e}"
+        logger.critical(msg)
         return PipelineResult(
             ok=False,
-            error=f"No se pudo crear la carpeta de salida: {salida_real}. Error: {e}",
+            error=msg,
             ruta_base=ruta_base,
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
@@ -268,7 +251,7 @@ def run_pipeline(
         )
 
     # -------------------------------------------------------------------------
-    # 5) Transcripción
+    # 4) Execute Transcription Service
     # -------------------------------------------------------------------------
     res_trans = transcribir_codigo(
         ruta_base=ruta_base,
@@ -282,9 +265,11 @@ def run_pipeline(
     )
 
     if not res_trans.get("ok"):
+        err_msg = res_trans.get('error', 'Unknown transcription error')
+        logger.error(f"Transcription failed: {err_msg}")
         return PipelineResult(
             ok=False,
-            error=f"Fallo en transcripción: {res_trans.get('error', 'Error desconocido')}",
+            error=f"Transcription failure: {err_msg}",
             ruta_base=ruta_base,
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
@@ -299,12 +284,13 @@ def run_pipeline(
         )
 
     # -------------------------------------------------------------------------
-    # 6) Árbol
+    # 5) Execute Tree Service
     # -------------------------------------------------------------------------
     arbol_lines: List[str] = []
     ruta_arbol = ""
     if cfg.get("generar_arbol"):
-        ruta_arbol = os.path.join(salida_real, f"{cfg['output_prefix']}_arbol.txt")
+        # Prioritize override path (CLI flag), else default
+        ruta_arbol = tree_output_path if tree_output_path else os.path.join(salida_real, f"{cfg['output_prefix']}_arbol.txt")
 
         arbol_lines = generar_arbol_directorios(
             ruta_base=ruta_base,
@@ -320,7 +306,7 @@ def run_pipeline(
         )
 
     # -------------------------------------------------------------------------
-    # 7) Resumen agregado
+    # 6) Final Summary
     # -------------------------------------------------------------------------
     cont = res_trans.get("contadores", {}) or {}
     resumen = {
@@ -337,6 +323,7 @@ def run_pipeline(
         "existing_files_before_run": list(existentes),
     }
 
+    logger.info("Pipeline completed successfully.")
     return PipelineResult(
         ok=True,
         error="",

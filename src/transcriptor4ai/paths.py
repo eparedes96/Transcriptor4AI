@@ -1,34 +1,38 @@
 from __future__ import annotations
 
 import os
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 # -----------------------------------------------------------------------------
-# Constantes
+# Constants
 # -----------------------------------------------------------------------------
 DEFAULT_OUTPUT_SUBDIR = "transcript"
 
+
 # -----------------------------------------------------------------------------
-# Helpers de rutas / sobrescritura
+# Path Helpers
 # -----------------------------------------------------------------------------
-def normalizar_dir(path: str, fallback: str) -> str:
+def normalizar_dir(path: Optional[str], fallback: str) -> str:
     """
-    Normaliza una ruta de directorio:
-    - Si está vacía, usa fallback.
-    - Expande ~ y variables.
-    - Convierte a absoluta.
+    Normalize a directory path.
+    - Handles None/Empty by using fallback.
+    - Expands user (~/) and environment variables.
+    - Returns an absolute path.
     """
     p = (path or "").strip()
     if not p:
         p = fallback
-    p = os.path.expandvars(os.path.expanduser(p))
-    return os.path.abspath(p)
+    try:
+        p = os.path.expandvars(os.path.expanduser(p))
+        return os.path.abspath(p)
+    except Exception:
+        # In case of rare path errors, return absolute fallback
+        return os.path.abspath(fallback)
 
 
 def ruta_salida_real(output_base_dir: str, output_subdir_name: str) -> str:
     """
-    Ruta donde se generan los ficheros:
-      output_base_dir / output_subdir_name
+    Construct the final output path: output_base_dir / output_subdir_name
     """
     sub = (output_subdir_name or "").strip() or DEFAULT_OUTPUT_SUBDIR
     return os.path.join(output_base_dir, sub)
@@ -36,7 +40,8 @@ def ruta_salida_real(output_base_dir: str, output_subdir_name: str) -> str:
 
 def archivos_destino(prefix: str, modo: str, incluir_arbol: bool) -> List[str]:
     """
-    Devuelve los nombres de ficheros (no rutas) que se generarían.
+    Return a list of potential output filenames based on configuration.
+    Does not return full paths, only filenames.
     """
     files: List[str] = []
     if modo in ("todo", "solo_tests"):
@@ -50,7 +55,8 @@ def archivos_destino(prefix: str, modo: str, incluir_arbol: bool) -> List[str]:
 
 def existen_ficheros_destino(output_dir: str, names: List[str]) -> List[str]:
     """
-    Devuelve la lista de ficheros (rutas completas) que YA existen.
+    Check which files from the list already exist in the output directory.
+    Returns a list of full paths of existing files.
     """
     existentes: List[str] = []
     for n in names:
@@ -61,6 +67,10 @@ def existen_ficheros_destino(output_dir: str, names: List[str]) -> List[str]:
 
 
 def _safe_mkdir(path: str) -> Tuple[bool, Optional[str]]:
+    """
+    Attempt to create a directory (idempotent).
+    Returns (Success, ErrorMessage).
+    """
     try:
         os.makedirs(path, exist_ok=True)
         return True, None

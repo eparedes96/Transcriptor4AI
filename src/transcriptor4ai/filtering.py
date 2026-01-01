@@ -4,7 +4,7 @@ import re
 from typing import List
 
 # -----------------------------------------------------------------------------
-# Configuración por defecto y utilidades
+# Default Filters & Helpers
 # -----------------------------------------------------------------------------
 def default_extensiones() -> List[str]:
     return [".py"]
@@ -16,15 +16,13 @@ def default_patrones_incluir() -> List[str]:
 
 def default_patrones_excluir() -> List[str]:
     """
-    Nota: estos patrones se aplican con re.match (desde el inicio del string).
+    Default exclusion patterns (applied via re.match).
 
-    - Archivos:
+    Excludes:
       - __init__.py
-      - *.pyc
-    - Directorios:
-      - __pycache__
-      - .git, .idea
-      - cualquier cosa que empiece por "."
+      - Compiled files (*.pyc)
+      - Directories: __pycache__, .git, .idea
+      - Hidden files (starting with .)
     """
     return [
         r"^__init__\.py$",
@@ -35,6 +33,7 @@ def default_patrones_excluir() -> List[str]:
 
 
 def compile_patterns(patterns: List[str]) -> List[re.Pattern]:
+    """Compile a list of regex strings into Pattern objects."""
     compiled: List[re.Pattern] = []
     for p in patterns:
         try:
@@ -45,10 +44,12 @@ def compile_patterns(patterns: List[str]) -> List[re.Pattern]:
 
 
 def matches_any(name: str, compiled_patterns: List[re.Pattern]) -> bool:
+    """Return True if 'name' matches ANY of the provided patterns."""
     return any(rx.match(name) for rx in compiled_patterns)
 
 
 def matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
+    """Return True if 'name' matches inclusion patterns (or if list is empty/permissive)."""
     if not include_patterns:
         return False
     return any(rx.match(name) for rx in include_patterns)
@@ -56,20 +57,7 @@ def matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
 
 def es_test(file_name: str) -> bool:
     """
-    Detecta ficheros de test tipo:
-      - test_algo.py
-      - algo_test.py
+    Detect if a file is a test file based on naming convention.
+    Matches: test_*.py or *_test.py
     """
     return re.match(r"^(test_.*\.py|.*_test\.py)$", file_name) is not None
-
-# -----------------------------------------------------------------------------
-# Compatibilidad temporal (API legacy con guión bajo)
-# - No duplica lógica: son alias al API público
-# -----------------------------------------------------------------------------
-_default_extensiones = default_extensiones
-_default_patrones_incluir = default_patrones_incluir
-_default_patrones_excluir = default_patrones_excluir
-_compile_patterns = compile_patterns
-_matches_any = matches_any
-_matches_include = matches_include
-_es_test = es_test

@@ -7,13 +7,13 @@ setup(
     description="Herramienta para transcribir código y generar árboles de directorios",
     author="Enrique Paredes",
     author_email="eparedesbalen@gmail.com",
-    packages=find_packages(),  # Encuentra automáticamente la carpeta 'transcriptor'
+    packages=find_packages(),
     install_requires=[
         "PySimpleGUI",  # Si usas la interfaz en main.py
     ],
     entry_points={
         'console_scripts': [
-            'transcriptor-cli=transcriptor.main:main',  # Permite ejecutar la interfaz vía CLI
+            'transcriptor-cli=transcriptor.main:main',
         ],
     },
     classifiers=[

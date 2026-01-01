@@ -1,147 +1,155 @@
-# src/transcriptor4ai/cli.py
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from typing import Any, Dict, Optional
 
 from transcriptor4ai.config import cargar_configuracion, cargar_configuracion_por_defecto
+from transcriptor4ai.validate_config import validate_config
 from transcriptor4ai.pipeline import run_pipeline
+from transcriptor4ai.logging import configure_logging, LoggingConfig, get_logger
+
+# Initialize a logger for the CLI module itself
+logger = get_logger(__name__)
 
 
 # -----------------------------------------------------------------------------
-# CLI: parsing
+# CLI: Argument Parsing
 # -----------------------------------------------------------------------------
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="transcriptor4ai",
         description=(
-            "Transcriptor4AI: transcribe código (tests/módulos) y opcionalmente "
-            "genera árbol de directorios con símbolos (funciones/clases/métodos)."
+            "Transcriptor4AI: Code transcription tool (Tests/Modules) with "
+            "directory tree generation support."
         ),
     )
 
-    # --- Input / Output ------------------------------------------------------
+    # --- Input / Output ---
     p.add_argument(
-        "-i",
-        "--input",
+        "-i", "--input",
         dest="ruta_carpetas",
-        help="Ruta de la carpeta a procesar.",
+        help="Path to the source directory to process.",
         default=None,
     )
     p.add_argument(
-        "-o",
-        "--output-base",
+        "-o", "--output-base",
         dest="output_base_dir",
-        help="Ruta base de salida (se creará una subcarpeta dentro).",
+        help="Base output directory.",
         default=None,
     )
     p.add_argument(
         "--subdir",
         dest="output_subdir_name",
-        help="Nombre de la subcarpeta de salida dentro de --output-base.",
+        help="Name of the output subdirectory.",
         default=None,
     )
     p.add_argument(
         "--prefix",
         dest="output_prefix",
-        help="Prefijo de los ficheros generados (p.ej. transcripcion).",
+        help="Prefix for generated files.",
         default=None,
     )
 
-    # --- Mode / Features -----------------------------------------------------
+    # --- Mode / Features ---
     p.add_argument(
         "--modo",
         choices=["todo", "solo_modulos", "solo_tests"],
         default=None,
-        help="Modo de procesamiento: todo | solo_modulos | solo_tests.",
+        help="Processing mode.",
     )
     p.add_argument(
         "--tree",
         action="store_true",
-        help="Generar árbol de directorios (archivo y/o consola según flags).",
+        help="Generate directory tree.",
     )
     p.add_argument(
         "--tree-file",
         dest="tree_file",
         default=None,
-        help="Ruta del fichero donde guardar el árbol. Si se omite, se guarda en la salida estándar del pipeline (prefijo_arbol.txt).",
+        help="Path to save the tree file (overrides default).",
     )
     p.add_argument(
         "--print-tree",
         action="store_true",
-        help="Imprimir el árbol por consola (además de guardarlo si corresponde).",
+        help="Print the tree to console.",
     )
 
-    # --- AST flags -----------------------------------------------------------
-    p.add_argument("--funciones", action="store_true", help="Mostrar funciones en el árbol.")
-    p.add_argument("--clases", action="store_true", help="Mostrar clases en el árbol.")
-    p.add_argument("--metodos", action="store_true", help="Mostrar métodos en el árbol (requiere --clases).")
+    # --- AST flags ---
+    p.add_argument("--funciones", action="store_true", help="Show functions in tree.")
+    p.add_argument("--clases", action="store_true", help="Show classes in tree.")
+    p.add_argument("--metodos", action="store_true", help="Show methods in tree.")
 
-    # --- Filters -------------------------------------------------------------
+    # --- Filters ---
     p.add_argument(
         "--ext",
         dest="extensiones",
         default=None,
-        help="Extensiones separadas por coma. Ej: .py,.txt",
+        help="Comma-separated extensions (e.g. .py,.txt).",
     )
     p.add_argument(
         "--include",
         dest="patrones_incluir",
         default=None,
-        help="Patrones regex de inclusión separados por coma (se aplican con re.match).",
+        help="Regex inclusion patterns.",
     )
     p.add_argument(
         "--exclude",
         dest="patrones_excluir",
         default=None,
-        help="Patrones regex de exclusión separados por coma (se aplican con re.match).",
+        help="Regex exclusion patterns.",
     )
 
-    # --- Safety / UX ---------------------------------------------------------
+    # --- Safety / UX ---
     p.add_argument(
         "--overwrite",
         action="store_true",
-        help="Permitir sobrescritura si ya existen ficheros destino.",
+        help="Overwrite existing files without prompting.",
     )
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="No escribe ficheros; sólo valida y muestra qué ocurriría (si el pipeline lo soporta).",
+        help="Simulate execution without writing files.",
     )
     p.add_argument(
         "--no-error-log",
         action="store_true",
-        help="No generar el fichero de errores de transcripción.",
+        help="Do not generate the error log file.",
     )
 
-    # --- Config handling -----------------------------------------------------
+    # --- Config handling ---
     p.add_argument(
         "--use-defaults",
         action="store_true",
-        help="Ignora config.json y usa sólo valores por defecto + flags.",
+        help="Ignore config.json and use defaults.",
     )
     p.add_argument(
         "--dump-config",
         action="store_true",
-        help="Imprime el config final (tras merges) en JSON y sale.",
+        help="Print final config in JSON and exit.",
+    )
+    p.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable DEBUG logging level.",
     )
 
-    # --- Output formatting ---------------------------------------------------
+    # --- Output formatting ---
     p.add_argument(
         "--json",
         dest="json_output",
         action="store_true",
-        help="Imprime el resultado final en JSON (útil para scripts).",
+        help="Output result in JSON format.",
     )
 
     return p
 
 
 # -----------------------------------------------------------------------------
-# CLI: config normalization
+# CLI: Helpers
 # -----------------------------------------------------------------------------
 def _split_csv(value: Optional[str]) -> Optional[list[str]]:
     if value is None:
@@ -152,60 +160,39 @@ def _split_csv(value: Optional[str]) -> Optional[list[str]]:
 
 
 def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Merge select keys where override is not None.
-    Bool flags are merged explicitly (only if present in overrides).
-    """
+    """Merge overrides into base config."""
     out = dict(base)
-
-    # Simple optional overrides
-    for k in [
-        "ruta_carpetas",
-        "output_base_dir",
-        "output_subdir_name",
-        "output_prefix",
-        "modo_procesamiento",
-        "extensiones",
-        "patrones_incluir",
-        "patrones_excluir",
-        "generar_arbol",
-        "imprimir_arbol",
-        "mostrar_funciones",
-        "mostrar_clases",
-        "mostrar_metodos",
-        "guardar_log_errores",
-    ]:
+    keys_to_merge = [
+        "ruta_carpetas", "output_base_dir", "output_subdir_name", "output_prefix",
+        "modo_procesamiento", "extensiones", "patrones_incluir", "patrones_excluir",
+        "generar_arbol", "imprimir_arbol", "mostrar_funciones", "mostrar_clases",
+        "mostrar_metodos", "guardar_log_errores",
+    ]
+    for k in keys_to_merge:
         if k in overrides and overrides[k] is not None:
             out[k] = overrides[k]
-
     return out
 
 
 def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
+    """Map argparse Namespace to config dictionary keys."""
     overrides: Dict[str, Any] = {}
 
-    # Paths / naming
     overrides["ruta_carpetas"] = args.ruta_carpetas
     overrides["output_base_dir"] = args.output_base_dir
     overrides["output_subdir_name"] = args.output_subdir_name
     overrides["output_prefix"] = args.output_prefix
 
-    # Mode
     if args.modo is not None:
         overrides["modo_procesamiento"] = args.modo
 
-    # Filters
-    ext = _split_csv(args.extensiones)
-    inc = _split_csv(args.patrones_incluir)
-    exc = _split_csv(args.patrones_excluir)
-    if ext is not None:
-        overrides["extensiones"] = ext
-    if inc is not None:
-        overrides["patrones_incluir"] = inc
-    if exc is not None:
-        overrides["patrones_excluir"] = exc
+    if args.extensiones:
+        overrides["extensiones"] = _split_csv(args.extensiones)
+    if args.patrones_incluir:
+        overrides["patrones_incluir"] = _split_csv(args.patrones_incluir)
+    if args.patrones_excluir:
+        overrides["patrones_excluir"] = _split_csv(args.patrones_excluir)
 
-    # Tree flags
     if args.tree:
         overrides["generar_arbol"] = True
     if args.print_tree:
@@ -216,109 +203,103 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["mostrar_clases"] = True
     if args.metodos:
         overrides["mostrar_metodos"] = True
-
-    # Error log
     if args.no_error_log:
         overrides["guardar_log_errores"] = False
 
     return overrides
 
 
-# -----------------------------------------------------------------------------
-# CLI: output helpers
-# -----------------------------------------------------------------------------
 def _print_human_summary(result: Dict[str, Any]) -> None:
     ok = bool(result.get("ok"))
     if not ok:
-        print("ERROR:", result.get("error", "Error desconocido"), file=sys.stderr)
+        print("ERROR:", result.get("error", "Unknown error"), file=sys.stderr)
         return
 
-    salida = result.get("output_dir") or result.get("output_folder") or ""
+    salida = result.get("output_dir") or result.get("salida_real") or ""
     cont = result.get("contadores") or result.get("summary") or {}
-    generados = result.get("generados") or result.get("outputs") or {}
+    generados = result.get("generados") or {}
+    resumen_data = result.get("resumen") or {}
 
-    print("OK")
+    print("SUCCESS")
     if salida:
-        print(f"Salida: {salida}")
+        print(f"Output Directory: {salida}")
 
-    # Common counters
-    if isinstance(cont, dict):
-        for k in ["procesados", "omitidos", "errores", "tests_escritos", "modulos_escritos"]:
-            if k in cont:
-                print(f"{k}: {cont[k]}")
+    # Merge counters from various possible result structures
+    counters = cont if cont else resumen_data
+    for k in ["procesados", "omitidos", "errores", "tests_escritos", "modulos_escritos"]:
+        if k in counters:
+            print(f"{k}: {counters[k]}")
 
-    # Common outputs
-    if isinstance(generados, dict):
-        for k in ["tests", "modulos", "errores", "arbol", "tree"]:
-            v = generados.get(k)
+    if generados:
+        print("\nGenerated Files:")
+        for k, v in generados.items():
             if v:
-                print(f"{k}: {v}")
+                print(f"  - {k}: {v}")
 
 
 # -----------------------------------------------------------------------------
-# CLI: main
+# Main Entry Point
 # -----------------------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # -------------------------------------------------------------------------
-    # Load base config
-    # -------------------------------------------------------------------------
+    # 1. Setup Logging (Console stderr only for CLI)
+    log_level = "DEBUG" if args.debug else "INFO"
+    logging_conf = LoggingConfig(level=log_level, console=True, log_file=None)
+    configure_logging(logging_conf)
+
+    logger.debug("CLI started. Parsing arguments...")
+
+    # 2. Load Base Config
     if args.use_defaults:
         base_conf = cargar_configuracion_por_defecto()
     else:
         base_conf = cargar_configuracion()
 
-    # -------------------------------------------------------------------------
-    # Apply CLI overrides
-    # -------------------------------------------------------------------------
+    # 3. Apply Overrides
     overrides = _args_to_overrides(args)
-    conf = _merge_config(base_conf, overrides)
+    raw_conf = _merge_config(base_conf, overrides)
 
-    conf["_cli_overwrite"] = bool(args.overwrite)
-    conf["_cli_dry_run"] = bool(args.dry_run)
+    # 4. Validate Configuration (Gatekeeper)
+    clean_conf, warnings = validate_config(raw_conf, strict=False)
+
+    if warnings:
+        for w in warnings:
+            logger.warning(f"Config Warning: {w}")
+
+    # Add CLI-specific runtime flags not in config schema
+    clean_conf["_cli_overwrite"] = bool(args.overwrite)
+    clean_conf["_cli_dry_run"] = bool(args.dry_run)
     if args.tree_file:
-        conf["_cli_tree_file"] = args.tree_file
+        clean_conf["_cli_tree_file"] = args.tree_file
 
-    # -------------------------------------------------------------------------
-    # Optional: dump config and exit
-    # -------------------------------------------------------------------------
     if args.dump_config:
-        print(json.dumps(conf, ensure_ascii=False, indent=2))
+        print(json.dumps(clean_conf, ensure_ascii=False, indent=2))
         return 0
 
-    # -------------------------------------------------------------------------
-    # Basic validation
-    # -------------------------------------------------------------------------
-    ruta = (conf.get("ruta_carpetas") or "").strip()
-    if ruta and not os.path.exists(ruta):
-        print(f"ERROR: La ruta a procesar no existe: {ruta}", file=sys.stderr)
-        return 2
-    if ruta and not os.path.isdir(ruta):
-        print(f"ERROR: La ruta a procesar no es un directorio: {ruta}", file=sys.stderr)
+    # 5. Basic Path Check (Pre-Pipeline)
+    ruta = clean_conf.get("ruta_carpetas", "")
+    if not os.path.exists(ruta):
+        logger.error(f"Input path does not exist: {ruta}")
         return 2
 
-    # -------------------------------------------------------------------------
-    # Run pipeline
-    # -------------------------------------------------------------------------
+    # 6. Run Pipeline
+    logger.info(f"Starting pipeline for input: {ruta}")
     try:
         result = run_pipeline(
-            conf,
+            clean_conf,
             overwrite=bool(args.overwrite),
             dry_run=bool(args.dry_run),
-            tree_output_path=args.tree_file,
         )
     except KeyboardInterrupt:
-        print("Interrumpido por el usuario.", file=sys.stderr)
+        logger.warning("Operation cancelled by user (SIGINT).")
         return 130
     except Exception as e:
-        print(f"ERROR: Excepción no controlada: {e}", file=sys.stderr)
+        logger.critical(f"Unhandled exception in pipeline: {e}", exc_info=True)
         return 1
 
-    # -------------------------------------------------------------------------
-    # Render output
-    # -------------------------------------------------------------------------
+    # 7. Render Output
     if args.json_output:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

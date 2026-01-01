@@ -1,19 +1,27 @@
 from __future__ import annotations
 
+import logging
 import os
 import traceback
+from typing import Any, Dict
 
 import PySimpleGUI as sg
 
 from transcriptor4ai import config as cfg
 from transcriptor4ai import paths
-from transcriptor4ai.transcription.service import transcribir_codigo
-from transcriptor4ai.tree.service import generar_arbol_directorios
+from transcriptor4ai.logging import configure_logging, LoggingConfig, get_default_gui_log_path
+from transcriptor4ai.validate_config import validate_config
+from transcriptor4ai.pipeline import run_pipeline, PipelineResult
+
+# Initialize logger for this module (after configuration in main)
+logger = logging.getLogger(__name__)
+
 
 # -----------------------------------------------------------------------------
-# Actualización config desde GUI (GUI-specific)
+# GUI: Config Helpers
 # -----------------------------------------------------------------------------
-def actualizar_config_desde_gui(config: dict, values: dict) -> None:
+def actualizar_config_desde_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
+    """Update the config dictionary with values from the GUI window."""
     config["ruta_carpetas"] = values["ruta_carpetas"]
     config["output_base_dir"] = values["output_base_dir"]
     config["output_subdir_name"] = values["output_subdir_name"]
@@ -26,9 +34,9 @@ def actualizar_config_desde_gui(config: dict, values: dict) -> None:
     elif values.get("modo_tests"):
         config["modo_procesamiento"] = "solo_tests"
 
-    config["extensiones"] = [ext.strip() for ext in (values.get("extensiones") or "").split(",") if ext.strip()]
-    config["patrones_incluir"] = [pat.strip() for pat in (values.get("patrones_incluir") or "").split(",") if pat.strip()]
-    config["patrones_excluir"] = [pat.strip() for pat in (values.get("patrones_excluir") or "").split(",") if pat.strip()]
+    config["extensiones"] = values.get("extensiones", "")
+    config["patrones_incluir"] = values.get("patrones_incluir", "")
+    config["patrones_excluir"] = values.get("patrones_excluir", "")
 
     config["mostrar_funciones"] = bool(values.get("mostrar_funciones"))
     config["mostrar_clases"] = bool(values.get("mostrar_clases"))
@@ -39,7 +47,8 @@ def actualizar_config_desde_gui(config: dict, values: dict) -> None:
     config["guardar_log_errores"] = bool(values.get("guardar_log_errores"))
 
 
-def volcar_config_a_gui(window: sg.Window, config: dict) -> None:
+def volcar_config_a_gui(window: sg.Window, config: Dict[str, Any]) -> None:
+    """Populate the GUI fields with values from the config dictionary."""
     window["ruta_carpetas"].update(config["ruta_carpetas"])
     window["output_base_dir"].update(config["output_base_dir"])
     window["output_subdir_name"].update(config["output_subdir_name"])
@@ -49,9 +58,14 @@ def volcar_config_a_gui(window: sg.Window, config: dict) -> None:
     window["modo_modulos"].update(config["modo_procesamiento"] == "solo_modulos")
     window["modo_tests"].update(config["modo_procesamiento"] == "solo_tests")
 
-    window["extensiones"].update(",".join(config["extensiones"]))
-    window["patrones_incluir"].update(",".join(config["patrones_incluir"]))
-    window["patrones_excluir"].update(",".join(config["patrones_excluir"]))
+    # Handle lists for display
+    exts = config["extensiones"] if isinstance(config["extensiones"], list) else []
+    incl = config["patrones_incluir"] if isinstance(config["patrones_incluir"], list) else []
+    excl = config["patrones_excluir"] if isinstance(config["patrones_excluir"], list) else []
+
+    window["extensiones"].update(",".join(exts))
+    window["patrones_incluir"].update(",".join(incl))
+    window["patrones_excluir"].update(",".join(excl))
 
     window["mostrar_funciones"].update(config["mostrar_funciones"])
     window["mostrar_clases"].update(config["mostrar_clases"])
@@ -62,62 +76,120 @@ def volcar_config_a_gui(window: sg.Window, config: dict) -> None:
     window["guardar_log_errores"].update(config["guardar_log_errores"])
 
 
+def _format_summary(res: PipelineResult) -> str:
+    """Format the pipeline result into a human-readable string for the popup."""
+    if not res.ok:
+        return f"Error:\n{res.error}"
+
+    # Extract summary data safely
+    summary = res.resumen or {}
+    dry_run = summary.get("dry_run", False)
+
+    lines = []
+    if dry_run:
+        lines.append("=== DRY RUN (SIMULACIÓN) COMPLETA ===")
+        lines.append("No se han generado archivos.")
+        lines.append(f"Se habrían generado: {summary.get('will_generate', [])}")
+    else:
+        lines.append("=== PROCESO COMPLETADO CON ÉXITO ===")
+        lines.append(f"Salida: {res.salida_real}")
+        lines.append("-" * 30)
+        lines.append(f"Archivos procesados: {summary.get('procesados', 0)}")
+        lines.append(f"Archivos omitidos:   {summary.get('omitidos', 0)}")
+        lines.append(f"Errores de lectura:  {summary.get('errores', 0)}")
+
+        # Details about generated files
+        generados = summary.get("generados", {})
+        if generados:
+            lines.append("\nArchivos Generados:")
+            if generados.get("tests"): lines.append(f" - Tests")
+            if generados.get("modulos"): lines.append(f" - Módulos")
+            if generados.get("errores"): lines.append(f" - Log de Errores")
+
+        arbol_info = summary.get("arbol", {})
+        if arbol_info.get("generado"):
+            lines.append(f" - Árbol ({arbol_info.get('lineas')} líneas)")
+
+    return "\n".join(lines)
+
+
 # -----------------------------------------------------------------------------
-# GUI principal
+# Main GUI Entry Point
 # -----------------------------------------------------------------------------
 def main() -> None:
+    # 1. Setup Logging (Rotating File in AppData)
+    log_path = get_default_gui_log_path()
+    log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
+    configure_logging(log_conf)
+
+    logger.info("GUI starting...")
     sg.theme("SystemDefault")
 
-    # -------------------------
-    # Cargar configuración
-    # -------------------------
-    config = cfg.cargar_configuracion()
+    # 2. Load Initial Config
+    try:
+        raw_config = cfg.cargar_configuracion()
+        # Initial validation to ensure UI has safe defaults
+        config, _ = validate_config(raw_config, strict=False)
+    except Exception as e:
+        logger.error(f"Failed to load config: {e}")
+        config = cfg.cargar_configuracion_por_defecto()
 
     if not config.get("output_base_dir"):
-        config["output_base_dir"] = config.get("ruta_carpetas") or os.path.dirname(os.path.abspath(__file__))
+        config["output_base_dir"] = config.get("ruta_carpetas") or os.getcwd()
 
-    # -------------------------
-    # Layout
-    # -------------------------
+    # 3. Define Layout
     layout = [
-        # --- Entrada ----------------------------------------------------------
+        # --- Input ---
         [sg.Text("Ruta de la carpeta a procesar:")],
         [
-            sg.Input(default_text=config["ruta_carpetas"], size=(70, 1), key="ruta_carpetas"),
+            sg.Input(default_text=config["ruta_carpetas"], size=(70, 1), key="ruta_carpetas",
+                     tooltip="Carpeta raíz donde está el código fuente"),
             sg.Button("Explorar", key="btn_explorar_in"),
         ],
 
-        # --- Salida -----------------------------------------------------------
+        # --- Output ---
         [sg.Text("Ruta base de salida (se creará una subcarpeta dentro):")],
         [
-            sg.Input(default_text=config["output_base_dir"], size=(70, 1), key="output_base_dir"),
+            sg.Input(default_text=config["output_base_dir"], size=(70, 1), key="output_base_dir",
+                     tooltip="Carpeta padre donde se guardarán los resultados"),
             sg.Button("Examinar", key="btn_examinar_out"),
         ],
         [
             sg.Text("Subcarpeta de salida:"),
-            sg.Input(default_text=config["output_subdir_name"], size=(20, 1), key="output_subdir_name"),
+            sg.Input(default_text=config["output_subdir_name"], size=(20, 1), key="output_subdir_name",
+                     tooltip="Nombre de la carpeta final"),
             sg.Text("Prefijo de archivos:"),
-            sg.Input(default_text=config["output_prefix"], size=(20, 1), key="output_prefix"),
+            sg.Input(default_text=config["output_prefix"], size=(20, 1), key="output_prefix",
+                     tooltip="Ej: proyecto_v1 -> proyecto_v1_modulos.txt"),
         ],
 
-        # --- Modo -------------------------------------------------------------
+        # --- Mode ---
         [sg.Text("Modo de procesamiento:")],
         [
-            sg.Radio("Todo (módulos + tests)", "RADIO1", key="modo_todo", default=(config["modo_procesamiento"] == "todo")),
-            sg.Radio("Solo Módulos", "RADIO1", key="modo_modulos", default=(config["modo_procesamiento"] == "solo_modulos")),
-            sg.Radio("Solo Tests", "RADIO1", key="modo_tests", default=(config["modo_procesamiento"] == "solo_tests")),
+            sg.Radio("Todo (módulos + tests)", "RADIO1", key="modo_todo",
+                     default=(config["modo_procesamiento"] == "todo")),
+            sg.Radio("Solo Módulos", "RADIO1", key="modo_modulos",
+                     default=(config["modo_procesamiento"] == "solo_modulos")),
+            sg.Radio("Solo Tests", "RADIO1", key="modo_tests",
+                     default=(config["modo_procesamiento"] == "solo_tests")),
         ],
 
-        # --- Filtros ----------------------------------------------------------
-        [sg.Text("Extensiones (separadas por coma):"), sg.Input(",".join(config["extensiones"]), size=(60, 1), key="extensiones")],
-        [sg.Text("Patrones Incluir (separados por comas):"), sg.Input(",".join(config["patrones_incluir"]), size=(60, 1), key="patrones_incluir")],
-        [sg.Text("Patrones Excluir (separados por comas):"), sg.Input(",".join(config["patrones_excluir"]), size=(60, 1), key="patrones_excluir")],
+        # --- Filters ---
+        [sg.Text("Extensiones (separadas por coma):"),
+         sg.Input(",".join(config["extensiones"]), size=(60, 1), key="extensiones",
+                  tooltip="Ej: .py, .js, .java")],
+        [sg.Text("Patrones Incluir (Regex):"),
+         sg.Input(",".join(config["patrones_incluir"]), size=(60, 1), key="patrones_incluir",
+                  tooltip="Solo procesar archivos que cumplan estos patrones")],
+        [sg.Text("Patrones Excluir (Regex):"),
+         sg.Input(",".join(config["patrones_excluir"]), size=(60, 1), key="patrones_excluir",
+                  tooltip="Ignorar archivos/carpetas que cumplan estos patrones")],
 
-        # --- Árbol / Símbolos -------------------------------------------------
+        # --- Tree Options ---
         [
-            sg.Checkbox("Mostrar funciones (árbol)", key="mostrar_funciones", default=config["mostrar_funciones"]),
-            sg.Checkbox("Mostrar clases (árbol)", key="mostrar_clases", default=config["mostrar_clases"]),
-            sg.Checkbox("Mostrar métodos (árbol)", key="mostrar_metodos", default=config["mostrar_metodos"]),
+            sg.Checkbox("Mostrar funciones", key="mostrar_funciones", default=config["mostrar_funciones"]),
+            sg.Checkbox("Mostrar clases", key="mostrar_clases", default=config["mostrar_clases"]),
+            sg.Checkbox("Mostrar métodos", key="mostrar_metodos", default=config["mostrar_metodos"]),
         ],
         [
             sg.Checkbox("Generar archivo de árbol", key="generar_arbol", default=config["generar_arbol"]),
@@ -125,9 +197,11 @@ def main() -> None:
         ],
         [
             sg.Checkbox("Guardar log de errores", key="guardar_log_errores", default=config["guardar_log_errores"]),
+            sg.Checkbox("Simulación (Dry Run)", key="dry_run", default=False, text_color="blue",
+                        tooltip="Ejecuta todo el proceso sin escribir en el disco"),
         ],
 
-        # --- Acciones ---------------------------------------------------------
+        # --- Actions ---
         [
             sg.Button("Procesar", button_color=("white", "green")),
             sg.Button("Guardar Configuración"),
@@ -136,21 +210,17 @@ def main() -> None:
         ],
     ]
 
-    window = sg.Window("Herramienta de Transcripción y Árbol de Directorios", layout, finalize=True)
+    window = sg.Window("Transcriptor4AI", layout, finalize=True)
 
-    # -------------------------
-    # Event loop
-    # -------------------------
+    # 4. Event Loop
     while True:
         event, values = window.read()
         if event in (sg.WIN_CLOSED, "Salir"):
             break
 
-        # ---------------------------------------------------------------------
-        # Selección de carpetas
-        # ---------------------------------------------------------------------
+        # --- Browse Actions ---
         if event == "btn_explorar_in":
-            initial = paths.normalizar_dir(values.get("ruta_carpetas", ""), os.path.dirname(os.path.abspath(__file__)))
+            initial = paths.normalizar_dir(values.get("ruta_carpetas", ""), os.getcwd())
             folder = sg.popup_get_folder("Seleccione la carpeta a procesar", default_path=initial)
             if folder:
                 window["ruta_carpetas"].update(folder)
@@ -164,42 +234,44 @@ def main() -> None:
             if folder:
                 window["output_base_dir"].update(folder)
 
-        # ---------------------------------------------------------------------
-        # Guardar / Reset
-        # ---------------------------------------------------------------------
+        # --- Save / Reset Actions ---
         if event == "Guardar Configuración":
             try:
                 actualizar_config_desde_gui(config, values)
-                config["ruta_carpetas"] = paths.normalizar_dir(config["ruta_carpetas"], os.path.dirname(os.path.abspath(__file__)))
-                config["output_base_dir"] = paths.normalizar_dir(config["output_base_dir"], config["ruta_carpetas"])
-                cfg.guardar_configuracion(config)
+                clean_conf, _ = validate_config(config, strict=False)
+
+                clean_conf["ruta_carpetas"] = paths.normalizar_dir(clean_conf["ruta_carpetas"], os.getcwd())
+                clean_conf["output_base_dir"] = paths.normalizar_dir(clean_conf["output_base_dir"],
+                                                                     clean_conf["ruta_carpetas"])
+
+                cfg.guardar_configuracion(clean_conf)
                 sg.popup("Configuración guardada en config.json")
+                logger.info("Configuration saved by user.")
             except Exception as e:
+                logger.error(f"Save config failed: {e}")
                 sg.popup_error(f"No se pudo guardar configuración:\n{e}")
 
         if event == "Resetear Configuración":
             config = cfg.cargar_configuracion_por_defecto()
             volcar_config_a_gui(window, config)
-            try:
-                cfg.guardar_configuracion(config)
-            except Exception as e:
-                sg.popup_error(f"No se pudo guardar configuración por defecto:\n{e}")
+            logger.info("Configuration reset to defaults.")
             sg.popup("Se ha restaurado la configuración por defecto.")
 
-        # ---------------------------------------------------------------------
-        # Procesar
-        # ---------------------------------------------------------------------
+        # --- Process Action ---
         if event == "Procesar":
             try:
                 actualizar_config_desde_gui(config, values)
 
-                # Normalizar rutas
-                ruta_carpetas = paths.normalizar_dir(config["ruta_carpetas"], os.path.dirname(os.path.abspath(__file__)))
-                output_base_dir = paths.normalizar_dir(config["output_base_dir"], ruta_carpetas)
-                output_subdir_name = (config.get("output_subdir_name") or "").strip() or paths.DEFAULT_OUTPUT_SUBDIR
-                output_prefix = (config.get("output_prefix") or "").strip() or cfg.DEFAULT_OUTPUT_PREFIX
+                # 1. Gatekeeper Validation
+                clean_conf, warnings = validate_config(config, strict=False)
+                if warnings:
+                    logger.warning(f"Config warnings: {warnings}")
 
-                # Validación de input
+                # 2. Runtime Path Checks
+                ruta_carpetas = paths.normalizar_dir(clean_conf["ruta_carpetas"], os.getcwd())
+                output_base_dir = paths.normalizar_dir(clean_conf["output_base_dir"], ruta_carpetas)
+                output_subdir_name = clean_conf["output_subdir_name"]
+
                 if not os.path.exists(ruta_carpetas):
                     sg.popup_error(f"La ruta a procesar no existe:\n{ruta_carpetas}")
                     continue
@@ -207,76 +279,49 @@ def main() -> None:
                     sg.popup_error(f"La ruta a procesar no es un directorio:\n{ruta_carpetas}")
                     continue
 
-                # Ruta final de salida
-                salida_real = paths.ruta_salida_real(output_base_dir, output_subdir_name)
+                # 3. Overwrite & Dry Run Logic
+                is_dry_run = bool(values.get("dry_run"))
+                should_overwrite = False
 
-                # Determinar ficheros destino para confirmar sobrescritura
-                modo_final = config["modo_procesamiento"]
-                incluir_arbol = bool(config.get("generar_arbol"))
-                nombres = paths.archivos_destino(output_prefix, modo_final, incluir_arbol)
-                existentes = paths.existen_ficheros_destino(salida_real, nombres)
+                if not is_dry_run:
+                    salida_real = paths.ruta_salida_real(output_base_dir, output_subdir_name)
+                    nombres = paths.archivos_destino(
+                        clean_conf["output_prefix"],
+                        clean_conf["modo_procesamiento"],
+                        clean_conf["generar_arbol"]
+                    )
+                    existentes = paths.existen_ficheros_destino(salida_real, nombres)
 
-                # Crear carpeta de salida si no existe (NO es sobrescritura)
-                try:
-                    os.makedirs(salida_real, exist_ok=True)
-                except OSError as e:
-                    sg.popup_error(f"No se pudo crear la carpeta de salida:\n{salida_real}\n\n{e}")
-                    continue
+                    if existentes:
+                        msg = "Se van a sobrescribir estos archivos:\n\n" + "\n".join(
+                            existentes) + "\n\n¿Desea continuar?"
+                        resp = sg.popup_yes_no(msg, icon="warning")
+                        if resp != "Yes":
+                            logger.info("Process cancelled by user (overwrite check).")
+                            continue
+                        should_overwrite = True
 
-                # Confirmación SOLO si existen ficheros concretos a reescribir
-                if existentes:
-                    msg = "Se van a sobrescribir estos archivos:\n\n" + "\n".join(existentes) + "\n\n¿Desea continuar?"
-                    resp = sg.popup_yes_no(msg)
-                    if resp != "Yes":
-                        continue
+                # 4. Execute Pipeline (Orchestrator)
+                logger.info(f"Starting pipeline (DryRun={is_dry_run})...")
 
-                # --- Transcripción ------------------------------------------------
-                res_trans = transcribir_codigo(
-                    ruta_base=ruta_carpetas,
-                    modo=modo_final,
-                    extensiones=config["extensiones"],
-                    patrones_incluir=config["patrones_incluir"],
-                    patrones_excluir=config["patrones_excluir"],
-                    archivo_salida=output_prefix,
-                    output_folder=salida_real,
-                    guardar_log_errores=bool(config.get("guardar_log_errores")),
+                result = run_pipeline(
+                    clean_conf,
+                    overwrite=should_overwrite,
+                    dry_run=is_dry_run
                 )
 
-                if not res_trans.get("ok"):
-                    sg.popup_error(f"Fallo en transcripción:\n{res_trans.get('error', 'Error desconocido')}")
-                    continue
-
-                # --- Árbol --------------------------------------------------------
-                ruta_arbol = ""
-                if incluir_arbol:
-                    ruta_arbol = os.path.join(salida_real, f"{output_prefix}_arbol.txt")
-
-                generar_arbol_directorios(
-                    ruta_base=ruta_carpetas,
-                    modo=modo_final,
-                    extensiones=config["extensiones"],
-                    patrones_incluir=config["patrones_incluir"],
-                    patrones_excluir=config["patrones_excluir"],
-                    mostrar_funciones=config["mostrar_funciones"],
-                    mostrar_clases=config["mostrar_clases"],
-                    mostrar_metodos=config.get("mostrar_metodos", False),
-                    imprimir=bool(config.get("imprimir_arbol", True)),
-                    guardar_archivo=ruta_arbol,
-                )
-
-                # --- Resumen ------------------------------------------------------
-                cont = res_trans.get("contadores", {})
-                resumen = (
-                    "Procesamiento finalizado.\n\n"
-                    f"Salida: {salida_real}\n\n"
-                    f"Procesados: {cont.get('procesados', 0)}\n"
-                    f"Omitidos: {cont.get('omitidos', 0)}\n"
-                    f"Errores: {cont.get('errores', 0)}\n"
-                )
-                sg.popup(resumen)
+                # 5. Result Handling
+                if result.ok:
+                    logger.info("Pipeline finished successfully.")
+                    sg.popup(_format_summary(result), title="Resultado")
+                else:
+                    logger.error(f"Pipeline failed: {result.error}")
+                    sg.popup_error(f"Error en el proceso:\n{result.error}")
 
             except Exception as e:
                 tb = traceback.format_exc(limit=5)
+                logger.critical(f"Unexpected error in GUI loop: {e}", exc_info=True)
                 sg.popup_error(f"Error inesperado:\n{e}\n\n{tb}")
 
     window.close()
+    logger.info("GUI closed.")

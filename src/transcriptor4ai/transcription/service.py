@@ -1,104 +1,24 @@
-# code_transcriptor.py
-# -----------------------------------------------------------------------------
-# Transcriptor de código:
-# - Recorre una ruta base
-# - Filtra por extensiones y patrones (incluir/excluir)
-# - Separa salida en:
-#     <prefijo>_modulos.txt  (no tests)
-#     <prefijo>_tests.txt    (tests)
-# -----------------------------------------------------------------------------
-
 from __future__ import annotations
 
 import os
-import re
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Optional, List
 
-
-# -----------------------------------------------------------------------------
-# Configuración por defecto y utilidades
-# -----------------------------------------------------------------------------
-
-def _default_extensiones() -> List[str]:
-    return [".py"]
-
-
-def _default_patrones_incluir() -> List[str]:
-    return [".*"]
-
-
-def _default_patrones_excluir() -> List[str]:
-    """
-    Nota: estos patrones se aplican con re.match (desde el inicio del string).
-
-    - Archivos:
-      - __init__.py
-      - *.pyc
-    - Directorios:
-      - __pycache__
-      - .git, .idea
-      - cualquier cosa que empiece por "."
-    """
-    return [
-        r"^__init__\.py$",
-        r".*\.pyc$",
-        r"^(__pycache__|\.git|\.idea)$",
-        r"^\.",
-    ]
-
-
-def _compile_patterns(patterns: List[str]) -> List[re.Pattern]:
-    compiled: List[re.Pattern] = []
-    for p in patterns:
-        try:
-            compiled.append(re.compile(p))
-        except re.error:
-            continue
-    return compiled
-
-
-def _matches_any(name: str, compiled_patterns: List[re.Pattern]) -> bool:
-    return any(rx.match(name) for rx in compiled_patterns)
-
-
-def _matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
-    if not include_patterns:
-        return False
-    return any(rx.match(name) for rx in include_patterns)
-
-
-def _es_test(file_name: str) -> bool:
-    """
-    Detecta ficheros de test tipo:
-      - test_algo.py
-      - algo_test.py
-    """
-    return re.match(r"^(test_.*\.py|.*_test\.py)$", file_name) is not None
-
-
-def _safe_mkdir(path: str) -> Tuple[bool, Optional[str]]:
-    try:
-        os.makedirs(path, exist_ok=True)
-        return True, None
-    except OSError as e:
-        return False, str(e)
-
-
-# -----------------------------------------------------------------------------
-# Modelo de error
-# -----------------------------------------------------------------------------
-
-@dataclass
-class TranscriptionError:
-    rel_path: str
-    error: str
-
+from transcriptor4ai.filtering import (
+    default_extensiones,
+    default_patrones_incluir,
+    default_patrones_excluir,
+    compile_patterns,
+    matches_any,
+    matches_include,
+    es_test,
+)
+from transcriptor4ai.transcription.models import TranscriptionError
+from transcriptor4ai.transcription.format import _append_entry
+from transcriptor4ai.paths import _safe_mkdir
 
 # -----------------------------------------------------------------------------
 # API pública
 # -----------------------------------------------------------------------------
-
 def transcribir_codigo(
     ruta_base: str,
     modo: str = "todo",
@@ -129,17 +49,17 @@ def transcribir_codigo(
     # Normalización de inputs
     # -------------------------
     if extensiones is None:
-        extensiones = _default_extensiones()
+        extensiones = default_extensiones()
     if patrones_incluir is None:
-        patrones_incluir = _default_patrones_incluir()
+        patrones_incluir = default_patrones_incluir()
     if patrones_excluir is None:
-        patrones_excluir = _default_patrones_excluir()
+        patrones_excluir = default_patrones_excluir()
 
     ruta_base_abs = os.path.abspath(ruta_base)
     output_folder_abs = os.path.abspath(output_folder)
 
-    incluir_rx = _compile_patterns(patrones_incluir)
-    excluir_rx = _compile_patterns(patrones_excluir)
+    incluir_rx = compile_patterns(patrones_incluir)
+    excluir_rx = compile_patterns(patrones_excluir)
 
     generar_tests = (modo == "solo_tests" or modo == "todo")
     generar_modulos = (modo == "solo_modulos" or modo == "todo")
@@ -184,7 +104,7 @@ def transcribir_codigo(
     escritos_modulos = 0
 
     for root, dirs, files in os.walk(ruta_base_abs):
-        dirs[:] = [d for d in dirs if not _matches_any(d, excluir_rx)]
+        dirs[:] = [d for d in dirs if not matches_any(d, excluir_rx)]
         dirs.sort()
         files.sort()
 
@@ -197,14 +117,14 @@ def transcribir_codigo(
                 continue
 
             # Excluir / incluir por patrones en nombre de archivo
-            if _matches_any(file_name, excluir_rx):
+            if matches_any(file_name, excluir_rx):
                 omitidos += 1
                 continue
-            if not _matches_include(file_name, incluir_rx):
+            if not matches_include(file_name, incluir_rx):
                 omitidos += 1
                 continue
 
-            archivo_es_test = _es_test(file_name)
+            archivo_es_test = es_test(file_name)
             if modo == "solo_tests" and not archivo_es_test:
                 omitidos += 1
                 continue
@@ -272,17 +192,3 @@ def transcribir_codigo(
         },
     }
     return result
-
-
-# -----------------------------------------------------------------------------
-# Escritura de entradas
-# -----------------------------------------------------------------------------
-
-def _append_entry(output_path: str, rel_path: str, contenido: str) -> None:
-    """
-    Añade una entrada al final del fichero de salida.
-    """
-    with open(output_path, "a", encoding="utf-8") as out:
-        out.write("-" * 200 + "\n")
-        out.write(f"{rel_path}\n")
-        out.write(contenido.rstrip("\n") + "\n")

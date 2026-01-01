@@ -17,6 +17,8 @@ import os
 from pathlib import Path
 
 import app_core as app
+import transcriptor4ai.config
+import transcriptor4ai.paths
 
 
 # -----------------------------------------------------------------------------
@@ -25,49 +27,49 @@ import app_core as app
 
 def test_normalizar_dir_empty_uses_fallback(tmp_path):
     fb = str(tmp_path / "fallback")
-    res = app.normalizar_dir("", fb)
+    res = transcriptor4ai.paths.normalizar_dir("", fb)
     assert os.path.isabs(res)
     assert res.endswith(os.path.basename(fb))
 
 
 def test_normalizar_dir_expands_user_and_vars(monkeypatch, tmp_path):
     monkeypatch.setenv("XTEST_BASE", str(tmp_path))
-    res = app.normalizar_dir("$XTEST_BASE/sub", str(tmp_path))
+    res = transcriptor4ai.paths.normalizar_dir("$XTEST_BASE/sub", str(tmp_path))
     assert os.path.isabs(res)
     assert res.endswith(os.path.join(os.path.basename(str(tmp_path)), "sub")) or res.endswith("sub")
 
 
 def test_ruta_salida_real_uses_default_subdir_when_empty(tmp_path):
     base = str(tmp_path / "base")
-    r = app.ruta_salida_real(base, "")
-    assert r == os.path.join(base, app.DEFAULT_OUTPUT_SUBDIR)
+    r = transcriptor4ai.paths.ruta_salida_real(base, "")
+    assert r == os.path.join(base, transcriptor4ai.paths.DEFAULT_OUTPUT_SUBDIR)
 
 
 def test_ruta_salida_real_joins_base_and_subdir(tmp_path):
     base = str(tmp_path / "base")
-    r = app.ruta_salida_real(base, "x")
+    r = transcriptor4ai.paths.ruta_salida_real(base, "x")
     assert r == os.path.join(base, "x")
 
 
 def test_archivos_destino_for_each_mode_and_tree_flag():
-    # todo + tree => 3
-    names = app.archivos_destino("p", "todo", True)
+    # all + tree => 3
+    names = transcriptor4ai.paths.archivos_destino("p", "todo", True)
     assert set(names) == {"p_tests.txt", "p_modulos.txt", "p_arbol.txt"}
 
-    # todo no tree => 2
-    names = app.archivos_destino("p", "todo", False)
+    # all no tree => 2
+    names = transcriptor4ai.paths.archivos_destino("p", "todo", False)
     assert set(names) == {"p_tests.txt", "p_modulos.txt"}
 
     # solo_modulos => 1 (+tree optional)
-    names = app.archivos_destino("p", "solo_modulos", False)
+    names = transcriptor4ai.paths.archivos_destino("p", "solo_modulos", False)
     assert names == ["p_modulos.txt"]
-    names = app.archivos_destino("p", "solo_modulos", True)
+    names = transcriptor4ai.paths.archivos_destino("p", "solo_modulos", True)
     assert set(names) == {"p_modulos.txt", "p_arbol.txt"}
 
     # solo_tests => 1 (+tree optional)
-    names = app.archivos_destino("p", "solo_tests", False)
+    names = transcriptor4ai.paths.archivos_destino("p", "solo_tests", False)
     assert names == ["p_tests.txt"]
-    names = app.archivos_destino("p", "solo_tests", True)
+    names = transcriptor4ai.paths.archivos_destino("p", "solo_tests", True)
     assert set(names) == {"p_tests.txt", "p_arbol.txt"}
 
 
@@ -78,7 +80,7 @@ def test_existen_ficheros_destino_detects_existing(tmp_path):
     (out_dir / "a.txt").write_text("x", encoding="utf-8")
     names = ["a.txt", "b.txt"]
 
-    existentes = app.existen_ficheros_destino(str(out_dir), names)
+    existentes = transcriptor4ai.paths.existen_ficheros_destino(str(out_dir), names)
     assert len(existentes) == 1
     assert existentes[0].endswith(os.path.join("out", "a.txt"))
 
@@ -88,19 +90,19 @@ def test_existen_ficheros_destino_detects_existing(tmp_path):
 # -----------------------------------------------------------------------------
 
 def test_defaults_are_coherent_output_base_equals_input():
-    conf = app.cargar_configuracion_por_defecto()
+    conf = transcriptor4ai.config.cargar_configuracion_por_defecto()
     assert conf["ruta_carpetas"] == conf["output_base_dir"]
-    assert conf["output_subdir_name"] == app.DEFAULT_OUTPUT_SUBDIR
-    assert conf["output_prefix"] == app.DEFAULT_OUTPUT_PREFIX
+    assert conf["output_subdir_name"] == transcriptor4ai.paths.DEFAULT_OUTPUT_SUBDIR
+    assert conf["output_prefix"] == transcriptor4ai.config.DEFAULT_OUTPUT_PREFIX
 
 
 def test_guardar_configuracion_writes_valid_json(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    conf = app.cargar_configuracion_por_defecto()
-    app.guardar_configuracion(conf)
+    conf = transcriptor4ai.config.cargar_configuracion_por_defecto()
+    transcriptor4ai.config.guardar_configuracion(conf)
 
-    cfg = tmp_path / app.CONFIG_FILE
+    cfg = tmp_path / transcriptor4ai.config.CONFIG_FILE
     assert cfg.exists()
 
     data = json.loads(cfg.read_text(encoding="utf-8"))
@@ -112,14 +114,14 @@ def test_guardar_configuracion_writes_valid_json(tmp_path, monkeypatch):
 def test_cargar_configuracion_merges_existing_config(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    base_conf = app.cargar_configuracion_por_defecto()
+    base_conf = transcriptor4ai.config.cargar_configuracion_por_defecto()
     custom = {
         "modo_procesamiento": "solo_tests",
         "output_subdir_name": "custom_out",
     }
-    Path(app.CONFIG_FILE).write_text(json.dumps(custom), encoding="utf-8")
+    Path(transcriptor4ai.config.CONFIG_FILE).write_text(json.dumps(custom), encoding="utf-8")
 
-    conf = app.cargar_configuracion()
+    conf = transcriptor4ai.config.cargar_configuracion()
     assert conf["modo_procesamiento"] == "solo_tests"
     assert conf["output_subdir_name"] == "custom_out"
     assert conf["output_prefix"] == base_conf["output_prefix"]
@@ -129,10 +131,10 @@ def test_cargar_configuracion_merges_existing_config(tmp_path, monkeypatch):
 def test_cargar_configuracion_corrupt_json_falls_back_to_defaults(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    Path(app.CONFIG_FILE).write_text("{not-json", encoding="utf-8")
-    conf = app.cargar_configuracion()
+    Path(transcriptor4ai.config.CONFIG_FILE).write_text("{not-json", encoding="utf-8")
+    conf = transcriptor4ai.config.cargar_configuracion()
 
-    defaults = app.cargar_configuracion_por_defecto()
+    defaults = transcriptor4ai.config.cargar_configuracion_por_defecto()
     assert conf["modo_procesamiento"] == defaults["modo_procesamiento"]
     assert conf["output_subdir_name"] == defaults["output_subdir_name"]
     assert conf["output_prefix"] == defaults["output_prefix"]
@@ -154,9 +156,9 @@ def test_cargar_configuracion_regression_old_config_shape(tmp_path, monkeypatch)
         "carpeta_salida": "transcripcion",
         "modo_procesamiento": "todo",
     }
-    Path(app.CONFIG_FILE).write_text(json.dumps(legacy), encoding="utf-8")
+    Path(transcriptor4ai.config.CONFIG_FILE).write_text(json.dumps(legacy), encoding="utf-8")
 
-    conf = app.cargar_configuracion()
+    conf = transcriptor4ai.config.cargar_configuracion()
 
     # Must still have new keys from defaults
     assert "output_base_dir" in conf

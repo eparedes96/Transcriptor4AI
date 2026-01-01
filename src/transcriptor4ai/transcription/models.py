@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from transcriptor4ai.ui.gui import main
+from dataclasses import dataclass
 
 # -----------------------------------------------------------------------------
-# Entry point
+# Modelo de error
 # -----------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    main()
+@dataclass
+class TranscriptionError:
+    rel_path: str
+    error: str

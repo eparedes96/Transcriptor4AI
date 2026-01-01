@@ -12,6 +12,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import transcriptor4ai.filtering
+import transcriptor4ai.tree.models
+import transcriptor4ai.tree.render
+import transcriptor4ai.tree.service
 import tree_generator as tg
 
 
@@ -66,15 +70,15 @@ def _make_tree(base: Path) -> dict[str, Path]:
 
 
 def _build_structure(base: Path, modo: str = "todo"):
-    incluir = tg._compile_patterns([".*"])
-    excluir = tg._compile_patterns(tg._default_patrones_excluir())
-    return tg.construir_estructura(
+    incluir = transcriptor4ai.filtering.compile_patterns([".*"])
+    excluir = transcriptor4ai.filtering.compile_patterns(transcriptor4ai.filtering.default_patrones_excluir())
+    return transcriptor4ai.tree.service.construir_estructura(
         ruta_base=str(base),
         modo=modo,
         extensiones=[".py"],
         incluir_rx=incluir,
         excluir_rx=excluir,
-        es_test_func=tg._es_test,
+        es_test_func=transcriptor4ai.filtering.es_test,
     )
 
 
@@ -83,7 +87,7 @@ def _render_root_entries(estructura: dict) -> list[str]:
     Render only the root level and return the displayed entry names in order.
     """
     lines: list[str] = []
-    tg.generar_estructura_texto(
+    transcriptor4ai.tree.render.generar_estructura_texto(
         estructura,
         lines,
         prefix="",
@@ -121,16 +125,16 @@ def test_build_structure_filters_extensions_and_patterns(tmp_path):
     base = tmp_path / "base"
     _make_tree(base)
 
-    incluir = tg._compile_patterns([r"^(a\.py|c\.py)$"])
-    excluir = tg._compile_patterns(tg._default_patrones_excluir())
+    incluir = transcriptor4ai.filtering.compile_patterns([r"^(a\.py|c\.py)$"])
+    excluir = transcriptor4ai.filtering.compile_patterns(transcriptor4ai.filtering.default_patrones_excluir())
 
-    estructura = tg.construir_estructura(
+    estructura = transcriptor4ai.tree.service.construir_estructura(
         ruta_base=str(base),
         modo="todo",
         extensiones=[".py"],
         incluir_rx=incluir,
         excluir_rx=excluir,
-        es_test_func=tg._es_test,
+        es_test_func=transcriptor4ai.filtering.es_test,
     )
 
     assert "a.py" in estructura
@@ -185,7 +189,7 @@ def test_build_structure_file_node_path_is_full_path(tmp_path):
 
     estructura = _build_structure(base, modo="todo")
     node = estructura["a.py"]
-    assert isinstance(node, tg.FileNode)
+    assert isinstance(node, transcriptor4ai.tree.models.FileNode)
     assert os.path.abspath(node.path) == os.path.abspath(str(paths["a.py"]))
 
 
@@ -204,7 +208,7 @@ def test_build_structure_is_sorted_stable(tmp_path):
     assert entries == sorted(entries)
 
     lines: list[str] = []
-    tg.generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=False, mostrar_clases=False, mostrar_metodos=False)
+    transcriptor4ai.tree.render.generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=False, mostrar_clases=False, mostrar_metodos=False)
     pkg_children = []
     in_pkg = False
     for ln in lines:
@@ -231,7 +235,7 @@ def test_render_connectors_and_prefix_alignment_simple_tree(tmp_path):
 
     estructura = _build_structure(base, modo="solo_modulos")
     lines = []
-    tg.generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=False, mostrar_clases=False, mostrar_metodos=False)
+    transcriptor4ai.tree.render.generar_estructura_texto(estructura, lines, prefix="", mostrar_funciones=False, mostrar_clases=False, mostrar_metodos=False)
 
     assert any(line.startswith(("├── ", "└── ")) for line in lines)
     assert any("pkg" in line for line in lines)
@@ -245,7 +249,7 @@ def test_render_empty_tree_is_empty_lines(tmp_path):
 
     estructura = _build_structure(base, modo="todo")
     lines = []
-    tg.generar_estructura_texto(estructura, lines)
+    transcriptor4ai.tree.render.generar_estructura_texto(estructura, lines)
 
     assert lines == []
 
@@ -254,12 +258,12 @@ def test_generar_arbol_directorios_returns_lines(tmp_path):
     base = tmp_path / "base"
     _make_tree(base)
 
-    lines = tg.generar_arbol_directorios(
+    lines = transcriptor4ai.tree.service.generar_arbol_directorios(
         ruta_base=str(base),
         modo="todo",
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=tg._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         mostrar_funciones=False,
         mostrar_clases=False,
         mostrar_metodos=False,
@@ -276,12 +280,12 @@ def test_generar_arbol_directorios_imprimir_false_no_stdout(tmp_path, capsys):
     base = tmp_path / "base"
     _make_tree(base)
 
-    tg.generar_arbol_directorios(
+    transcriptor4ai.tree.service.generar_arbol_directorios(
         ruta_base=str(base),
         modo="todo",
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=tg._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         imprimir=False,
     )
 
@@ -295,12 +299,12 @@ def test_save_tree_creates_parent_dir_and_writes_file(tmp_path):
 
     out_file = tmp_path / "nested" / "dir" / "tree.txt"
 
-    lines = tg.generar_arbol_directorios(
+    lines = transcriptor4ai.tree.service.generar_arbol_directorios(
         ruta_base=str(base),
         modo="todo",
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=tg._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         imprimir=False,
         guardar_archivo=str(out_file),
     )
@@ -326,12 +330,12 @@ def test_save_tree_write_failure_appends_error_line(monkeypatch, tmp_path):
     monkeypatch.setattr(builtins, "open", selective_open)
 
     out_file = tmp_path / "tree.txt"
-    lines = tg.generar_arbol_directorios(
+    lines = transcriptor4ai.tree.service.generar_arbol_directorios(
         ruta_base=str(base),
         modo="todo",
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=tg._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         imprimir=False,
         guardar_archivo=str(out_file),
     )
@@ -346,12 +350,12 @@ def test_render_includes_symbol_lines_when_flags_enabled(tmp_path):
     base.mkdir(parents=True, exist_ok=True)
     _write(base / "a.py", "def f():\n    return 1\n\nclass K:\n    def m(self):\n        return 2\n")
 
-    lines = tg.generar_arbol_directorios(
+    lines = transcriptor4ai.tree.service.generar_arbol_directorios(
         ruta_base=str(base),
         modo="solo_modulos",
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=tg._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         mostrar_funciones=True,
         mostrar_clases=True,
         mostrar_metodos=True,

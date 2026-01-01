@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import os
+import re
+from typing import Optional, List, Callable
+
+from transcriptor4ai.filtering import default_extensiones, default_patrones_incluir, default_patrones_excluir, \
+    compile_patterns, es_test, matches_any, matches_include
+from transcriptor4ai.tree.models import Tree, FileNode
+from transcriptor4ai.tree.render import generar_estructura_texto
+
+
+# -----------------------------------------------------------------------------
+# API pública
+# -----------------------------------------------------------------------------
+def generar_arbol_directorios(
+    ruta_base: str,
+    modo: str = "todo",
+    extensiones: Optional[List[str]] = None,
+    patrones_incluir: Optional[List[str]] = None,
+    patrones_excluir: Optional[List[str]] = None,
+    mostrar_funciones: bool = False,
+    mostrar_clases: bool = False,
+    mostrar_metodos: bool = False,
+    imprimir: bool = True,
+    guardar_archivo: str = "",
+) -> List[str]:
+    """
+    Genera una visualización jerárquica de archivos y, opcionalmente, muestra
+    símbolos del archivo (funciones/clases, y opcionalmente métodos de clase).
+
+    - modo: "all" | "only_modules" | "only_test"
+    - imprimir: si True imprime en consola
+    - guardar_archivo: si se proporciona, guarda el árbol en ese fichero
+
+    Devuelve:
+      Lista de líneas (strings) del árbol generado (útil para GUI / tests).
+    """
+    # -------------------------
+    # Normalización de inputs
+    # -------------------------
+    if extensiones is None:
+        extensiones = default_extensiones()
+    if patrones_incluir is None:
+        patrones_incluir = default_patrones_incluir()
+    if patrones_excluir is None:
+        patrones_excluir = default_patrones_excluir()
+
+    ruta_base_abs = os.path.abspath(ruta_base)
+
+    incluir_rx = compile_patterns(patrones_incluir)
+    excluir_rx = compile_patterns(patrones_excluir)
+
+    # -------------------------
+    # Construcción de estructura
+    # -------------------------
+    estructura = construir_estructura(
+        ruta_base_abs,
+        modo=modo,
+        extensiones=extensiones,
+        incluir_rx=incluir_rx,
+        excluir_rx=excluir_rx,
+        es_test_func=es_test,
+    )
+
+    # -------------------------
+    # Renderizado del árbol
+    # -------------------------
+    lines: List[str] = []
+    generar_estructura_texto(
+        estructura,
+        lines,
+        prefix="",
+        mostrar_funciones=mostrar_funciones,
+        mostrar_clases=mostrar_clases,
+        mostrar_metodos=mostrar_metodos,
+    )
+
+    # -------------------------
+    # Salida (consola / fichero)
+    # -------------------------
+    if imprimir:
+        print("\n".join(lines))
+
+    if guardar_archivo:
+        try:
+            out_dir = os.path.dirname(os.path.abspath(guardar_archivo))
+            if out_dir and not os.path.exists(out_dir):
+                os.makedirs(out_dir, exist_ok=True)
+
+            with open(guardar_archivo, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+        except OSError as e:
+            lines.append(f"[ERROR] No se pudo guardar el árbol en '{guardar_archivo}': {e}")
+
+    return lines
+
+# -----------------------------------------------------------------------------
+# Construcción de estructura
+# -----------------------------------------------------------------------------
+def construir_estructura(
+    ruta_base: str,
+    modo: str,
+    extensiones: List[str],
+    incluir_rx: List[re.Pattern],
+    excluir_rx: List[re.Pattern],
+    es_test_func: Callable[[str], bool],
+) -> Tree:
+    estructura: Tree = {}
+
+    for root, dirs, files in os.walk(ruta_base):
+        dirs[:] = [d for d in dirs if not matches_any(d, excluir_rx)]
+        dirs.sort()
+        files.sort()
+
+        rel_root = os.path.relpath(root, ruta_base)
+        if rel_root == ".":
+            rel_root = ""
+
+        # Navegar/crear nodos intermedios
+        nodos_carpeta: Tree = estructura
+        if rel_root:
+            for p in rel_root.split(os.sep):
+                if p not in nodos_carpeta or not isinstance(nodos_carpeta[p], dict):
+                    nodos_carpeta[p] = {}
+                nodos_carpeta = nodos_carpeta[p]
+
+        # Procesar archivos
+        for file_name in files:
+            _, ext = os.path.splitext(file_name)
+            if ext not in extensiones:
+                continue
+
+            # Excluir/incluir por patrones (aplicados sobre nombre del archivo)
+            if matches_any(file_name, excluir_rx):
+                continue
+            if not matches_include(file_name, incluir_rx):
+                continue
+
+            archivo_es_test = es_test_func(file_name)
+            if modo == "solo_tests" and not archivo_es_test:
+                continue
+            if modo == "solo_modulos" and archivo_es_test:
+                continue
+
+            # Guardar nodo archivo
+            full_path = os.path.join(root, file_name)
+            nodos_carpeta[file_name] = FileNode(path=full_path)
+
+    return estructura

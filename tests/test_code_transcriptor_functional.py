@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 
 import code_transcriptor as ct
+import transcriptor4ai.transcription.service
 
 
 # -----------------------------------------------------------------------------
@@ -92,7 +93,7 @@ def _run(
     prefix: str = "out",
     guardar_log_errores: bool = True,
 ):
-    return ct.transcribir_codigo(
+    return transcriptor4ai.transcription.service.transcribir_codigo(
         ruta_base=str(ruta_base),
         modo=modo,
         extensiones=extensiones,

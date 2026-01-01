@@ -18,6 +18,9 @@ import os
 from pathlib import Path
 
 import code_transcriptor as ct
+import transcriptor4ai.filtering
+import transcriptor4ai.transcription.service
+import transcriptor4ai.tree.service
 import tree_generator as tg
 
 
@@ -58,12 +61,12 @@ def _pipeline(
     salida_real = output_base / subdir
     salida_real.mkdir(parents=True, exist_ok=True)
 
-    res = ct.transcribir_codigo(
+    res = transcriptor4ai.transcription.service.transcribir_codigo(
         ruta_base=str(ruta_base),
         modo=modo,
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=ct._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         archivo_salida=prefix,
         output_folder=str(salida_real),
         guardar_log_errores=True,
@@ -71,12 +74,12 @@ def _pipeline(
     assert res["ok"] is True
 
     tree_file = salida_real / f"{prefix}_arbol.txt"
-    tg.generar_arbol_directorios(
+    transcriptor4ai.tree.service.generar_arbol_directorios(
         ruta_base=str(ruta_base),
         modo=modo,
         extensiones=[".py"],
         patrones_incluir=[".*"],
-        patrones_excluir=tg._default_patrones_excluir(),
+        patrones_excluir=transcriptor4ai.filtering.default_patrones_excluir(),
         mostrar_funciones=True,
         mostrar_clases=True,
         mostrar_metodos=True,

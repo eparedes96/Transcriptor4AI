@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from transcriptor4ai.ui.gui import main
+from dataclasses import dataclass
+from typing import Dict, Union
 
 # -----------------------------------------------------------------------------
-# Entry point
+# Modelo de datos
 # -----------------------------------------------------------------------------
+@dataclass(frozen=True)
+class FileNode:
+    path: str
 
-if __name__ == "__main__":
-    main()
+
+Tree = Dict[str, Union["Tree", FileNode]]

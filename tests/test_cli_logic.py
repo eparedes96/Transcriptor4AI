@@ -1,0 +1,74 @@
+# tests/test_cli_logic.py
+import pytest
+from transcriptor4ai.cli import _build_parser, _args_to_overrides
+
+
+def parse_args(arg_list):
+    """Helper to simulate CLI argument parsing."""
+    parser = _build_parser()
+    return parser.parse_args(arg_list)
+
+
+# -----------------------------------------------------------------------------
+# CLI Argument Mapping Tests
+# -----------------------------------------------------------------------------
+
+def test_cli_simple_flags_mapping():
+    """Verify boolean flags are mapped correctly to config keys."""
+    args = parse_args([
+        "--tree",
+        "--print-tree",
+        "--funciones",
+        "--no-error-log"
+    ])
+
+    overrides = _args_to_overrides(args)
+
+    assert overrides["generar_arbol"] is True
+    assert overrides["imprimir_arbol"] is True
+    assert overrides["mostrar_funciones"] is True
+    assert overrides["guardar_log_errores"] is False
+
+
+def test_cli_csv_list_parsing():
+    """Verify comma-separated strings are parsed into lists."""
+    args = parse_args([
+        "--ext", ".js,.ts",
+        "--exclude", "node_modules,dist"
+    ])
+
+    overrides = _args_to_overrides(args)
+
+    assert overrides["extensiones"] == [".js", ".ts"]
+    assert overrides["patrones_excluir"] == ["node_modules", "dist"]
+
+
+def test_cli_path_arguments():
+    """Verify input/output path arguments."""
+    args = parse_args([
+        "-i", "/input/path",
+        "-o", "/output/path",
+        "--subdir", "my_sub",
+        "--prefix", "my_prefix"
+    ])
+
+    overrides = _args_to_overrides(args)
+
+    assert overrides["ruta_carpetas"] == "/input/path"
+    assert overrides["output_base_dir"] == "/output/path"
+    assert overrides["output_subdir_name"] == "my_sub"
+    assert overrides["output_prefix"] == "my_prefix"
+
+
+def test_cli_defaults_are_not_in_overrides():
+    """
+    If arguments are not provided, they should NOT appear in overrides.
+    This allows the underlying config.json to take precedence.
+    """
+    args = parse_args([])  # No arguments
+    overrides = _args_to_overrides(args)
+
+    # Keys should be missing or None, so merge_config ignores them
+    assert "generar_arbol" not in overrides
+    assert "extensiones" not in overrides
+    assert overrides["ruta_carpetas"] is None

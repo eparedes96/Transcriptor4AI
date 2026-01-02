@@ -1,104 +1,171 @@
-# Transcriptor: Herramienta de Transcripción y Árbol de Directorios
+# Transcriptor4AI
 
-Transcriptor es un paquete de Python diseñado para transcribir el contenido de archivos de código fuente y generar una representación en árbol de la estructura de directorios. Además, permite extraer funciones y clases definidas en cada archivo. La herramienta incluye una interfaz gráfica (usando PySimpleGUI) que facilita la configuración y ejecución del proceso.
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
+[![Status](https://img.shields.io/badge/status-stable-green.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-## Características
+**Transcriptor4AI** is a robust tool designed to prepare codebases for Large Language Models (LLMs) like ChatGPT, Claude, or Copilot.
 
-- **Transcripción de Código:**  
-  - Extrae el contenido completo de los archivos que cumplen criterios definidos (por ejemplo, extensión `.py`, patrones de inclusión/exclusión).
-  - Separa los resultados en archivos de transcripción para tests y para módulos según el modo de procesamiento.
+It flattens complex project structures into consolidated text files and generates detailed directory trees with AST analysis (Classes, Functions, Methods), making it effortless to provide context to AI assistants.
 
-- **Generación de Árbol de Directorios:**  
-  - Crea una representación jerárquica de la estructura de directorios utilizando caracteres como `├──` y `└──`.
-  - Puede extraer y mostrar las definiciones de funciones y clases (usando el módulo `ast`).
+## 🚀 Features
 
-- **Interfaz Gráfica Configurable:**  
-  - Permite seleccionar la ruta de entrada y salida, el modo de procesamiento, extensiones, patrones, y opciones para mostrar funciones y clases.
-  - Incluye botones para guardar o resetear la configuración, que se almacena en un archivo `config.json`.
+*   **Smart Flattening**: Consolidates code into readable text files (`_modules.txt` and `_tests.txt`).
+*   **AST Analysis**: Generates a visual directory tree that "sees inside" files, listing Classes, Functions, and Methods without executing code.
+*   **Dual Interface**:
+    *   **GUI**: User-friendly graphical interface with asynchronous processing (no freezing).
+    *   **CLI**: Powerful command-line interface for automation and CI/CD pipelines.
+*   **Intelligent Filtering**: Regex-based inclusion/exclusion patterns (ignores `.git`, `__pycache__` by default).
+*   **Robustness**: Thread-safe execution, rotating file logging, and input sanitization.
+*   **Internationalization (i18n)**: Built-in support for multiple languages (Default: English).
 
-- **Configuración Personalizable:**  
-  - Define parámetros como las extensiones a procesar, patrones para incluir o excluir archivos, etc.
-  - Guarda la configuración para usos futuros y permite restablecerla a los valores por defecto.
+---
 
-## Requisitos
+## 📦 Installation
 
-- Python 3.6 o superior.
-- [PySimpleGUI](https://pypi.org/project/PySimpleGUI/) (se instalará automáticamente al instalar el paquete).
+### Prerequisites
+*   Python 3.9 or higher.
 
-## Instalación
+### From Source (Recommended)
+Since this project uses a modern `src` layout, install it using `pip` to ensure dependencies and entry points are correctly configured.
 
-1. **Clona el repositorio** o descarga el código fuente.
+```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/transcriptor4ai.git
+cd transcriptor4ai
 
-2. **Instala el paquete en modo editable** (esto permite que cualquier cambio en el código se refleje de inmediato sin reinstalar):
-   ```bash
-   pip install -e .
-   ```
-Nota: Durante la instalación se generará una carpeta transcriptor.egg-info con metadatos del paquete. Esto es normal y forma parte del proceso de empaquetado.
+# 2. Install dependencies and the package
+pip install .
 
-## Uso
+# For development (editable mode)
+pip install -e .
+```
 
-### Ejecutar la Interfaz Gráfica
+---
 
-El paquete incluye un punto de entrada para la línea de comandos. Una vez instalado, puedes iniciar la interfaz gráfica con:
+## 🖥️ Usage
 
-   ```bash
-   
-   transcriptor-cli
-   ```
+Once installed, two commands become available in your terminal:
 
-Esto abrirá la ventana configurada con PySimpleGUI, donde podrás:
+### 1. Graphical User Interface (GUI)
+Launch the visual tool:
 
-- Seleccionar la carpeta a procesar (se abre el explorador en la ruta mostrada).
-- Establecer la carpeta de salida (y, en caso de existir, solicitar confirmación para sobrescribir).
-- Configurar el modo de procesamiento, extensiones, patrones y opciones de extracción.
-- Guardar o resetear la configuración.
+```bash
+transcriptor-gui
+```
 
-### Usar el Paquete en Otros Proyectos
+*   **Source Directory**: Select the root folder of your project.
+*   **Tree & Symbols**: Check "Show classes/methods" to enrich the structural map.
+*   **Dry Run**: Use the "Simulation" checkbox to validate paths without writing files.
 
-Puedes importar las funciones principales del paquete en tus propios scripts. Por ejemplo:
+### 2. Command Line Interface (CLI)
+Ideal for scripts or quick operations.
 
-   ```bash
-   
-   from transcriptor import transcribir_codigo, generar_arbol_directorios
+**Basic Example:**
 
-   def main():
-       # Define las rutas de ejemplo
-       ruta_codigo = "ruta/a/tu/codigo"
-       carpeta_salida = "resultados"
-   
-       # Transcribe el código
-       transcribir_codigo(
-           ruta_base=ruta_codigo,
-           modo="todo",
-           archivo_salida="mi_transcripcion",
-           output_folder=carpeta_salida
-       )
-   
-       # Genera el árbol de directorios
-       generar_arbol_directorios(
-           ruta_base=ruta_codigo,
-           mostrar_funciones=True,
-           mostrar_clases=True,
-           guardar_archivo=f"{carpeta_salida}/mi_arbol.txt"
-       )
-   
-   if __name__ == "__main__":
-       main()
-   ```
+```bash
+transcriptor-cli -i ./my_project -o ./dist --tree
+```
 
-## Estructura del Proyecto
+**Advanced Example:**
 
-La estructura típica del paquete es la siguiente:
+```bash
+transcriptor-cli -i ./src \
+                 -o ./output \
+                 --tree --clases --funciones \
+                 --exclude "venv,tests" \
+                 --json
+```
 
-   ```bash
-   
-   mi_transcriptor/
-    ├── transcriptor/
-    │   ├── __init__.py         # Inicializa el paquete y expone funciones clave
-    │   ├── code_transcriptor.py
-    │   ├── tree_generator.py
-    │   └── main.py             # Interfaz gráfica (opcional)
-    ├── setup.py                # Configuración para la instalación del paquete
-    ├── README.md               # Este archivo
-    └── .gitignore              # Excluye archivos y directorios no deseados
-   ```
+#### CLI Arguments Reference
+
+| Flag | Description |
+| :--- | :--- |
+| `-i`, `--input` | Path to the source directory to process. |
+| `-o`, `--output-base` | Base output directory (a subdirectory is created inside). |
+| `--tree` | Generate the directory tree structure. |
+| `--clases` | Include class definitions in the tree. |
+| `--funciones` | Include function definitions in the tree. |
+| `--metodos` | Include methods inside classes in the tree. |
+| `--ext` | Comma-separated extensions (e.g., `.py,.js`). |
+| `--exclude` | Regex patterns to ignore (e.g., `venv,node_modules`). |
+| `--dry-run` | Simulate execution without writing files. |
+| `--json` | Output execution result in JSON format (useful for piping). |
+
+Use `transcriptor-cli --help` for the full list of options.
+
+---
+
+## ⚙️ Configuration
+
+The application uses a `config.json` file for persistent settings.
+*   **Location**: The file is created in the working directory after the first "Save" in the GUI.
+*   **Defaults**: Smart defaults are applied if the file is missing.
+
+**Example `config.json`:**
+
+```json
+{
+    "modo_procesamiento": "todo",
+    "extensiones": [".py", ".ts"],
+    "patrones_excluir": [
+        "^__init__\\.py$",
+        "^(__pycache__|\\.git|node_modules)$"
+    ],
+    "generar_arbol": true,
+    "mostrar_clases": true,
+    "guardar_log_errores": true
+}
+```
+
+---
+
+## 📂 Output Structure
+
+After running the tool, the output folder will contain:
+
+1.  **`{prefix}_modulos.txt`**: Consolidated source code (non-test files).
+2.  **`{prefix}_tests.txt`**: Consolidated test files (files matching `test_*.py` or `*_test.py`).
+3.  **`{prefix}_arbol.txt`**: Hierarchical view of the project structure.
+4.  **`{prefix}_errores.txt`**: (Optional) Log of files that could not be read (encoding errors, permissions).
+
+---
+
+## 🛠️ Development
+
+### Running Tests
+The project includes a comprehensive test suite using `pytest`.
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+```
+
+### Building Executable
+To generate a standalone `.exe` file (Windows) or binary (Linux/Mac):
+
+```bash
+# Install build tools
+pip install pyinstaller
+
+# Generate executable (One-File mode)
+pyinstaller --name "transcriptor4ai" \
+            --onefile \
+            --noconsole \
+            --add-data "src/transcriptor4ai/locales/*.json;transcriptor4ai/locales" \
+            src/transcriptor4ai/main.py
+```
+
+---
+
+## 📝 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
+
+---
+
+**Author**: Enrique Paredes
+**Contact**: eparedesbalen@gmail.com

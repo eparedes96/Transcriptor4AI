@@ -35,12 +35,13 @@ def build():
 
     # 5. Base PyInstaller Arguments
     args = [
-        'src/transcriptor4ai/main.py',  # Script Entry Point
-        '--name=transcriptor4ai',       # Executable Name
-        '--onefile',                    # Bundle everything into one .exe
-        '--console',                    # Keep console open (Required for CLI output)
-        f'--add-data={add_data_arg}',   # Include translation files
-        '--clean',                      # Clean PyInstaller cache
+        'main.py',
+        '--name=transcriptor4ai',
+        '--onefile',
+        '--console',
+        '--paths=src',
+        f'--add-data={add_data_arg}',
+        '--clean',
     ]
 
     # 6. Conditionally add Icon

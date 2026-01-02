@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "0.1.0"
+version = "1.0.0"
 description = "Tool for transcribing codebases and generating directory trees for AI context injection."
 readme = "README.md"
 requires-python = ">=3.9"

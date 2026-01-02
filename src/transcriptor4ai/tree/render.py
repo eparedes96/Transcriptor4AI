@@ -60,7 +60,7 @@ def generar_estructura_texto(
                 symbols = extract_definitions(
                     node.path,
                     show_functions=mostrar_funciones,
-                    show_classes=mostrar_classes,
+                    show_classes=mostrar_clases,
                     show_methods=mostrar_metodos,
                 )
 

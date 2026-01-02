@@ -45,7 +45,7 @@ def my_function():
 def test_extract_definitions_handles_syntax_error(tmp_path):
     """The parser should not crash on invalid python code."""
     f = tmp_path / "broken.py"
-    f.write_text("def broken_code( :", encoding="utf-8")  # Invalid syntax
+    f.write_text("def broken_code( :", encoding="utf-8")
 
     results = extract_definitions(str(f), True, True)
 
@@ -68,9 +68,6 @@ def test_render_flat_structure():
     lines = []
     generar_estructura_texto(structure, lines)
 
-    # Should look like:
-    # ├── file1.txt
-    # └── file2.txt
     assert len(lines) == 2
     assert "├── file1.txt" in lines[0]
     assert "└── file2.txt" in lines[1]
@@ -87,9 +84,31 @@ def test_render_nested_structure():
     lines = []
     generar_estructura_texto(structure, lines)
 
-    # Should look like:
-    # └── folder
-    #     └── file.txt
     assert len(lines) == 2
     assert "└── folder" in lines[0]
     assert "    └── file.txt" in lines[1]
+
+
+def test_render_with_ast_flags_enabled(tmp_path):
+    """
+    Verify rendering passes correctly when AST flags are True.
+    This catches variable naming errors inside the conditional block.
+    """
+    # Create a real file so extract_definitions doesn't fail
+    f = tmp_path / "test_cls.py"
+    f.write_text("class MyTestClass: pass", encoding="utf-8")
+
+    structure = {
+        "test_cls.py": FileNode(path=str(f))
+    }
+
+    lines = []
+    # Force entry into the AST block
+    generar_estructura_texto(
+        structure,
+        lines,
+        mostrar_clases=True
+    )
+
+    assert any("test_cls.py" in l for l in lines)
+    assert any("Class: MyTestClass" in l for l in lines)

@@ -22,14 +22,15 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/transcriptor4ai"
+"Homepage" = "https://github.com/eparedesbalen/transcriptor4ai"
 
 [project.scripts]
-# Installs command 'transcriptor-cli' pointing to the CLI module
 transcriptor-cli = "transcriptor4ai.cli:main"
-# Installs command 'transcriptor-gui' pointing to the GUI module
 transcriptor-gui = "transcriptor4ai.ui.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["transcriptor4ai*"]
+
+[tool.setuptools.package-data]
+transcriptor4ai = ["locales/*.json"]

@@ -1,5 +1,38 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Distribution / Build ---
+build/
+dist/
+*.spec
+*.egg-info/
+.eggs/
+
+# --- IDEs (JetBrains/VSCode) ---
+.idea/
+*.iml
+.vscode/
+
+# --- Environment ---
+.env
+.venv
+env/
+venv/
+*.log
+
+# --- Project Specific ---
+# User configuration (local only)
 config.json
+
+# Output files (do not track results)
 *_tests.txt
 *_modulos.txt
 *_arbol.txt
-transcriptor.egg-info
+*_errores.txt
+transcript/
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db

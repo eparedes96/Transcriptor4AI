@@ -23,32 +23,36 @@ def build():
     clean_artifacts()
 
     # 2. Determine OS path separator for --add-data
-    # Windows uses ';', Unix uses ':'
     sep = ';' if platform.system() == 'Windows' else ':'
 
     # 3. Define Data Resources
-    # We must include the JSON locales.
-    # Source: src/transcriptor4ai/locales/*.json
-    # Destination inside exe: transcriptor4ai/locales
     locales_src = os.path.join("src", "transcriptor4ai", "locales", "*.json")
     locales_dest = os.path.join("transcriptor4ai", "locales")
     add_data_arg = f"{locales_src}{sep}{locales_dest}"
 
-    # 4. PyInstaller Arguments
+    # 4. Define Icon Path
+    icon_path = os.path.join("assets", "icon.ico")
+
+    # 5. Base PyInstaller Arguments
     args = [
         'src/transcriptor4ai/main.py',  # Script Entry Point
-        '--name=transcriptor4ai',  # Executable Name
-        '--onefile',  # Bundle everything into one .exe
-        '--console',  # Keep console open (Required for CLI output)
-        f'--add-data={add_data_arg}',  # Include translation files
-        '--clean',  # Clean PyInstaller cache
-        # Optional: Add icon if you have one
-        # '--icon=assets/icon.ico',
+        '--name=transcriptor4ai',       # Executable Name
+        '--onefile',                    # Bundle everything into one .exe
+        '--console',                    # Keep console open (Required for CLI output)
+        f'--add-data={add_data_arg}',   # Include translation files
+        '--clean',                      # Clean PyInstaller cache
     ]
+
+    # 6. Conditionally add Icon
+    if os.path.exists(icon_path):
+        print(f"Icon found: {icon_path}")
+        args.append(f'--icon={icon_path}')
+    else:
+        print("WARNING: Icon not found in 'assets/icon.ico'. Building with default icon.")
 
     print(f"Running PyInstaller with args: {args}")
 
-    # 5. Execute
+    # 7. Execute
     PyInstaller.__main__.run(args)
 
     print("\nBuild Complete! Check the 'dist/' folder.")

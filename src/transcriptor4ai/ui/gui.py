@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import traceback
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 import PySimpleGUI as sg
 
@@ -13,8 +14,28 @@ from transcriptor4ai.logging import configure_logging, LoggingConfig, get_defaul
 from transcriptor4ai.validate_config import validate_config
 from transcriptor4ai.pipeline import run_pipeline, PipelineResult
 
-# Initialize logger for this module (after configuration in main)
 logger = logging.getLogger(__name__)
+
+
+# -----------------------------------------------------------------------------
+# Threading Helper
+# -----------------------------------------------------------------------------
+def _run_pipeline_thread(
+        window: sg.Window,
+        config: Dict[str, Any],
+        overwrite: bool,
+        dry_run: bool
+) -> None:
+    """
+    Wrapper to execute the pipeline in a separate thread.
+    Sends the result back to the main GUI thread via window event.
+    """
+    try:
+        result = run_pipeline(config, overwrite=overwrite, dry_run=dry_run)
+        window.write_event_value("-THREAD-DONE-", result)
+    except Exception as e:
+        logger.critical(f"Critical failure in pipeline thread: {e}", exc_info=True)
+        window.write_event_value("-THREAD-DONE-", e)
 
 
 # -----------------------------------------------------------------------------
@@ -58,7 +79,6 @@ def volcar_config_a_gui(window: sg.Window, config: Dict[str, Any]) -> None:
     window["modo_modulos"].update(config["modo_procesamiento"] == "solo_modulos")
     window["modo_tests"].update(config["modo_procesamiento"] == "solo_tests")
 
-    # Handle lists for display
     exts = config["extensiones"] if isinstance(config["extensiones"], list) else []
     incl = config["patrones_incluir"] if isinstance(config["patrones_incluir"], list) else []
     excl = config["patrones_excluir"] if isinstance(config["patrones_excluir"], list) else []
@@ -113,11 +133,17 @@ def _format_summary(res: PipelineResult) -> str:
     return "\n".join(lines)
 
 
+def _toggle_ui_state(window: sg.Window, disabled: bool) -> None:
+    """Helper to enable/disable buttons during processing."""
+    for key in ["Procesar", "Guardar Configuración", "Resetear Configuración", "btn_explorar_in", "btn_examinar_out"]:
+        window[key].update(disabled=disabled)
+
+
 # -----------------------------------------------------------------------------
 # Main GUI Entry Point
 # -----------------------------------------------------------------------------
 def main() -> None:
-    # 1. Setup Logging (Rotating File in AppData)
+    # 1. Setup Logging
     log_path = get_default_gui_log_path()
     log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
     configure_logging(log_conf)
@@ -128,7 +154,6 @@ def main() -> None:
     # 2. Load Initial Config
     try:
         raw_config = cfg.cargar_configuracion()
-        # Initial validation to ensure UI has safe defaults
         config, _ = validate_config(raw_config, strict=False)
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
@@ -176,14 +201,11 @@ def main() -> None:
 
         # --- Filters ---
         [sg.Text("Extensiones (separadas por coma):"),
-         sg.Input(",".join(config["extensiones"]), size=(60, 1), key="extensiones",
-                  tooltip="Ej: .py, .js, .java")],
+         sg.Input(",".join(config["extensiones"]), size=(60, 1), key="extensiones")],
         [sg.Text("Patrones Incluir (Regex):"),
-         sg.Input(",".join(config["patrones_incluir"]), size=(60, 1), key="patrones_incluir",
-                  tooltip="Solo procesar archivos que cumplan estos patrones")],
+         sg.Input(",".join(config["patrones_incluir"]), size=(60, 1), key="patrones_incluir")],
         [sg.Text("Patrones Excluir (Regex):"),
-         sg.Input(",".join(config["patrones_excluir"]), size=(60, 1), key="patrones_excluir",
-                  tooltip="Ignorar archivos/carpetas que cumplan estos patrones")],
+         sg.Input(",".join(config["patrones_excluir"]), size=(60, 1), key="patrones_excluir")],
 
         # --- Tree Options ---
         [
@@ -197,9 +219,12 @@ def main() -> None:
         ],
         [
             sg.Checkbox("Guardar log de errores", key="guardar_log_errores", default=config["guardar_log_errores"]),
-            sg.Checkbox("Simulación (Dry Run)", key="dry_run", default=False, text_color="blue",
-                        tooltip="Ejecuta todo el proceso sin escribir en el disco"),
+            sg.Checkbox("Simulación (Dry Run)", key="dry_run", default=False, text_color="blue"),
         ],
+
+        # --- Status Indicator (Hidden by default) ---
+        [sg.Text("⏳ Procesando... Por favor, espere.", key="-STATUS-", text_color="blue", visible=False,
+                 font=("Any", 10, "bold"))],
 
         # --- Actions ---
         [
@@ -218,7 +243,7 @@ def main() -> None:
         if event in (sg.WIN_CLOSED, "Salir"):
             break
 
-        # --- Browse Actions ---
+        # --- File Browsing ---
         if event == "btn_explorar_in":
             initial = paths.normalizar_dir(values.get("ruta_carpetas", ""), os.getcwd())
             folder = sg.popup_get_folder("Seleccione la carpeta a procesar", default_path=initial)
@@ -234,19 +259,17 @@ def main() -> None:
             if folder:
                 window["output_base_dir"].update(folder)
 
-        # --- Save / Reset Actions ---
+        # --- Configuration Actions ---
         if event == "Guardar Configuración":
             try:
                 actualizar_config_desde_gui(config, values)
                 clean_conf, _ = validate_config(config, strict=False)
-
                 clean_conf["ruta_carpetas"] = paths.normalizar_dir(clean_conf["ruta_carpetas"], os.getcwd())
                 clean_conf["output_base_dir"] = paths.normalizar_dir(clean_conf["output_base_dir"],
                                                                      clean_conf["ruta_carpetas"])
 
                 cfg.guardar_configuracion(clean_conf)
                 sg.popup("Configuración guardada en config.json")
-                logger.info("Configuration saved by user.")
             except Exception as e:
                 logger.error(f"Save config failed: {e}")
                 sg.popup_error(f"No se pudo guardar configuración:\n{e}")
@@ -254,20 +277,19 @@ def main() -> None:
         if event == "Resetear Configuración":
             config = cfg.cargar_configuracion_por_defecto()
             volcar_config_a_gui(window, config)
-            logger.info("Configuration reset to defaults.")
             sg.popup("Se ha restaurado la configuración por defecto.")
 
-        # --- Process Action ---
+        # --- PROCESS ACTION (Prepare & Thread Start) ---
         if event == "Procesar":
             try:
                 actualizar_config_desde_gui(config, values)
 
-                # 1. Gatekeeper Validation
+                # 1. Validation (Gatekeeper)
                 clean_conf, warnings = validate_config(config, strict=False)
                 if warnings:
                     logger.warning(f"Config warnings: {warnings}")
 
-                # 2. Runtime Path Checks
+                # 2. Path Checks
                 ruta_carpetas = paths.normalizar_dir(clean_conf["ruta_carpetas"], os.getcwd())
                 output_base_dir = paths.normalizar_dir(clean_conf["output_base_dir"], ruta_carpetas)
                 output_subdir_name = clean_conf["output_subdir_name"]
@@ -279,7 +301,7 @@ def main() -> None:
                     sg.popup_error(f"La ruta a procesar no es un directorio:\n{ruta_carpetas}")
                     continue
 
-                # 3. Overwrite & Dry Run Logic
+                # 3. Overwrite & Dry Run Checks (Must happen in Main Thread due to Popups)
                 is_dry_run = bool(values.get("dry_run"))
                 should_overwrite = False
 
@@ -297,31 +319,47 @@ def main() -> None:
                             existentes) + "\n\n¿Desea continuar?"
                         resp = sg.popup_yes_no(msg, icon="warning")
                         if resp != "Yes":
-                            logger.info("Process cancelled by user (overwrite check).")
                             continue
                         should_overwrite = True
 
-                # 4. Execute Pipeline (Orchestrator)
-                logger.info(f"Starting pipeline (DryRun={is_dry_run})...")
+                # 4. Start Thread (Freeze UI)
+                _toggle_ui_state(window, disabled=True)
+                window["-STATUS-"].update(visible=True)
 
-                result = run_pipeline(
-                    clean_conf,
-                    overwrite=should_overwrite,
-                    dry_run=is_dry_run
-                )
+                thread_conf = clean_conf.copy()
 
-                # 5. Result Handling
-                if result.ok:
-                    logger.info("Pipeline finished successfully.")
-                    sg.popup(_format_summary(result), title="Resultado")
-                else:
-                    logger.error(f"Pipeline failed: {result.error}")
-                    sg.popup_error(f"Error en el proceso:\n{result.error}")
+                logger.info(f"Starting pipeline thread (DryRun={is_dry_run})...")
+                threading.Thread(
+                    target=_run_pipeline_thread,
+                    args=(window, thread_conf, should_overwrite, is_dry_run),
+                    daemon=True
+                ).start()
 
             except Exception as e:
                 tb = traceback.format_exc(limit=5)
-                logger.critical(f"Unexpected error in GUI loop: {e}", exc_info=True)
-                sg.popup_error(f"Error inesperado:\n{e}\n\n{tb}")
+                logger.critical(f"Error starting pipeline: {e}\n{tb}")
+                sg.popup_error(f"Error al iniciar el proceso:\n{e}")
+
+        # --- THREAD COMPLETION (Receive Result) ---
+        if event == "-THREAD-DONE-":
+            # 1. Restore UI
+            window["-STATUS-"].update(visible=False)
+            _toggle_ui_state(window, disabled=False)
+
+            # 2. Handle Result
+            payload = values[event]
+
+            if isinstance(payload, PipelineResult):
+                if payload.ok:
+                    logger.info("Pipeline thread finished successfully.")
+                    sg.popup(_format_summary(payload), title="Resultado")
+                else:
+                    logger.error(f"Pipeline thread finished with error: {payload.error}")
+                    sg.popup_error(f"Error en el proceso:\n{payload.error}")
+
+            elif isinstance(payload, Exception):
+                logger.critical(f"Thread crashed: {payload}")
+                sg.popup_error(f"Error crítico en el hilo de ejecución:\n{payload}")
 
     window.close()
     logger.info("GUI closed.")

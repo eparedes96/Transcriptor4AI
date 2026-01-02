@@ -11,8 +11,8 @@ from transcriptor4ai.config import cargar_configuracion, cargar_configuracion_po
 from transcriptor4ai.validate_config import validate_config
 from transcriptor4ai.pipeline import run_pipeline
 from transcriptor4ai.logging import configure_logging, LoggingConfig, get_logger
+from transcriptor4ai.utils.i18n import i18n
 
-# Initialize a logger for the CLI module itself
 logger = get_logger(__name__)
 
 
@@ -22,35 +22,32 @@ logger = get_logger(__name__)
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="transcriptor4ai",
-        description=(
-            "Transcriptor4AI: Code transcription tool (Tests/Modules) with "
-            "directory tree generation support."
-        ),
+        description=i18n.t("app.description"),
     )
 
     # --- Input / Output ---
     p.add_argument(
         "-i", "--input",
         dest="ruta_carpetas",
-        help="Path to the source directory to process.",
+        help=i18n.t("cli.args.input"),
         default=None,
     )
     p.add_argument(
         "-o", "--output-base",
         dest="output_base_dir",
-        help="Base output directory.",
+        help=i18n.t("cli.args.output_base"),
         default=None,
     )
     p.add_argument(
         "--subdir",
         dest="output_subdir_name",
-        help="Name of the output subdirectory.",
+        help=i18n.t("cli.args.subdir"),
         default=None,
     )
     p.add_argument(
         "--prefix",
         dest="output_prefix",
-        help="Prefix for generated files.",
+        help=i18n.t("cli.args.prefix"),
         default=None,
     )
 
@@ -59,77 +56,77 @@ def _build_parser() -> argparse.ArgumentParser:
         "--modo",
         choices=["todo", "solo_modulos", "solo_tests"],
         default=None,
-        help="Processing mode.",
+        help=i18n.t("cli.args.mode"),
     )
     p.add_argument(
         "--tree",
         action="store_true",
-        help="Generate directory tree.",
+        help=i18n.t("cli.args.tree"),
     )
     p.add_argument(
         "--tree-file",
         dest="tree_file",
         default=None,
-        help="Path to save the tree file (overrides default).",
+        help=i18n.t("cli.args.tree_file"),
     )
     p.add_argument(
         "--print-tree",
         action="store_true",
-        help="Print the tree to console.",
+        help=i18n.t("cli.args.print_tree"),
     )
 
     # --- AST flags ---
-    p.add_argument("--funciones", action="store_true", help="Show functions in tree.")
-    p.add_argument("--clases", action="store_true", help="Show classes in tree.")
-    p.add_argument("--metodos", action="store_true", help="Show methods in tree.")
+    p.add_argument("--funciones", action="store_true", help=i18n.t("cli.args.func"))
+    p.add_argument("--clases", action="store_true", help=i18n.t("cli.args.cls"))
+    p.add_argument("--metodos", action="store_true", help=i18n.t("cli.args.meth"))
 
     # --- Filters ---
     p.add_argument(
         "--ext",
         dest="extensiones",
         default=None,
-        help="Comma-separated extensions (e.g. .py,.txt).",
+        help=i18n.t("cli.args.ext"),
     )
     p.add_argument(
         "--include",
         dest="patrones_incluir",
         default=None,
-        help="Regex inclusion patterns.",
+        help=i18n.t("cli.args.inc"),
     )
     p.add_argument(
         "--exclude",
         dest="patrones_excluir",
         default=None,
-        help="Regex exclusion patterns.",
+        help=i18n.t("cli.args.exc"),
     )
 
     # --- Safety / UX ---
     p.add_argument(
         "--overwrite",
         action="store_true",
-        help="Overwrite existing files without prompting.",
+        help=i18n.t("cli.args.overwrite"),
     )
     p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Simulate execution without writing files.",
+        help=i18n.t("cli.args.dry_run"),
     )
     p.add_argument(
         "--no-error-log",
         action="store_true",
-        help="Do not generate the error log file.",
+        help=i18n.t("cli.args.no_log"),
     )
 
     # --- Config handling ---
     p.add_argument(
         "--use-defaults",
         action="store_true",
-        help="Ignore config.json and use defaults.",
+        help=i18n.t("cli.args.defaults"),
     )
     p.add_argument(
         "--dump-config",
         action="store_true",
-        help="Print final config in JSON and exit.",
+        help=i18n.t("cli.args.dump"),
     )
     p.add_argument(
         "--debug",
@@ -142,7 +139,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json",
         dest="json_output",
         action="store_true",
-        help="Output result in JSON format.",
+        help=i18n.t("cli.args.json"),
     )
 
     return p
@@ -212,7 +209,7 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
 def _print_human_summary(result: Dict[str, Any]) -> None:
     ok = bool(result.get("ok"))
     if not ok:
-        print("ERROR:", result.get("error", "Unknown error"), file=sys.stderr)
+        print(f"ERROR: {result.get('error', 'Unknown error')}", file=sys.stderr)
         return
 
     salida = result.get("output_dir") or result.get("salida_real") or ""
@@ -220,9 +217,9 @@ def _print_human_summary(result: Dict[str, Any]) -> None:
     generados = result.get("generados") or {}
     resumen_data = result.get("resumen") or {}
 
-    print("SUCCESS")
+    print(i18n.t("cli.status.success"))
     if salida:
-        print(f"Output Directory: {salida}")
+        print(i18n.t("cli.status.output_dir", path=salida))
 
     # Merge counters from various possible result structures
     counters = cont if cont else resumen_data
@@ -231,7 +228,7 @@ def _print_human_summary(result: Dict[str, Any]) -> None:
             print(f"{k}: {counters[k]}")
 
     if generados:
-        print("\nGenerated Files:")
+        print("\n" + i18n.t("cli.status.generated"))
         for k, v in generados.items():
             if v:
                 print(f"  - {k}: {v}")
@@ -281,7 +278,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     # 5. Basic Path Check (Pre-Pipeline)
     ruta = clean_conf.get("ruta_carpetas", "")
     if not os.path.exists(ruta):
-        logger.error(f"Input path does not exist: {ruta}")
+        msg = i18n.t("cli.errors.path_not_exist", path=ruta)
+        logger.error(msg)
+        print(f"ERROR: {msg}", file=sys.stderr)
         return 2
 
     # 6. Run Pipeline
@@ -293,10 +292,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             dry_run=bool(args.dry_run),
         )
     except KeyboardInterrupt:
-        logger.warning("Operation cancelled by user (SIGINT).")
+        msg = i18n.t("cli.status.interrupted")
+        logger.warning(msg)
+        print(msg, file=sys.stderr)
         return 130
     except Exception as e:
-        logger.critical(f"Unhandled exception in pipeline: {e}", exc_info=True)
+        msg = i18n.t("cli.errors.pipeline_fail", error=e)
+        logger.critical(msg, exc_info=True)
+        print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
     # 7. Render Output

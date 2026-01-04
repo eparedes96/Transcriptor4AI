@@ -43,7 +43,7 @@ def get_default_config() -> Dict[str, Any]:
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": DEFAULT_OUTPUT_PREFIX,
         "processing_mode": "all",  # Options: all, modules_only, tests_only
-        "extensiones": [".py"],
+        "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [
             r"^__init__\.py$",

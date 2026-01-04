@@ -63,7 +63,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     # --- Mode / Features ---
     p.add_argument(
-        "--modo",
+        "--mode",
         choices=["all", "modules_only", "tests_only"],
         default=None,
         help=i18n.t("cli.args.mode"),
@@ -86,14 +86,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     # --- AST flags ---
-    p.add_argument("--funciones", action="store_true", help=i18n.t("cli.args.func"))
-    p.add_argument("--clases", action="store_true", help=i18n.t("cli.args.cls"))
-    p.add_argument("--mealls", action="store_true", help=i18n.t("cli.args.meth"))
+    p.add_argument("--functions", action="store_true", help=i18n.t("cli.args.func"))
+    p.add_argument("--classes", action="store_true", help=i18n.t("cli.args.cls"))
+    p.add_argument("--methods", action="store_true", help=i18n.t("cli.args.meth"))
 
     # --- Filters ---
     p.add_argument(
         "--ext",
-        dest="extensiones",
+        dest="extensions",
         default=None,
         help=i18n.t("cli.args.ext"),
     )
@@ -171,7 +171,7 @@ def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
     out = dict(base)
     keys_to_merge = [
         "input_path", "output_base_dir", "output_subdir_name", "output_prefix",
-        "processing_mode", "extensiones", "include_patterns", "exclude_patterns",
+        "processing_mode", "extensions", "include_patterns", "exclude_patterns",
         "generate_tree", "print_tree", "show_functions", "show_classes",
         "show_methods", "save_error_log",
     ]
@@ -193,8 +193,8 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     if args.modo is not None:
         overrides["processing_mode"] = args.modo
 
-    if args.extensiones:
-        overrides["extensiones"] = _split_csv(args.extensiones)
+    if args.extensions:
+        overrides["extensions"] = _split_csv(args.extensions)
     if args.include_patterns:
         overrides["include_patterns"] = _split_csv(args.include_patterns)
     if args.exclude_patterns:

@@ -17,7 +17,7 @@ from transcriptor4ai.filtering import (
     default_extensions,
     default_exclude_patterns,
     default_include_patterns,
-    es_test,
+    is_test,
     matches_any,
     matches_include,
 )
@@ -89,7 +89,7 @@ def generate_directory_tree(
         extensions=extensions,
         include_patterns_rx=include_rx,
         exclude_patterns_rx=exclude_rx,
-        test_detect_func=es_test,
+        test_detect_func=is_test,
     )
 
     # -------------------------

@@ -72,7 +72,7 @@ transcriptor-cli -i ./my_project -o ./dist --tree
 ```bash
 transcriptor-cli -i ./src \
                  -o ./output \
-                 --tree --clases --funciones \
+                 --tree --classes --functions \
                  --exclude "venv,tests" \
                  --json
 ```
@@ -84,9 +84,9 @@ transcriptor-cli -i ./src \
 | `-i`, `--input` | Path to the source directory to process. |
 | `-o`, `--output-base` | Base output directory (a subdirectory is created inside). |
 | `--tree` | Generate the directory tree structure. |
-| `--clases` | Include class definitions in the tree. |
-| `--funciones` | Include function definitions in the tree. |
-| `--mealls` | Include methods inside classes in the tree. |
+| `--classes` | Include class definitions in the tree. |
+| `--functions` | Include function definitions in the tree. |
+| `--methods` | Include methods inside classes in the tree. |
 | `--ext` | Comma-separated extensions (e.g., `.py,.js`). |
 | `--exclude` | Regex patterns to ignore (e.g., `venv,node_modules`). |
 | `--dry-run` | Simulate execution without writing files. |
@@ -107,7 +107,7 @@ The application uses a `config.json` file for persistent settings.
 ```json
 {
     "processing_mode": "all",
-    "extensiones": [".py", ".ts"],
+    "extensions": [".py", ".ts"],
     "exclude_patterns": [
         "^__init__\\.py$",
         "^(__pycache__|\\.git|node_modules)$"

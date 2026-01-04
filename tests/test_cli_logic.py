@@ -18,7 +18,7 @@ def test_cli_simple_flags_mapping():
     args = parse_args([
         "--tree",
         "--print-tree",
-        "--funciones",
+        "--functions",
         "--no-error-log"
     ])
 
@@ -39,7 +39,7 @@ def test_cli_csv_list_parsing():
 
     overrides = _args_to_overrides(args)
 
-    assert overrides["extensiones"] == [".js", ".ts"]
+    assert overrides["extensions"] == [".js", ".ts"]
     assert overrides["exclude_patterns"] == ["node_modules", "dist"]
 
 
@@ -70,5 +70,5 @@ def test_cli_defaults_are_not_in_overrides():
 
     # Keys should be missing or None, so merge_config ignores them
     assert "generate_tree" not in overrides
-    assert "extensiones" not in overrides
+    assert "extensions" not in overrides
     assert overrides["input_path"] is None

@@ -144,14 +144,14 @@ def validate_config(
     )
 
     # 4. Lists Normalization: Extensions and Patterns
-    merged["extensiones"] = _as_list_str(
-        merged.get("extensiones"),
+    merged["extensions"] = _as_list_str(
+        merged.get("extensions"),
         default_extensions(),
-        "extensiones",
+        "extensions",
         warnings,
         strict,
     )
-    merged["extensiones"] = _normalize_extensions(merged["extensiones"], warnings, strict)
+    merged["extensions"] = _normalize_extensions(merged["extensions"], warnings, strict)
 
     merged["include_patterns"] = _as_list_str(
         merged.get("include_patterns"),

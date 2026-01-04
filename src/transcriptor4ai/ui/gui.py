@@ -56,14 +56,14 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
     config["output_subdir_name"] = values["output_subdir_name"]
     config["output_prefix"] = values["output_prefix"]
 
-    if values.get("modo_all"):
+    if values.get("mode_all"):
         config["processing_mode"] = "all"
-    elif values.get("modo_modulos"):
+    elif values.get("mode_modulos"):
         config["processing_mode"] = "modules_only"
-    elif values.get("modo_tests"):
+    elif values.get("mode_tests"):
         config["processing_mode"] = "tests_only"
 
-    config["extensiones"] = values.get("extensiones", "")
+    config["extensions"] = values.get("extensions", "")
     config["include_patterns"] = values.get("include_patterns", "")
     config["exclude_patterns"] = values.get("exclude_patterns", "")
 
@@ -83,15 +83,15 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["output_subdir_name"].update(config["output_subdir_name"])
     window["output_prefix"].update(config["output_prefix"])
 
-    window["modo_all"].update(config["processing_mode"] == "all")
-    window["modo_modulos"].update(config["processing_mode"] == "modules_only")
-    window["modo_tests"].update(config["processing_mode"] == "tests_only")
+    window["mode_all"].update(config["processing_mode"] == "all")
+    window["mode_modulos"].update(config["processing_mode"] == "modules_only")
+    window["mode_tests"].update(config["processing_mode"] == "tests_only")
 
-    exts = config["extensiones"] if isinstance(config["extensiones"], list) else []
+    exts = config["extensions"] if isinstance(config["extensions"], list) else []
     incl = config["include_patterns"] if isinstance(config["include_patterns"], list) else []
     excl = config["exclude_patterns"] if isinstance(config["exclude_patterns"], list) else []
 
-    window["extensiones"].update(",".join(exts))
+    window["extensions"].update(",".join(exts))
     window["include_patterns"].update(",".join(incl))
     window["exclude_patterns"].update(",".join(excl))
 
@@ -148,7 +148,7 @@ def _format_summary(res: PipelineResult) -> str:
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
     """Helper to enable/disable buttons during processing."""
     # Use explicit keys for reliable access regardless of language
-    for key in ["btn_process", "btn_save", "btn_reset", "btn_explorar_in", "btn_examinar_out"]:
+    for key in ["btn_process", "btn_save", "btn_reset", "btn_browse_in", "btn_browse_out"]:
         window[key].update(disabled=is_disabled)
 
 
@@ -182,7 +182,7 @@ def main() -> None:
         [
             sg.Input(default_text=config["input_path"], size=(70, 1), key="input_path",
                      tooltip=i18n.t("gui.tooltips.input")),
-            sg.Button(i18n.t("gui.buttons.explore"), key="btn_explorar_in"),
+            sg.Button(i18n.t("gui.buttons.explore"), key="btn_browse_in"),
         ],
 
         # --- Output ---
@@ -190,7 +190,7 @@ def main() -> None:
         [
             sg.Input(default_text=config["output_base_dir"], size=(70, 1), key="output_base_dir",
                      tooltip=i18n.t("gui.tooltips.output")),
-            sg.Button(i18n.t("gui.buttons.examine"), key="btn_examinar_out"),
+            sg.Button(i18n.t("gui.buttons.examine"), key="btn_browse_out"),
         ],
         [
             sg.Text(i18n.t("gui.sections.sub_output")),
@@ -204,17 +204,17 @@ def main() -> None:
         # --- Mode ---
         [sg.Text(i18n.t("gui.sections.mode"))],
         [
-            sg.Radio(i18n.t("gui.radios.all"), "RADIO1", key="modo_all",
+            sg.Radio(i18n.t("gui.radios.all"), "RADIO1", key="mode_all",
                      default=(config["processing_mode"] == "all")),
-            sg.Radio(i18n.t("gui.radios.modules"), "RADIO1", key="modo_modulos",
+            sg.Radio(i18n.t("gui.radios.modules"), "RADIO1", key="mode_modulos",
                      default=(config["processing_mode"] == "modules_only")),
-            sg.Radio(i18n.t("gui.radios.tests"), "RADIO1", key="modo_tests",
+            sg.Radio(i18n.t("gui.radios.tests"), "RADIO1", key="mode_tests",
                      default=(config["processing_mode"] == "tests_only")),
         ],
 
         # --- Filters ---
         [sg.Text(i18n.t("gui.labels.extensions")),
-         sg.Input(",".join(config["extensiones"]), size=(60, 1), key="extensiones",
+         sg.Input(",".join(config["extensions"]), size=(60, 1), key="extensions",
                   tooltip=i18n.t("gui.tooltips.ext"))],
         [sg.Text(i18n.t("gui.labels.include")),
          sg.Input(",".join(config["include_patterns"]), size=(60, 1), key="include_patterns",
@@ -261,7 +261,7 @@ def main() -> None:
             break
 
         # --- File Browsing ---
-        if event == "btn_explorar_in":
+        if event == "btn_browse_in":
             initial = paths.normalize_path(values.get("input_path", ""), os.getcwd())
             folder = sg.popup_get_folder(i18n.t("gui.tooltips.input"), default_path=initial)
             if folder:
@@ -270,7 +270,7 @@ def main() -> None:
                 if not curr_out or os.path.abspath(curr_out) == os.path.abspath(initial):
                     window["output_base_dir"].update(folder)
 
-        if event == "btn_examinar_out":
+        if event == "btn_browse_out":
             initial = paths.normalize_path(values.get("output_base_dir", ""), values.get("input_path", ""))
             folder = sg.popup_get_folder(i18n.t("gui.tooltips.output"), default_path=initial)
             if folder:

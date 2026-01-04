@@ -7,8 +7,8 @@ from typing import Any, Dict, List, Optional
 from transcriptor4ai.filtering import (
     compile_patterns,
     default_extensiones,
-    default_patrones_excluir,
-    default_patrones_incluir,
+    default_exclude_patterns,
+    default_include_patterns,
     es_test,
     matches_any,
     matches_include,
@@ -23,15 +23,15 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
-def transcribir_codigo(
+def transcribe_code(
         ruta_base: str,
         modo: str = "todo",
         extensiones: Optional[List[str]] = None,
-        patrones_incluir: Optional[List[str]] = None,
-        patrones_excluir: Optional[List[str]] = None,
+        include_patterns: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None,
         archivo_salida: str = "transcripcion",
         output_folder: str = ".",
-        guardar_log_errores: bool = True,
+        save_error_log: bool = True,
 ) -> Dict[str, Any]:
     """
     Consolidate source code into text files based on filtering criteria.
@@ -45,11 +45,11 @@ def transcribir_codigo(
         ruta_base: Source directory.
         modo: "todo", "solo_modulos", "solo_tests".
         extensiones: List of file extensions to process.
-        patrones_incluir: Whitelist regex patterns.
-        patrones_excluir: Blacklist regex patterns.
+        include_patterns: Whitelist regex patterns.
+        exclude_patterns: Blacklist regex patterns.
         archivo_salida: Prefix for output files.
         output_folder: Destination directory.
-        guardar_log_errores: Whether to write a separate error log file.
+        save_error_log: Whether to write a separate error log file.
 
     Returns:
         A dictionary containing counters, paths, and status.
@@ -61,16 +61,16 @@ def transcribir_codigo(
     # -------------------------
     if extensiones is None:
         extensiones = default_extensiones()
-    if patrones_incluir is None:
-        patrones_incluir = default_patrones_incluir()
-    if patrones_excluir is None:
-        patrones_excluir = default_patrones_excluir()
+    if include_patterns is None:
+        include_patterns = default_include_patterns()
+    if exclude_patterns is None:
+        exclude_patterns = default_exclude_patterns()
 
     ruta_base_abs = os.path.abspath(ruta_base)
     output_folder_abs = os.path.abspath(output_folder)
 
-    incluir_rx = compile_patterns(patrones_incluir)
-    excluir_rx = compile_patterns(patrones_excluir)
+    incluir_rx = compile_patterns(include_patterns)
+    excluir_rx = compile_patterns(exclude_patterns)
 
     generar_tests = (modo == "solo_tests" or modo == "todo")
     generar_modulos = (modo == "solo_modulos" or modo == "todo")
@@ -179,7 +179,7 @@ def transcribir_codigo(
     # -------------------------
     # Error Logging
     # -------------------------
-    if guardar_log_errores and errores:
+    if save_error_log and errores:
         try:
             with open(path_errores, "w", encoding="utf-8") as f:
                 f.write("ERRORES:\n")
@@ -207,8 +207,8 @@ def transcribir_codigo(
         "generados": {
             "tests": path_tests if generar_tests else "",
             "modulos": path_modulos if generar_modulos else "",
-            "errores": path_errores if (guardar_log_errores and errores) else (
-                path_errores if guardar_log_errores else ""),
+            "errores": path_errores if (save_error_log and errores) else (
+                path_errores if save_error_log else ""),
         },
         "contadores": {
             "procesados": procesados,

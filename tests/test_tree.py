@@ -107,7 +107,7 @@ def test_render_with_ast_flags_enabled(tmp_path):
     generar_estructura_texto(
         structure,
         lines,
-        mostrar_clases=True
+        show_classes=True
     )
 
     assert any("test_cls.py" in l for l in lines)

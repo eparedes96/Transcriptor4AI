@@ -7,7 +7,7 @@ import os
 import sys
 from typing import Any, Dict, Optional
 
-from transcriptor4ai.config import cargar_configuracion, cargar_configuracion_por_defecto
+from transcriptor4ai.config import load_config, get_default_config
 from transcriptor4ai.validate_config import validate_config
 from transcriptor4ai.pipeline import run_pipeline
 from transcriptor4ai.logging import configure_logging, LoggingConfig, get_logger
@@ -28,7 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- Input / Output ---
     p.add_argument(
         "-i", "--input",
-        dest="ruta_carpetas",
+        dest="input_path",
         help=i18n.t("cli.args.input"),
         default=None,
     )
@@ -89,13 +89,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--include",
-        dest="patrones_incluir",
+        dest="include_patterns",
         default=None,
         help=i18n.t("cli.args.inc"),
     )
     p.add_argument(
         "--exclude",
-        dest="patrones_excluir",
+        dest="exclude_patterns",
         default=None,
         help=i18n.t("cli.args.exc"),
     )
@@ -160,10 +160,10 @@ def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
     """Merge overrides into base config."""
     out = dict(base)
     keys_to_merge = [
-        "ruta_carpetas", "output_base_dir", "output_subdir_name", "output_prefix",
-        "modo_procesamiento", "extensiones", "patrones_incluir", "patrones_excluir",
-        "generar_arbol", "imprimir_arbol", "mostrar_funciones", "mostrar_clases",
-        "mostrar_metodos", "guardar_log_errores",
+        "input_path", "output_base_dir", "output_subdir_name", "output_prefix",
+        "processing_mode", "extensiones", "include_patterns", "exclude_patterns",
+        "generate_tree", "print_tree", "show_functions", "show_classes",
+        "show_methods", "save_error_log",
     ]
     for k in keys_to_merge:
         if k in overrides and overrides[k] is not None:
@@ -175,33 +175,33 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     """Map argparse Namespace to config dictionary keys."""
     overrides: Dict[str, Any] = {}
 
-    overrides["ruta_carpetas"] = args.ruta_carpetas
+    overrides["input_path"] = args.input_path
     overrides["output_base_dir"] = args.output_base_dir
     overrides["output_subdir_name"] = args.output_subdir_name
     overrides["output_prefix"] = args.output_prefix
 
     if args.modo is not None:
-        overrides["modo_procesamiento"] = args.modo
+        overrides["processing_mode"] = args.modo
 
     if args.extensiones:
         overrides["extensiones"] = _split_csv(args.extensiones)
-    if args.patrones_incluir:
-        overrides["patrones_incluir"] = _split_csv(args.patrones_incluir)
-    if args.patrones_excluir:
-        overrides["patrones_excluir"] = _split_csv(args.patrones_excluir)
+    if args.include_patterns:
+        overrides["include_patterns"] = _split_csv(args.include_patterns)
+    if args.exclude_patterns:
+        overrides["exclude_patterns"] = _split_csv(args.exclude_patterns)
 
     if args.tree:
-        overrides["generar_arbol"] = True
+        overrides["generate_tree"] = True
     if args.print_tree:
-        overrides["imprimir_arbol"] = True
+        overrides["print_tree"] = True
     if args.funciones:
-        overrides["mostrar_funciones"] = True
+        overrides["show_functions"] = True
     if args.clases:
-        overrides["mostrar_clases"] = True
+        overrides["show_classes"] = True
     if args.metodos:
-        overrides["mostrar_metodos"] = True
+        overrides["show_methods"] = True
     if args.no_error_log:
-        overrides["guardar_log_errores"] = False
+        overrides["save_error_log"] = False
 
     return overrides
 
@@ -250,9 +250,9 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # 2. Load Base Config
     if args.use_defaults:
-        base_conf = cargar_configuracion_por_defecto()
+        base_conf = get_default_config()
     else:
-        base_conf = cargar_configuracion()
+        base_conf = load_config()
 
     # 3. Apply Overrides
     overrides = _args_to_overrides(args)
@@ -276,7 +276,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     # 5. Basic Path Check (Pre-Pipeline)
-    ruta = clean_conf.get("ruta_carpetas", "")
+    ruta = clean_conf.get("input_path", "")
     if not os.path.exists(ruta):
         msg = i18n.t("cli.errors.path_not_exist", path=ruta)
         logger.error(msg)

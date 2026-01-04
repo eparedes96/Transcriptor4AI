@@ -44,57 +44,57 @@ def _run_pipeline_thread(
 # -----------------------------------------------------------------------------
 def actualizar_config_desde_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
     """Update the config dictionary with values from the GUI window."""
-    config["ruta_carpetas"] = values["ruta_carpetas"]
+    config["input_path"] = values["input_path"]
     config["output_base_dir"] = values["output_base_dir"]
     config["output_subdir_name"] = values["output_subdir_name"]
     config["output_prefix"] = values["output_prefix"]
 
     if values.get("modo_todo"):
-        config["modo_procesamiento"] = "todo"
+        config["processing_mode"] = "todo"
     elif values.get("modo_modulos"):
-        config["modo_procesamiento"] = "solo_modulos"
+        config["processing_mode"] = "solo_modulos"
     elif values.get("modo_tests"):
-        config["modo_procesamiento"] = "solo_tests"
+        config["processing_mode"] = "solo_tests"
 
     config["extensiones"] = values.get("extensiones", "")
-    config["patrones_incluir"] = values.get("patrones_incluir", "")
-    config["patrones_excluir"] = values.get("patrones_excluir", "")
+    config["include_patterns"] = values.get("include_patterns", "")
+    config["exclude_patterns"] = values.get("exclude_patterns", "")
 
-    config["mostrar_funciones"] = bool(values.get("mostrar_funciones"))
-    config["mostrar_clases"] = bool(values.get("mostrar_clases"))
-    config["mostrar_metodos"] = bool(values.get("mostrar_metodos"))
+    config["show_functions"] = bool(values.get("show_functions"))
+    config["show_classes"] = bool(values.get("show_classes"))
+    config["show_methods"] = bool(values.get("show_methods"))
 
-    config["generar_arbol"] = bool(values.get("generar_arbol"))
-    config["imprimir_arbol"] = bool(values.get("imprimir_arbol"))
-    config["guardar_log_errores"] = bool(values.get("guardar_log_errores"))
+    config["generate_tree"] = bool(values.get("generate_tree"))
+    config["print_tree"] = bool(values.get("print_tree"))
+    config["save_error_log"] = bool(values.get("save_error_log"))
 
 
 def volcar_config_a_gui(window: sg.Window, config: Dict[str, Any]) -> None:
     """Populate the GUI fields with values from the config dictionary."""
-    window["ruta_carpetas"].update(config["ruta_carpetas"])
+    window["input_path"].update(config["input_path"])
     window["output_base_dir"].update(config["output_base_dir"])
     window["output_subdir_name"].update(config["output_subdir_name"])
     window["output_prefix"].update(config["output_prefix"])
 
-    window["modo_todo"].update(config["modo_procesamiento"] == "todo")
-    window["modo_modulos"].update(config["modo_procesamiento"] == "solo_modulos")
-    window["modo_tests"].update(config["modo_procesamiento"] == "solo_tests")
+    window["modo_todo"].update(config["processing_mode"] == "todo")
+    window["modo_modulos"].update(config["processing_mode"] == "solo_modulos")
+    window["modo_tests"].update(config["processing_mode"] == "solo_tests")
 
     exts = config["extensiones"] if isinstance(config["extensiones"], list) else []
-    incl = config["patrones_incluir"] if isinstance(config["patrones_incluir"], list) else []
-    excl = config["patrones_excluir"] if isinstance(config["patrones_excluir"], list) else []
+    incl = config["include_patterns"] if isinstance(config["include_patterns"], list) else []
+    excl = config["exclude_patterns"] if isinstance(config["exclude_patterns"], list) else []
 
     window["extensiones"].update(",".join(exts))
-    window["patrones_incluir"].update(",".join(incl))
-    window["patrones_excluir"].update(",".join(excl))
+    window["include_patterns"].update(",".join(incl))
+    window["exclude_patterns"].update(",".join(excl))
 
-    window["mostrar_funciones"].update(config["mostrar_funciones"])
-    window["mostrar_clases"].update(config["mostrar_clases"])
-    window["mostrar_metodos"].update(config["mostrar_metodos"])
+    window["show_functions"].update(config["show_functions"])
+    window["show_classes"].update(config["show_classes"])
+    window["show_methods"].update(config["show_methods"])
 
-    window["generar_arbol"].update(config["generar_arbol"])
-    window["imprimir_arbol"].update(config["imprimir_arbol"])
-    window["guardar_log_errores"].update(config["guardar_log_errores"])
+    window["generate_tree"].update(config["generate_tree"])
+    window["print_tree"].update(config["print_tree"])
+    window["save_error_log"].update(config["save_error_log"])
 
 
 def _format_summary(res: PipelineResult) -> str:
@@ -155,21 +155,21 @@ def main() -> None:
 
     # 2. Load Initial Config
     try:
-        raw_config = cfg.cargar_configuracion()
+        raw_config = cfg.load_config()
         config, _ = validate_config(raw_config, strict=False)
     except Exception as e:
         logger.error(f"Failed to load config: {e}")
-        config = cfg.cargar_configuracion_por_defecto()
+        config = cfg.get_default_config()
 
     if not config.get("output_base_dir"):
-        config["output_base_dir"] = config.get("ruta_carpetas") or os.getcwd()
+        config["output_base_dir"] = config.get("input_path") or os.getcwd()
 
     # 3. Define Layout
     layout = [
         # --- Input ---
         [sg.Text(i18n.t("gui.sections.input"))],
         [
-            sg.Input(default_text=config["ruta_carpetas"], size=(70, 1), key="ruta_carpetas",
+            sg.Input(default_text=config["input_path"], size=(70, 1), key="input_path",
                      tooltip=i18n.t("gui.tooltips.input")),
             sg.Button(i18n.t("gui.buttons.explore"), key="btn_explorar_in"),
         ],
@@ -194,11 +194,11 @@ def main() -> None:
         [sg.Text(i18n.t("gui.sections.mode"))],
         [
             sg.Radio(i18n.t("gui.radios.all"), "RADIO1", key="modo_todo",
-                     default=(config["modo_procesamiento"] == "todo")),
+                     default=(config["processing_mode"] == "todo")),
             sg.Radio(i18n.t("gui.radios.modules"), "RADIO1", key="modo_modulos",
-                     default=(config["modo_procesamiento"] == "solo_modulos")),
+                     default=(config["processing_mode"] == "solo_modulos")),
             sg.Radio(i18n.t("gui.radios.tests"), "RADIO1", key="modo_tests",
-                     default=(config["modo_procesamiento"] == "solo_tests")),
+                     default=(config["processing_mode"] == "solo_tests")),
         ],
 
         # --- Filters ---
@@ -206,24 +206,24 @@ def main() -> None:
          sg.Input(",".join(config["extensiones"]), size=(60, 1), key="extensiones",
                   tooltip=i18n.t("gui.tooltips.ext"))],
         [sg.Text(i18n.t("gui.labels.include")),
-         sg.Input(",".join(config["patrones_incluir"]), size=(60, 1), key="patrones_incluir",
+         sg.Input(",".join(config["include_patterns"]), size=(60, 1), key="include_patterns",
                   tooltip=i18n.t("gui.tooltips.inc"))],
         [sg.Text(i18n.t("gui.labels.exclude")),
-         sg.Input(",".join(config["patrones_excluir"]), size=(60, 1), key="patrones_excluir",
+         sg.Input(",".join(config["exclude_patterns"]), size=(60, 1), key="exclude_patterns",
                   tooltip=i18n.t("gui.tooltips.exc"))],
 
         # --- Tree Options ---
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="mostrar_funciones", default=config["mostrar_funciones"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="mostrar_clases", default=config["mostrar_clases"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="mostrar_metodos", default=config["mostrar_metodos"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", default=config["show_classes"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", default=config["show_methods"]),
         ],
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generar_arbol", default=config["generar_arbol"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.print_tree"), key="imprimir_arbol", default=config["imprimir_arbol"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.print_tree"), key="print_tree", default=config["print_tree"]),
         ],
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="guardar_log_errores", default=config["guardar_log_errores"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="save_error_log", default=config["save_error_log"]),
             sg.Checkbox(i18n.t("gui.checkboxes.dry_run"), key="dry_run", default=False, text_color="blue",
                         tooltip=i18n.t("gui.tooltips.dry_run")),
         ],
@@ -251,16 +251,16 @@ def main() -> None:
 
         # --- File Browsing ---
         if event == "btn_explorar_in":
-            initial = paths.normalizar_dir(values.get("ruta_carpetas", ""), os.getcwd())
+            initial = paths.normalize_path(values.get("input_path", ""), os.getcwd())
             folder = sg.popup_get_folder(i18n.t("gui.tooltips.input"), default_path=initial)
             if folder:
-                window["ruta_carpetas"].update(folder)
+                window["input_path"].update(folder)
                 curr_out = (values.get("output_base_dir") or "").strip()
                 if not curr_out or os.path.abspath(curr_out) == os.path.abspath(initial):
                     window["output_base_dir"].update(folder)
 
         if event == "btn_examinar_out":
-            initial = paths.normalizar_dir(values.get("output_base_dir", ""), values.get("ruta_carpetas", ""))
+            initial = paths.normalize_path(values.get("output_base_dir", ""), values.get("input_path", ""))
             folder = sg.popup_get_folder(i18n.t("gui.tooltips.output"), default_path=initial)
             if folder:
                 window["output_base_dir"].update(folder)
@@ -270,11 +270,11 @@ def main() -> None:
             try:
                 actualizar_config_desde_gui(config, values)
                 clean_conf, _ = validate_config(config, strict=False)
-                clean_conf["ruta_carpetas"] = paths.normalizar_dir(clean_conf["ruta_carpetas"], os.getcwd())
-                clean_conf["output_base_dir"] = paths.normalizar_dir(clean_conf["output_base_dir"],
-                                                                     clean_conf["ruta_carpetas"])
+                clean_conf["input_path"] = paths.normalize_path(clean_conf["input_path"], os.getcwd())
+                clean_conf["output_base_dir"] = paths.normalize_path(clean_conf["output_base_dir"],
+                                                                     clean_conf["input_path"])
 
-                cfg.guardar_configuracion(clean_conf)
+                cfg.save_config(clean_conf)
                 sg.popup(i18n.t("gui.status.success"))
                 logger.info("Configuration saved by user.")
             except Exception as e:
@@ -282,7 +282,7 @@ def main() -> None:
                 sg.popup_error(i18n.t("gui.popups.error_save", error=e))
 
         if event == "btn_reset":
-            config = cfg.cargar_configuracion_por_defecto()
+            config = cfg.get_default_config()
             volcar_config_a_gui(window, config)
             sg.popup(i18n.t("gui.status.reset"))
             logger.info("Configuration reset to defaults.")
@@ -298,15 +298,15 @@ def main() -> None:
                     logger.warning(f"Config warnings: {warnings}")
 
                 # 2. Path Checks
-                ruta_carpetas = paths.normalizar_dir(clean_conf["ruta_carpetas"], os.getcwd())
-                output_base_dir = paths.normalizar_dir(clean_conf["output_base_dir"], ruta_carpetas)
+                input_path = paths.normalize_path(clean_conf["input_path"], os.getcwd())
+                output_base_dir = paths.normalize_path(clean_conf["output_base_dir"], input_path)
                 output_subdir_name = clean_conf["output_subdir_name"]
 
-                if not os.path.exists(ruta_carpetas):
-                    sg.popup_error(i18n.t("gui.popups.error_path", path=ruta_carpetas))
+                if not os.path.exists(input_path):
+                    sg.popup_error(i18n.t("gui.popups.error_path", path=input_path))
                     continue
-                if not os.path.isdir(ruta_carpetas):
-                    sg.popup_error(i18n.t("gui.popups.error_dir", path=ruta_carpetas))
+                if not os.path.isdir(input_path):
+                    sg.popup_error(i18n.t("gui.popups.error_dir", path=input_path))
                     continue
 
                 # 3. Overwrite & Dry Run Checks (Must happen in Main Thread due to Popups)
@@ -314,13 +314,13 @@ def main() -> None:
                 should_overwrite = False
 
                 if not is_dry_run:
-                    salida_real = paths.ruta_salida_real(output_base_dir, output_subdir_name)
-                    nombres = paths.archivos_destino(
+                    salida_real = paths.get_real_output_path(output_base_dir, output_subdir_name)
+                    nombres = paths.get_destination_filenames(
                         clean_conf["output_prefix"],
-                        clean_conf["modo_procesamiento"],
-                        clean_conf["generar_arbol"]
+                        clean_conf["processing_mode"],
+                        clean_conf["generate_tree"]
                     )
-                    existentes = paths.existen_ficheros_destino(salida_real, nombres)
+                    existentes = paths.check_existing_output_files(salida_real, nombres)
 
                     if existentes:
                         msg = i18n.t("gui.popups.overwrite_msg", files="\n".join(existentes))

@@ -8,8 +8,8 @@ from typing import Callable, List, Optional
 from transcriptor4ai.filtering import (
     compile_patterns,
     default_extensiones,
-    default_patrones_excluir,
-    default_patrones_incluir,
+    default_exclude_patterns,
+    default_include_patterns,
     es_test,
     matches_any,
     matches_include,
@@ -23,15 +23,15 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
-def generar_arbol_directorios(
+def generate_directory_tree(
         ruta_base: str,
         modo: str = "todo",
         extensiones: Optional[List[str]] = None,
-        patrones_incluir: Optional[List[str]] = None,
-        patrones_excluir: Optional[List[str]] = None,
-        mostrar_funciones: bool = False,
-        mostrar_clases: bool = False,
-        mostrar_metodos: bool = False,
+        include_patterns: Optional[List[str]] = None,
+        exclude_patterns: Optional[List[str]] = None,
+        show_functions: bool = False,
+        show_classes: bool = False,
+        show_methods: bool = False,
         imprimir: bool = False,  # Kept for signature compatibility, but behavior changes (logs instead of prints)
         guardar_archivo: str = "",
 ) -> List[str]:
@@ -45,11 +45,11 @@ def generar_arbol_directorios(
         ruta_base: Root directory to scan.
         modo: Processing mode ("todo", "solo_modulos", "solo_tests").
         extensiones: List of allowed file extensions.
-        patrones_incluir: Regex patterns for inclusion.
-        patrones_excluir: Regex patterns for exclusion.
-        mostrar_funciones: If True, parse and show top-level functions.
-        mostrar_clases: If True, parse and show top-level classes.
-        mostrar_metodos: If True (and classes=True), show methods.
+        include_patterns: Regex patterns for inclusion.
+        exclude_patterns: Regex patterns for exclusion.
+        show_functions: If True, parse and show top-level functions.
+        show_classes: If True, parse and show top-level classes.
+        show_methods: If True (and classes=True), show methods.
         imprimir: Deprecated/Legacy flag. If True, logs the tree at INFO level instead of printing.
         guardar_archivo: If provided, saves the tree to this file path.
 
@@ -63,20 +63,20 @@ def generar_arbol_directorios(
     # -------------------------
     if extensiones is None:
         extensiones = default_extensiones()
-    if patrones_incluir is None:
-        patrones_incluir = default_patrones_incluir()
-    if patrones_excluir is None:
-        patrones_excluir = default_patrones_excluir()
+    if include_patterns is None:
+        include_patterns = default_include_patterns()
+    if exclude_patterns is None:
+        exclude_patterns = default_exclude_patterns()
 
     ruta_base_abs = os.path.abspath(ruta_base)
 
-    incluir_rx = compile_patterns(patrones_incluir)
-    excluir_rx = compile_patterns(patrones_excluir)
+    incluir_rx = compile_patterns(include_patterns)
+    excluir_rx = compile_patterns(exclude_patterns)
 
     # -------------------------
     # Build Structure
     # -------------------------
-    estructura = _construir_estructura(
+    estructura = _build_structure(
         ruta_base_abs,
         modo=modo,
         extensiones=extensiones,
@@ -93,9 +93,9 @@ def generar_arbol_directorios(
         estructura,
         lines,
         prefix="",
-        mostrar_funciones=mostrar_funciones,
-        mostrar_clases=mostrar_clases,
-        mostrar_metodos=mostrar_metodos,
+        show_functions=show_functions,
+        show_classes=show_classes,
+        show_methods=show_methods,
     )
 
     # -------------------------
@@ -126,7 +126,7 @@ def generar_arbol_directorios(
 # -----------------------------------------------------------------------------
 # Internal Helpers
 # -----------------------------------------------------------------------------
-def _construir_estructura(
+def _build_structure(
         ruta_base: str,
         modo: str,
         extensiones: List[str],

@@ -7,22 +7,22 @@ from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.config import (
     DEFAULT_OUTPUT_PREFIX,
-    cargar_configuracion_por_defecto,
+    get_default_config,
 )
 from transcriptor4ai.filtering import (
     default_extensiones,
-    default_patrones_excluir,
-    default_patrones_incluir,
+    default_exclude_patterns,
+    default_include_patterns,
 )
 from transcriptor4ai.paths import (
     DEFAULT_OUTPUT_SUBDIR,
-    archivos_destino,
-    existen_ficheros_destino,
-    normalizar_dir,
-    ruta_salida_real,
+    get_destination_filenames,
+    check_existing_output_files,
+    normalize_path,
+    get_real_output_path,
 )
-from transcriptor4ai.transcription.service import transcribir_codigo
-from transcriptor4ai.tree.service import generar_arbol_directorios
+from transcriptor4ai.transcription.service import transcribe_code
+from transcriptor4ai.tree.service import generate_directory_tree
 
 logger = logging.getLogger(__name__)
 
@@ -89,29 +89,29 @@ def _normalize_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     Internal normalization to ensure the pipeline is safe even if called
     without external validation.
     """
-    defaults = cargar_configuracion_por_defecto()
+    defaults = get_default_config()
     cfg: Dict[str, Any] = dict(defaults)
     if isinstance(config, dict):
         cfg.update(config)
 
     # Mode
-    modo = (cfg.get("modo_procesamiento") or "todo").strip()
+    modo = (cfg.get("processing_mode") or "todo").strip()
     if modo not in ("todo", "solo_modulos", "solo_tests"):
         modo = "todo"
-    cfg["modo_procesamiento"] = modo
+    cfg["processing_mode"] = modo
 
     # Lists
     cfg["extensiones"] = _ensure_list(cfg.get("extensiones"), default_extensiones())
-    cfg["patrones_incluir"] = _ensure_list(cfg.get("patrones_incluir"), default_patrones_incluir())
-    cfg["patrones_excluir"] = _ensure_list(cfg.get("patrones_excluir"), default_patrones_excluir())
+    cfg["include_patterns"] = _ensure_list(cfg.get("include_patterns"), default_include_patterns())
+    cfg["exclude_patterns"] = _ensure_list(cfg.get("exclude_patterns"), default_exclude_patterns())
 
     # Bools
-    cfg["generar_arbol"] = _ensure_bool(cfg.get("generar_arbol"), False)
-    cfg["imprimir_arbol"] = _ensure_bool(cfg.get("imprimir_arbol"), True)
-    cfg["guardar_log_errores"] = _ensure_bool(cfg.get("guardar_log_errores"), True)
-    cfg["mostrar_funciones"] = _ensure_bool(cfg.get("mostrar_funciones"), False)
-    cfg["mostrar_clases"] = _ensure_bool(cfg.get("mostrar_clases"), False)
-    cfg["mostrar_metodos"] = _ensure_bool(cfg.get("mostrar_metodos"), False)
+    cfg["generate_tree"] = _ensure_bool(cfg.get("generate_tree"), False)
+    cfg["print_tree"] = _ensure_bool(cfg.get("print_tree"), True)
+    cfg["save_error_log"] = _ensure_bool(cfg.get("save_error_log"), True)
+    cfg["show_functions"] = _ensure_bool(cfg.get("show_functions"), False)
+    cfg["show_classes"] = _ensure_bool(cfg.get("show_classes"), False)
+    cfg["show_methods"] = _ensure_bool(cfg.get("show_methods"), False)
 
     # Strings
     cfg["output_subdir_name"] = (cfg.get("output_subdir_name") or DEFAULT_OUTPUT_SUBDIR).strip() or DEFAULT_OUTPUT_SUBDIR
@@ -150,7 +150,7 @@ def run_pipeline(
     cfg = _normalize_config(config)
 
     fallback_base = os.getcwd()
-    ruta_base = normalizar_dir(cfg.get("ruta_carpetas", ""), fallback_base)
+    ruta_base = normalize_path(cfg.get("input_path", ""), fallback_base)
 
     if not os.path.exists(ruta_base) or not os.path.isdir(ruta_base):
         msg = f"Invalid input directory: {ruta_base}"
@@ -162,7 +162,7 @@ def run_pipeline(
             output_base_dir="",
             output_subdir_name=cfg["output_subdir_name"],
             output_prefix=cfg["output_prefix"],
-            modo=cfg["modo_procesamiento"],
+            modo=cfg["processing_mode"],
             salida_real="",
             existentes=[],
             res_transcripcion={},
@@ -171,14 +171,14 @@ def run_pipeline(
             resumen={},
         )
 
-    output_base_dir = normalizar_dir(cfg.get("output_base_dir", ""), ruta_base)
-    salida_real = ruta_salida_real(output_base_dir, cfg["output_subdir_name"])
+    output_base_dir = normalize_path(cfg.get("output_base_dir", ""), ruta_base)
+    salida_real = get_real_output_path(output_base_dir, cfg["output_subdir_name"])
 
     # -------------------------------------------------------------------------
     # 2) Overwrite Check
     # -------------------------------------------------------------------------
-    nombres = archivos_destino(cfg["output_prefix"], cfg["modo_procesamiento"], bool(cfg.get("generar_arbol")))
-    existentes = existen_ficheros_destino(salida_real, nombres)
+    nombres = get_destination_filenames(cfg["output_prefix"], cfg["processing_mode"], bool(cfg.get("generate_tree")))
+    existentes = check_existing_output_files(salida_real, nombres)
 
     if existentes and not overwrite and not dry_run:
         msg = "Existing files detected and overwrite=False. Aborting."
@@ -190,7 +190,7 @@ def run_pipeline(
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
             output_prefix=cfg["output_prefix"],
-            modo=cfg["modo_procesamiento"],
+            modo=cfg["processing_mode"],
             salida_real=salida_real,
             existentes=existentes,
             res_transcripcion={},
@@ -213,12 +213,12 @@ def run_pipeline(
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
             output_prefix=cfg["output_prefix"],
-            modo=cfg["modo_procesamiento"],
+            modo=cfg["processing_mode"],
             salida_real=salida_real,
             existentes=existentes,
             res_transcripcion={},
             res_arbol_lines=[],
-            ruta_arbol=os.path.join(salida_real, f"{cfg['output_prefix']}_arbol.txt") if cfg.get("generar_arbol") else "",
+            ruta_arbol=os.path.join(salida_real, f"{cfg['output_prefix']}_arbol.txt") if cfg.get("generate_tree") else "",
             resumen={
                 "dry_run": True,
                 "existing_files": list(existentes),
@@ -241,7 +241,7 @@ def run_pipeline(
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
             output_prefix=cfg["output_prefix"],
-            modo=cfg["modo_procesamiento"],
+            modo=cfg["processing_mode"],
             salida_real=salida_real,
             existentes=existentes,
             res_transcripcion={},
@@ -253,15 +253,15 @@ def run_pipeline(
     # -------------------------------------------------------------------------
     # 4) Execute Transcription Service
     # -------------------------------------------------------------------------
-    res_trans = transcribir_codigo(
+    res_trans = transcribe_code(
         ruta_base=ruta_base,
-        modo=cfg["modo_procesamiento"],
+        modo=cfg["processing_mode"],
         extensiones=cfg["extensiones"],
-        patrones_incluir=cfg["patrones_incluir"],
-        patrones_excluir=cfg["patrones_excluir"],
+        include_patterns=cfg["include_patterns"],
+        exclude_patterns=cfg["exclude_patterns"],
         archivo_salida=cfg["output_prefix"],
         output_folder=salida_real,
-        guardar_log_errores=bool(cfg.get("guardar_log_errores")),
+        save_error_log=bool(cfg.get("save_error_log")),
     )
 
     if not res_trans.get("ok"):
@@ -274,7 +274,7 @@ def run_pipeline(
             output_base_dir=output_base_dir,
             output_subdir_name=cfg["output_subdir_name"],
             output_prefix=cfg["output_prefix"],
-            modo=cfg["modo_procesamiento"],
+            modo=cfg["processing_mode"],
             salida_real=salida_real,
             existentes=existentes,
             res_transcripcion=res_trans,
@@ -288,20 +288,20 @@ def run_pipeline(
     # -------------------------------------------------------------------------
     arbol_lines: List[str] = []
     ruta_arbol = ""
-    if cfg.get("generar_arbol"):
+    if cfg.get("generate_tree"):
         # Prioritize override path (CLI flag), else default
         ruta_arbol = tree_output_path if tree_output_path else os.path.join(salida_real, f"{cfg['output_prefix']}_arbol.txt")
 
-        arbol_lines = generar_arbol_directorios(
+        arbol_lines = generate_directory_tree(
             ruta_base=ruta_base,
-            modo=cfg["modo_procesamiento"],
+            modo=cfg["processing_mode"],
             extensiones=cfg["extensiones"],
-            patrones_incluir=cfg["patrones_incluir"],
-            patrones_excluir=cfg["patrones_excluir"],
-            mostrar_funciones=bool(cfg.get("mostrar_funciones")),
-            mostrar_clases=bool(cfg.get("mostrar_clases")),
-            mostrar_metodos=bool(cfg.get("mostrar_metodos")),
-            imprimir=bool(cfg.get("imprimir_arbol")),
+            include_patterns=cfg["include_patterns"],
+            exclude_patterns=cfg["exclude_patterns"],
+            show_functions=bool(cfg.get("show_functions")),
+            show_classes=bool(cfg.get("show_classes")),
+            show_methods=bool(cfg.get("show_methods")),
+            imprimir=bool(cfg.get("print_tree")),
             guardar_archivo=ruta_arbol,
         )
 
@@ -316,7 +316,7 @@ def run_pipeline(
         "errores": int(cont.get("errores", 0)),
         "generados": (res_trans.get("generados", {}) or {}),
         "arbol": {
-            "generado": bool(cfg.get("generar_arbol")),
+            "generado": bool(cfg.get("generate_tree")),
             "ruta": ruta_arbol,
             "lineas": len(arbol_lines),
         },
@@ -331,7 +331,7 @@ def run_pipeline(
         output_base_dir=output_base_dir,
         output_subdir_name=cfg["output_subdir_name"],
         output_prefix=cfg["output_prefix"],
-        modo=cfg["modo_procesamiento"],
+        modo=cfg["processing_mode"],
         salida_real=salida_real,
         existentes=existentes,
         res_transcripcion=res_trans,

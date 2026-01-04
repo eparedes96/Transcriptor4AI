@@ -19,12 +19,12 @@ DEFAULT_OUTPUT_PREFIX = "transcripcion"
 # -----------------------------------------------------------------------------
 # Configuration: Load / Save / Defaults
 # -----------------------------------------------------------------------------
-def cargar_configuracion_por_defecto() -> Dict[str, Any]:
+def get_default_config() -> Dict[str, Any]:
     """
     Return the default configuration dictionary.
 
     Defaults:
-    - ruta_carpetas: Current working directory.
+    - input_path: Current working directory.
     - output_base_dir: Current working directory.
     - output_subdir_name: 'transcript'.
     - processing mode: 'todo' (all).
@@ -32,34 +32,34 @@ def cargar_configuracion_por_defecto() -> Dict[str, Any]:
     """
     base = os.getcwd()
     return {
-        "ruta_carpetas": base,
+        "input_path": base,
         "output_base_dir": base,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": DEFAULT_OUTPUT_PREFIX,
-        "modo_procesamiento": "todo",  # Options: todo, solo_modulos, solo_tests
+        "processing_mode": "todo",  # Options: todo, solo_modulos, solo_tests
         "extensiones": [".py"],
-        "patrones_incluir": [".*"],
-        "patrones_excluir": [
+        "include_patterns": [".*"],
+        "exclude_patterns": [
             r"^__init__\.py$",
             r".*\.pyc$",
             r"^(__pycache__|\.git|\.idea)$",
             r"^\."
         ],
-        "mostrar_funciones": False,
-        "mostrar_clases": False,
-        "mostrar_metodos": False,
-        "generar_arbol": False,
-        "imprimir_arbol": True,
-        "guardar_log_errores": True
+        "show_functions": False,
+        "show_classes": False,
+        "show_methods": False,
+        "generate_tree": False,
+        "print_tree": True,
+        "save_error_log": True
     }
 
 
-def cargar_configuracion() -> Dict[str, Any]:
+def load_config() -> Dict[str, Any]:
     """
     Load 'config.json' if it exists and merge with defaults.
     Returns defaults if the file is missing or invalid.
     """
-    defaults = cargar_configuracion_por_defecto()
+    defaults = get_default_config()
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -74,7 +74,7 @@ def cargar_configuracion() -> Dict[str, Any]:
     return defaults
 
 
-def guardar_configuracion(config: Dict[str, Any]) -> None:
+def save_config(config: Dict[str, Any]) -> None:
     """
     Save the configuration to 'config.json'.
     Raises OSError if writing fails.

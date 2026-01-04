@@ -10,11 +10,11 @@ def default_extensiones() -> List[str]:
     return [".py"]
 
 
-def default_patrones_incluir() -> List[str]:
+def default_include_patterns() -> List[str]:
     return [".*"]
 
 
-def default_patrones_excluir() -> List[str]:
+def default_exclude_patterns() -> List[str]:
     """
     Default exclusion patterns (applied via re.match).
 

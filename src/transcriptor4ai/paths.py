@@ -12,7 +12,7 @@ DEFAULT_OUTPUT_SUBDIR = "transcript"
 # -----------------------------------------------------------------------------
 # Path Helpers
 # -----------------------------------------------------------------------------
-def normalizar_dir(path: Optional[str], fallback: str) -> str:
+def normalize_path(path: Optional[str], fallback: str) -> str:
     """
     Normalize a directory path.
     - Handles None/Empty by using fallback.
@@ -30,7 +30,7 @@ def normalizar_dir(path: Optional[str], fallback: str) -> str:
         return os.path.abspath(fallback)
 
 
-def ruta_salida_real(output_base_dir: str, output_subdir_name: str) -> str:
+def get_real_output_path(output_base_dir: str, output_subdir_name: str) -> str:
     """
     Construct the final output path: output_base_dir / output_subdir_name
     """
@@ -38,7 +38,7 @@ def ruta_salida_real(output_base_dir: str, output_subdir_name: str) -> str:
     return os.path.join(output_base_dir, sub)
 
 
-def archivos_destino(prefix: str, modo: str, incluir_arbol: bool) -> List[str]:
+def get_destination_filenames(prefix: str, modo: str, incluir_arbol: bool) -> List[str]:
     """
     Return a list of potential output filenames based on configuration.
     Does not return full paths, only filenames.
@@ -53,7 +53,7 @@ def archivos_destino(prefix: str, modo: str, incluir_arbol: bool) -> List[str]:
     return files
 
 
-def existen_ficheros_destino(output_dir: str, names: List[str]) -> List[str]:
+def check_existing_output_files(output_dir: str, names: List[str]) -> List[str]:
     """
     Check which files from the list already exist in the output directory.
     Returns a list of full paths of existing files.

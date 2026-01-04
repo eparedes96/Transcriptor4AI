@@ -12,18 +12,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 def mock_config_dict():
     """Returns a valid, complete configuration dictionary for testing."""
     return {
-        "ruta_carpetas": "/tmp/test",
+        "input_path": "/tmp/test",
         "output_base_dir": "/tmp/test",
         "output_subdir_name": "transcript",
         "output_prefix": "test_output",
-        "modo_procesamiento": "todo",
+        "processing_mode": "todo",
         "extensiones": [".py"],
-        "patrones_incluir": [".*"],
-        "patrones_excluir": [],
-        "mostrar_funciones": False,
-        "mostrar_clases": False,
-        "mostrar_metodos": False,
-        "generar_arbol": False,
-        "imprimir_arbol": False,
-        "guardar_log_errores": True
+        "include_patterns": [".*"],
+        "exclude_patterns": [],
+        "show_functions": False,
+        "show_classes": False,
+        "show_methods": False,
+        "generate_tree": False,
+        "print_tree": False,
+        "save_error_log": True
     }

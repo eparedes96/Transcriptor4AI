@@ -3,11 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Tuple
 
-from transcriptor4ai.config import cargar_configuracion_por_defecto
+from transcriptor4ai.config import get_default_config
 from transcriptor4ai.filtering import (
     default_extensiones,
-    default_patrones_incluir,
-    default_patrones_excluir,
+    default_include_patterns,
+    default_exclude_patterns,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ def validate_config(
         2. A list of warning messages (strings).
     """
     warnings: List[str] = []
-    defaults = cargar_configuracion_por_defecto()
+    defaults = get_default_config()
 
     # 1. Base Validation: Type Check
     if not isinstance(config, dict):
@@ -51,10 +51,10 @@ def validate_config(
     merged.update(config)
 
     # 2. String Normalization
-    merged["ruta_carpetas"] = _as_str(
-        merged.get("ruta_carpetas"),
-        defaults["ruta_carpetas"],
-        "ruta_carpetas",
+    merged["input_path"] = _as_str(
+        merged.get("input_path"),
+        defaults["input_path"],
+        "input_path",
         warnings,
         strict
     )
@@ -81,53 +81,53 @@ def validate_config(
     )
 
     # 3. Enums and Flags Normalization
-    merged["modo_procesamiento"] = _as_modo(
-        merged.get("modo_procesamiento"),
-        defaults["modo_procesamiento"],
+    merged["processing_mode"] = _as_modo(
+        merged.get("processing_mode"),
+        defaults["processing_mode"],
         warnings,
         strict,
     )
 
-    merged["mostrar_funciones"] = _as_bool(
-        merged.get("mostrar_funciones"),
-        defaults["mostrar_funciones"],
-        "mostrar_funciones",
+    merged["show_functions"] = _as_bool(
+        merged.get("show_functions"),
+        defaults["show_functions"],
+        "show_functions",
         warnings,
         strict
     )
-    merged["mostrar_clases"] = _as_bool(
-        merged.get("mostrar_clases"),
-        defaults["mostrar_clases"],
-        "mostrar_clases",
+    merged["show_classes"] = _as_bool(
+        merged.get("show_classes"),
+        defaults["show_classes"],
+        "show_classes",
         warnings,
         strict
     )
-    merged["mostrar_metodos"] = _as_bool(
-        merged.get("mostrar_metodos"),
-        defaults["mostrar_metodos"],
-        "mostrar_metodos",
+    merged["show_methods"] = _as_bool(
+        merged.get("show_methods"),
+        defaults["show_methods"],
+        "show_methods",
         warnings,
         strict
     )
 
-    merged["generar_arbol"] = _as_bool(
-        merged.get("generar_arbol"),
-        defaults["generar_arbol"],
-        "generar_arbol",
+    merged["generate_tree"] = _as_bool(
+        merged.get("generate_tree"),
+        defaults["generate_tree"],
+        "generate_tree",
         warnings,
         strict
     )
-    merged["imprimir_arbol"] = _as_bool(
-        merged.get("imprimir_arbol"),
-        defaults["imprimir_arbol"],
-        "imprimir_arbol",
+    merged["print_tree"] = _as_bool(
+        merged.get("print_tree"),
+        defaults["print_tree"],
+        "print_tree",
         warnings,
         strict
     )
-    merged["guardar_log_errores"] = _as_bool(
-        merged.get("guardar_log_errores"),
-        defaults["guardar_log_errores"],
-        "guardar_log_errores",
+    merged["save_error_log"] = _as_bool(
+        merged.get("save_error_log"),
+        defaults["save_error_log"],
+        "save_error_log",
         warnings,
         strict
     )
@@ -142,17 +142,17 @@ def validate_config(
     )
     merged["extensiones"] = _normalize_extensions(merged["extensiones"], warnings, strict)
 
-    merged["patrones_incluir"] = _as_list_str(
-        merged.get("patrones_incluir"),
-        default_patrones_incluir(),
-        "patrones_incluir",
+    merged["include_patterns"] = _as_list_str(
+        merged.get("include_patterns"),
+        default_include_patterns(),
+        "include_patterns",
         warnings,
         strict,
     )
-    merged["patrones_excluir"] = _as_list_str(
-        merged.get("patrones_excluir"),
-        default_patrones_excluir(),
-        "patrones_excluir",
+    merged["exclude_patterns"] = _as_list_str(
+        merged.get("exclude_patterns"),
+        default_exclude_patterns(),
+        "exclude_patterns",
         warnings,
         strict,
     )
@@ -247,14 +247,14 @@ def _as_modo(value: Any, fallback: str, warnings: List[str], strict: bool) -> st
         v = value.strip().lower()
         if v in allowed:
             return v
-        msg = f"Invalid 'modo_procesamiento': '{value}'. Allowed: {sorted(allowed)}."
+        msg = f"Invalid 'processing_mode': '{value}'. Allowed: {sorted(allowed)}."
         if strict:
             raise ValueError(msg)
         warnings.append(f"{msg} Using fallback '{fallback}'.")
         logger.warning(msg)
         return fallback
 
-    msg = f"Invalid 'modo_procesamiento': expected str, received {type(value).__name__}."
+    msg = f"Invalid 'processing_mode': expected str, received {type(value).__name__}."
     if strict:
         raise TypeError(msg)
     warnings.append(f"{msg} Using fallback '{fallback}'.")

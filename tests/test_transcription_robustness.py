@@ -1,7 +1,7 @@
 # tests/test_transcription_robustness.py
 import pytest
 import os
-from transcriptor4ai.transcription.service import transcribir_codigo
+from transcriptor4ai.transcription.service import transcribe_code
 
 
 @pytest.fixture
@@ -36,12 +36,12 @@ def test_transcription_resilience_to_encoding_errors(bad_files_structure, tmp_pa
     """
     out_dir = tmp_path / "out"
 
-    result = transcribir_codigo(
+    result = transcribe_code(
         ruta_base=str(bad_files_structure),
         modo="todo",
         extensiones=[".py"],
         output_folder=str(out_dir),
-        guardar_log_errores=True
+        save_error_log=True
     )
 
     # 1. Pipeline should finish successfully (partial success)

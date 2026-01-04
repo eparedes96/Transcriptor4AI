@@ -33,11 +33,11 @@ def source_structure(tmp_path):
 def test_pipeline_dry_run_does_not_write(source_structure):
     """Dry run should return OK but create no output files."""
     config = {
-        "ruta_carpetas": str(source_structure),
+        "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
         "output_subdir_name": "out",
         "output_prefix": "dry",
-        "modo_procesamiento": "todo"
+        "processing_mode": "todo"
     }
 
     result = run_pipeline(config, dry_run=True)
@@ -54,12 +54,12 @@ def test_pipeline_dry_run_does_not_write(source_structure):
 def test_pipeline_full_execution(source_structure):
     """Full execution should generate module and test text files."""
     config = {
-        "ruta_carpetas": str(source_structure),
+        "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
         "output_subdir_name": "final",
         "output_prefix": "res",
-        "modo_procesamiento": "todo",
-        "generar_arbol": True
+        "processing_mode": "todo",
+        "generate_tree": True
     }
 
     result = run_pipeline(config, dry_run=False)
@@ -96,11 +96,11 @@ def test_pipeline_overwrite_protection(source_structure):
     (out_dir / "conflict_modulos.txt").write_text("exists")
 
     config = {
-        "ruta_carpetas": str(source_structure),
+        "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
         "output_subdir_name": "protect",
         "output_prefix": "conflict",
-        "modo_procesamiento": "todo"
+        "processing_mode": "todo"
     }
 
     # First run: Should fail (ok=False) because file exists

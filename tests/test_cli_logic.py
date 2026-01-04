@@ -24,10 +24,10 @@ def test_cli_simple_flags_mapping():
 
     overrides = _args_to_overrides(args)
 
-    assert overrides["generar_arbol"] is True
-    assert overrides["imprimir_arbol"] is True
-    assert overrides["mostrar_funciones"] is True
-    assert overrides["guardar_log_errores"] is False
+    assert overrides["generate_tree"] is True
+    assert overrides["print_tree"] is True
+    assert overrides["show_functions"] is True
+    assert overrides["save_error_log"] is False
 
 
 def test_cli_csv_list_parsing():
@@ -40,7 +40,7 @@ def test_cli_csv_list_parsing():
     overrides = _args_to_overrides(args)
 
     assert overrides["extensiones"] == [".js", ".ts"]
-    assert overrides["patrones_excluir"] == ["node_modules", "dist"]
+    assert overrides["exclude_patterns"] == ["node_modules", "dist"]
 
 
 def test_cli_path_arguments():
@@ -54,7 +54,7 @@ def test_cli_path_arguments():
 
     overrides = _args_to_overrides(args)
 
-    assert overrides["ruta_carpetas"] == "/input/path"
+    assert overrides["input_path"] == "/input/path"
     assert overrides["output_base_dir"] == "/output/path"
     assert overrides["output_subdir_name"] == "my_sub"
     assert overrides["output_prefix"] == "my_prefix"
@@ -69,6 +69,6 @@ def test_cli_defaults_are_not_in_overrides():
     overrides = _args_to_overrides(args)
 
     # Keys should be missing or None, so merge_config ignores them
-    assert "generar_arbol" not in overrides
+    assert "generate_tree" not in overrides
     assert "extensiones" not in overrides
-    assert overrides["ruta_carpetas"] is None
+    assert overrides["input_path"] is None

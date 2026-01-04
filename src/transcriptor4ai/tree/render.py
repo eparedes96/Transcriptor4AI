@@ -13,9 +13,9 @@ def generar_estructura_texto(
         estructura: Tree,
         lines: List[str],
         prefix: str = "",
-        mostrar_funciones: bool = False,
-        mostrar_clases: bool = False,
-        mostrar_metodos: bool = False,
+        show_functions: bool = False,
+        show_classes: bool = False,
+        show_methods: bool = False,
 ) -> None:
     """
     Recursive function to render the dictionary structure into a list of strings.
@@ -24,9 +24,9 @@ def generar_estructura_texto(
         estructura: The Tree dictionary (current level).
         lines: The accumulator list for output lines.
         prefix: Indentation string for the current level.
-        mostrar_funciones: Flag to enable function parsing.
-        mostrar_clases: Flag to enable class parsing.
-        mostrar_metodos: Flag to enable method parsing.
+        show_functions: Flag to enable function parsing.
+        show_classes: Flag to enable class parsing.
+        show_methods: Flag to enable method parsing.
     """
     entries = sorted(estructura.keys())
     total = len(entries)
@@ -45,9 +45,9 @@ def generar_estructura_texto(
                 node,
                 lines,
                 prefix=new_prefix,
-                mostrar_funciones=mostrar_funciones,
-                mostrar_clases=mostrar_clases,
-                mostrar_metodos=mostrar_metodos,
+                show_functions=show_functions,
+                show_classes=show_classes,
+                show_methods=show_methods,
             )
             continue
 
@@ -56,12 +56,12 @@ def generar_estructura_texto(
             lines.append(f"{prefix}{connector}{entry}")
 
             # Optional AST analysis
-            if mostrar_funciones or mostrar_clases or mostrar_metodos:
+            if show_functions or show_classes or show_methods:
                 symbols = extract_definitions(
                     node.path,
-                    show_functions=mostrar_funciones,
-                    show_classes=mostrar_clases,
-                    show_methods=mostrar_metodos,
+                    show_functions=show_functions,
+                    show_classes=show_classes,
+                    show_methods=show_methods,
                 )
 
                 # Indent symbols below the file

@@ -106,15 +106,15 @@ The application uses a `config.json` file for persistent settings.
 
 ```json
 {
-    "modo_procesamiento": "todo",
+    "processing_mode": "todo",
     "extensiones": [".py", ".ts"],
-    "patrones_excluir": [
+    "exclude_patterns": [
         "^__init__\\.py$",
         "^(__pycache__|\\.git|node_modules)$"
     ],
-    "generar_arbol": true,
-    "mostrar_clases": true,
-    "guardar_log_errores": true
+    "generate_tree": true,
+    "show_classes": true,
+    "save_error_log": true
 }
 ```
 

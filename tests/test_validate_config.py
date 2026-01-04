@@ -12,7 +12,7 @@ def test_validate_none_returns_defaults():
     cfg, warnings = validate_config(None)
 
     assert isinstance(cfg, dict)
-    assert cfg["modo_procesamiento"] == "todo"
+    assert cfg["processing_mode"] == "todo"
     assert cfg["extensiones"] == [".py"]
     # Should produce a warning about invalid type
     assert len(warnings) > 0
@@ -23,7 +23,7 @@ def test_validate_empty_dict_returns_defaults():
     cfg, warnings = validate_config({})
 
     assert cfg["output_prefix"] == "transcripcion"
-    assert cfg["generar_arbol"] is False
+    assert cfg["generate_tree"] is False
     assert len(warnings) == 0
 
 
@@ -34,17 +34,17 @@ def test_validate_empty_dict_returns_defaults():
 def test_validate_converts_strings_to_bools():
     """Common scenario: CLI/GUI passing 'true'/'false' strings."""
     raw = {
-        "generar_arbol": "true",
-        "imprimir_arbol": "False",
-        "mostrar_funciones": "1",
-        "mostrar_clases": "0"
+        "generate_tree": "true",
+        "print_tree": "False",
+        "show_functions": "1",
+        "show_classes": "0"
     }
     cfg, warnings = validate_config(raw, strict=False)
 
-    assert cfg["generar_arbol"] is True
-    assert cfg["imprimir_arbol"] is False
-    assert cfg["mostrar_funciones"] is True
-    assert cfg["mostrar_clases"] is False
+    assert cfg["generate_tree"] is True
+    assert cfg["print_tree"] is False
+    assert cfg["show_functions"] is True
+    assert cfg["show_classes"] is False
     assert len(warnings) == 4  # One warning per conversion
 
 
@@ -52,7 +52,7 @@ def test_validate_normalizes_csv_strings_to_lists():
     """Common scenario: 'py,txt' from CLI args."""
     raw = {
         "extensiones": "py, txt, .js",
-        "patrones_incluir": "test.*"
+        "include_patterns": "test.*"
     }
     cfg, warnings = validate_config(raw, strict=False)
 
@@ -60,8 +60,8 @@ def test_validate_normalizes_csv_strings_to_lists():
     assert ".py" in cfg["extensiones"]
     assert ".txt" in cfg["extensiones"]
     assert ".js" in cfg["extensiones"]
-    assert isinstance(cfg["patrones_incluir"], list)
-    assert cfg["patrones_incluir"][0] == "test.*"
+    assert isinstance(cfg["include_patterns"], list)
+    assert cfg["include_patterns"][0] == "test.*"
 
 
 # -----------------------------------------------------------------------------
@@ -70,10 +70,10 @@ def test_validate_normalizes_csv_strings_to_lists():
 
 def test_validate_modo_fallback():
     """Invalid mode should fallback to 'todo'."""
-    raw = {"modo_procesamiento": "invalid_mode"}
+    raw = {"processing_mode": "invalid_mode"}
     cfg, warnings = validate_config(raw)
 
-    assert cfg["modo_procesamiento"] == "todo"
+    assert cfg["processing_mode"] == "todo"
     assert any("fallback" in w for w in warnings)
 
 
@@ -92,7 +92,7 @@ def test_validate_extensions_adds_dots():
 
 def test_strict_raises_on_bad_type():
     """Strict mode should raise TypeError on mismatch."""
-    raw = {"generar_arbol": "not_a_bool"}
+    raw = {"generate_tree": "not_a_bool"}
 
     with pytest.raises(TypeError):
         validate_config(raw, strict=True)
@@ -100,7 +100,7 @@ def test_strict_raises_on_bad_type():
 
 def test_strict_raises_on_bad_enum():
     """Strict mode should raise ValueError on invalid mode."""
-    raw = {"modo_procesamiento": "super_mode"}
+    raw = {"processing_mode": "super_mode"}
 
     with pytest.raises(ValueError):
         validate_config(raw, strict=True)

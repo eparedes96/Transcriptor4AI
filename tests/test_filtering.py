@@ -5,7 +5,7 @@ from transcriptor4ai.filtering import (
     compile_patterns,
     matches_any,
     es_test,
-    default_patrones_excluir
+    default_exclude_patterns
 )
 
 
@@ -26,7 +26,7 @@ def test_compile_patterns_handles_valid_and_invalid():
 # -----------------------------------------------------------------------------
 def test_default_exclusions():
     """Ensure default patterns block common noise files."""
-    defaults = default_patrones_excluir()
+    defaults = default_exclude_patterns()
     compiled = compile_patterns(defaults)
 
     # Should match (Exclude)

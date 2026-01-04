@@ -1,6 +1,7 @@
-﻿name: Transcriptor4AI
+﻿name: transcriptor4ai
 channels:
   - conda-forge
+  - defaults
 dependencies:
   - python=3.12
   - pip
@@ -9,3 +10,6 @@ dependencies:
   - pyinstaller
   - setuptools
   - wheel
+  - mypy
+  - pip:
+      - types-setuptools

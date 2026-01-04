@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "1.0.0"
-description = "Tool for transcribing codebases and generating directory trees for AI context injection."
+version = "1.0.1"
+description = "Industrial-grade tool for consolidating codebases and generating metadata-rich directory trees for AI context injection."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 authors = [
   { name = "Enrique Paredes", email = "eparedesbalen@gmail.com" },
 ]
@@ -15,7 +15,9 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
     "PySimpleGUI",
@@ -34,3 +36,27 @@ include = ["transcriptor4ai*"]
 
 [tool.setuptools.package-data]
 transcriptor4ai = ["locales/*.json"]
+
+# =============================================================================
+# MYPY CONFIGURATION
+# =============================================================================
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_configs = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "PySimpleGUI"
+ignore_missing_imports = true
+
+# =============================================================================
+# PYTEST CONFIGURATION
+# =============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --strict-markers"

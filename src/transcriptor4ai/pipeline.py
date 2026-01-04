@@ -200,7 +200,7 @@ def run_pipeline(
     trans_res = transcribe_code(
         input_path=base_path,
         mode=cfg["processing_mode"],
-        extensions=cfg["extensiones"],
+        extensions=cfg["extensions"],
         include_patterns=cfg["include_patterns"],
         exclude_patterns=cfg["exclude_patterns"],
         output_prefix=cfg["output_prefix"],
@@ -239,7 +239,7 @@ def run_pipeline(
         tree_lines = generate_directory_tree(
             input_path=base_path,
             mode=cfg["processing_mode"],
-            extensions=cfg["extensiones"],
+            extensions=cfg["extensions"],
             include_patterns=cfg["include_patterns"],
             exclude_patterns=cfg["exclude_patterns"],
             show_functions=bool(cfg.get("show_functions")),

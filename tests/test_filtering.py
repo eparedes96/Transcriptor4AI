@@ -4,7 +4,7 @@ import pytest
 from transcriptor4ai.filtering import (
     compile_patterns,
     matches_any,
-    es_test,
+    is_test,
     default_exclude_patterns
 )
 
@@ -57,11 +57,11 @@ def test_custom_inclusion_logic():
 def test_es_test_identification():
     """Verify classification of Test vs Source files."""
     # Positives
-    assert es_test("test_api.py") is True
-    assert es_test("api_test.py") is True
-    assert es_test("test_utils.py") is True
+    assert is_test("test_api.py") is True
+    assert is_test("api_test.py") is True
+    assert is_test("test_utils.py") is True
 
     # Negatives
-    assert es_test("api.py") is False
-    assert es_test("test_helper.txt") is False  # Extension check is usually done before, but regex expects .py
-    assert es_test("latest_results.py") is False
+    assert is_test("api.py") is False
+    assert is_test("test_helper.txt") is False  # Extension check is usually done before, but regex expects .py
+    assert is_test("latest_results.py") is False

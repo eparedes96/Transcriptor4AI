@@ -61,7 +61,7 @@ def matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
     return any(rx.match(name) for rx in include_patterns)
 
 
-def es_test(file_name: str) -> bool:
+def is_test(file_name: str) -> bool:
     """
     Detect if a file is a test file based on naming convention.
     Matches: test_*.py or *_test.py

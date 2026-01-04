@@ -7,7 +7,7 @@ from transcriptor4ai.paths import normalize_path, get_real_output_path, DEFAULT_
 # Path Normalization Tests
 # -----------------------------------------------------------------------------
 
-def test_normalizar_dir_handles_none_and_empty():
+def test_normalize_path_handles_none_and_empty():
     """Fallback should be used when input is None or empty."""
     fallback = os.getcwd()
 
@@ -24,7 +24,7 @@ def test_normalizar_dir_handles_none_and_empty():
     assert res_space == fallback
 
 
-def test_normalizar_dir_resolves_relative_paths():
+def test_normalize_path_resolves_relative_paths():
     """Relative paths should be converted to absolute paths."""
     cwd = os.getcwd()
     rel_path = "subfolder"
@@ -35,7 +35,7 @@ def test_normalizar_dir_resolves_relative_paths():
     assert res == os.path.join(cwd, rel_path)
 
 
-def test_normalizar_dir_expands_user_home():
+def test_normalize_path_expands_user_home():
     """Tilde (~) should be expanded to user home directory."""
     path_with_tilde = os.path.join("~", "Documents")
     res = normalize_path(path_with_tilde, fallback="/tmp")
@@ -48,7 +48,7 @@ def test_normalizar_dir_expands_user_home():
 # Output Path Logic Tests
 # -----------------------------------------------------------------------------
 
-def test_ruta_salida_real_joins_paths():
+def test_get_real_output_path_joins_paths():
     """Output path should be correctly joined."""
     base = "/tmp/base"
     sub = "my_transcript"
@@ -59,7 +59,7 @@ def test_ruta_salida_real_joins_paths():
     assert res == expected
 
 
-def test_ruta_salida_real_uses_default_subdir():
+def test_get_real_output_path_uses_default_subdir():
     """If subdir is missing, use DEFAULT_OUTPUT_SUBDIR."""
     base = "/tmp/base"
 

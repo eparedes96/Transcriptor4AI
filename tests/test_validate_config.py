@@ -13,7 +13,7 @@ def test_validate_none_returns_defaults():
 
     assert isinstance(cfg, dict)
     assert cfg["processing_mode"] == "all"
-    assert cfg["extensiones"] == [".py"]
+    assert cfg["extensions"] == [".py"]
     # Should produce a warning about invalid type
     assert len(warnings) > 0
 
@@ -51,15 +51,15 @@ def test_validate_converts_strings_to_bools():
 def test_validate_normalizes_csv_strings_to_lists():
     """Common scenario: 'py,txt' from CLI args."""
     raw = {
-        "extensiones": "py, txt, .js",
+        "extensions": "py, txt, .js",
         "include_patterns": "test.*"
     }
     cfg, warnings = validate_config(raw, strict=False)
 
     # Logic adds dot if missing
-    assert ".py" in cfg["extensiones"]
-    assert ".txt" in cfg["extensiones"]
-    assert ".js" in cfg["extensiones"]
+    assert ".py" in cfg["extensions"]
+    assert ".txt" in cfg["extensions"]
+    assert ".js" in cfg["extensions"]
     assert isinstance(cfg["include_patterns"], list)
     assert cfg["include_patterns"][0] == "test.*"
 
@@ -68,7 +68,7 @@ def test_validate_normalizes_csv_strings_to_lists():
 # 3. Enum & Logic Validation
 # -----------------------------------------------------------------------------
 
-def test_validate_modo_fallback():
+def test_validate_mode_fallback():
     """Invalid mode should fallback to 'all'."""
     raw = {"processing_mode": "invalid_mode"}
     cfg, warnings = validate_config(raw)
@@ -79,11 +79,11 @@ def test_validate_modo_fallback():
 
 def test_validate_extensions_adds_dots():
     """Extensions without dots should have them added."""
-    raw = {"extensiones": ["py", "java"]}
+    raw = {"extensions": ["py", "java"]}
     cfg, _ = validate_config(raw)
 
-    assert ".py" in cfg["extensiones"]
-    assert ".java" in cfg["extensiones"]
+    assert ".py" in cfg["extensions"]
+    assert ".java" in cfg["extensions"]
 
 
 # -----------------------------------------------------------------------------

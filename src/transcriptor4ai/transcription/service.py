@@ -17,7 +17,7 @@ from transcriptor4ai.filtering import (
     default_extensions,
     default_exclude_patterns,
     default_include_patterns,
-    es_test,
+    is_test,
     matches_any,
     matches_include,
 )
@@ -129,7 +129,7 @@ def transcribe_code(
                 skipped_count += 1
                 continue
 
-            is_test_file = es_test(file_name)
+            is_test_file = is_test(file_name)
             if mode == "tests_only" and not is_test_file:
                 skipped_count += 1
                 continue

@@ -22,7 +22,7 @@ def mock_config_dict() -> dict:
         "output_subdir_name": "transcript",
         "output_prefix": "test_output",
         "processing_mode": "all",
-        "extensiones": [".py"],
+        "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [],
         "show_functions": False,

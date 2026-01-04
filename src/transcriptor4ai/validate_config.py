@@ -3,8 +3,9 @@ from __future__ import annotations
 """
 Configuration validation and normalization gatekeeper.
 
-Ensures all input data follows the expected types and formats before 
-reaching the business logic.
+This module ensures that all input data follows the expected types and formats 
+before reaching the business logic, acting as the primary security layer for 
+the pipeline.
 """
 
 import logging
@@ -20,6 +21,9 @@ from transcriptor4ai.filtering import (
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# Public API
+# -----------------------------------------------------------------------------
 def validate_config(
     config: Any,
     *,
@@ -168,10 +172,10 @@ def validate_config(
 
 
 # -----------------------------------------------------------------------------
-# Internal Helpers
+# Internal Helpers (Private)
 # -----------------------------------------------------------------------------
-
 def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: bool) -> str:
+    """Ensure the value is a non-empty string or use fallback."""
     if value is None:
         return fallback
     if isinstance(value, str):
@@ -186,6 +190,7 @@ def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: 
 
 
 def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict: bool) -> bool:
+    """Coerce various input types into a boolean value."""
     if isinstance(value, bool):
         return value
     if value is None:
@@ -213,6 +218,7 @@ def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict
 
 
 def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str], strict: bool) -> List[str]:
+    """Ensure the value is a list of strings, handles CSV strings in non-strict mode."""
     if value is None:
         return list(fallback)
 
@@ -247,6 +253,7 @@ def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str
 
 
 def _as_modo(value: Any, fallback: str, warnings: List[str], strict: bool) -> str:
+    """Validate that the processing mode is within allowed enums."""
     allowed = {"todo", "solo_modulos", "solo_tests"}
     if value is None:
         return fallback
@@ -270,6 +277,7 @@ def _as_modo(value: Any, fallback: str, warnings: List[str], strict: bool) -> st
 
 
 def _normalize_extensions(exts: List[str], warnings: List[str], strict: bool) -> List[str]:
+    """Ensure all extensions start with a dot."""
     out: List[str] = []
     for ext in exts:
         e = ext.strip()

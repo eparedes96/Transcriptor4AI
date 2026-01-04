@@ -4,7 +4,8 @@ from __future__ import annotations
 Source code transcription service.
 
 Recursively scans directories and consolidates files into text documents 
-based on processing modes and filters.
+based on processing modes and filters. Implements lazy writing to prevent 
+the creation of empty files.
 """
 
 import logging
@@ -31,56 +32,53 @@ logger = logging.getLogger(__name__)
 # Public API
 # -----------------------------------------------------------------------------
 def transcribe_code(
-        ruta_base: str,
-        modo: str = "todo",
-        extensiones: Optional[List[str]] = None,
+        input_path: str,
+        mode: str = "todo",
+        extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
-        archivo_salida: str = "transcripcion",
+        output_prefix: str = "transcription",
         output_folder: str = ".",
         save_error_log: bool = True,
 ) -> Dict[str, Any]:
     """
     Consolidate source code into text files based on filtering criteria.
 
-    Generates:
-      - {prefix}_tests.txt
-      - {prefix}_modulos.txt
-      - {prefix}_errores.txt (optional)
+    Implements lazy writing: files are only created if content is found.
 
     Args:
-        ruta_base: Source directory.
-        modo: "todo", "solo_modulos", "solo_tests".
-        extensiones: List of file extensions to process.
+        input_path: Source directory to scan.
+        mode: "todo", "solo_modulos", "solo_tests".
+        extensions: List of file extensions to process.
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
-        archivo_salida: Prefix for output files.
+        output_prefix: Prefix for output files.
         output_folder: Destination directory.
-        save_error_log: Whether to write a separate error log file.
+        save_error_log: Whether to write a separate error log file (only if errors occur).
 
     Returns:
         A dictionary containing counters, paths, and status.
     """
-    logger.info(f"Starting transcription scan in: {ruta_base}")
+    logger.info(f"Starting transcription scan in: {input_path}")
 
     # -------------------------
     # Input Normalization
     # -------------------------
-    if extensiones is None:
-        extensiones = default_extensiones()
+    if extensions is None:
+        extensions = default_extensiones()
     if include_patterns is None:
         include_patterns = default_include_patterns()
     if exclude_patterns is None:
         exclude_patterns = default_exclude_patterns()
 
-    ruta_base_abs = os.path.abspath(ruta_base)
+    input_path_abs = os.path.abspath(input_path)
     output_folder_abs = os.path.abspath(output_folder)
 
-    incluir_rx = compile_patterns(include_patterns)
-    excluir_rx = compile_patterns(exclude_patterns)
+    include_rx = compile_patterns(include_patterns)
+    exclude_rx = compile_patterns(exclude_patterns)
 
-    generar_tests = (modo == "solo_tests" or modo == "todo")
-    generar_modulos = (modo == "solo_modulos" or modo == "todo")
+    generate_tests = (mode == "solo_tests" or mode == "todo")
+    generate_modules = (mode == "solo_modulos" or mode == "todo")
 
     # -------------------------
     # Prepare Output Directory
@@ -94,38 +92,25 @@ def transcribe_code(
             "output_folder": output_folder_abs,
         }
 
-    path_tests = os.path.join(output_folder_abs, f"{archivo_salida}_tests.txt")
-    path_modulos = os.path.join(output_folder_abs, f"{archivo_salida}_modulos.txt")
-    path_errores = os.path.join(output_folder_abs, f"{archivo_salida}_errores.txt")
-
-    # Initialize files with headers
-    try:
-        if generar_tests:
-            with open(path_tests, "w", encoding="utf-8") as f:
-                f.write("CODIGO:\n")
-        if generar_modulos:
-            with open(path_modulos, "w", encoding="utf-8") as f:
-                f.write("CODIGO:\n")
-    except OSError as e:
-        logger.error(f"Failed to initialize output files: {e}")
-        return {
-            "ok": False,
-            "error": f"Output initialization error: {e}",
-            "output_folder": output_folder_abs,
-        }
+    path_tests = os.path.join(output_folder_abs, f"{output_prefix}_tests.txt")
+    path_modules = os.path.join(output_folder_abs, f"{output_prefix}_modules.txt")
+    path_errors = os.path.join(output_folder_abs, f"{output_prefix}_errors.txt")
 
     # -------------------------
     # Filesystem Traversal
     # -------------------------
-    errores: List[TranscriptionError] = []
-    procesados = 0
-    omitidos = 0
-    escritos_tests = 0
-    escritos_modulos = 0
+    errors: List[TranscriptionError] = []
+    processed_count = 0
+    skipped_count = 0
+    tests_written = 0
+    modules_written = 0
 
-    for root, dirs, files in os.walk(ruta_base_abs):
-        # Prune excluded directories
-        dirs[:] = [d for d in dirs if not matches_any(d, excluir_rx)]
+    # Lazy initialization flags
+    tests_file_initialized = False
+    modules_file_initialized = False
+
+    for root, dirs, files in os.walk(input_path_abs):
+        dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
         dirs.sort()
         files.sort()
 
@@ -133,96 +118,110 @@ def transcribe_code(
             _, ext = os.path.splitext(file_name)
 
             # --- Filtering ---
-            if ext not in extensiones:
-                omitidos += 1
+            if ext not in extensions:
+                skipped_count += 1
                 continue
 
-            if matches_any(file_name, excluir_rx):
-                omitidos += 1
+            if matches_any(file_name, exclude_rx):
+                skipped_count += 1
                 continue
-            if not matches_include(file_name, incluir_rx):
-                omitidos += 1
+            if not matches_include(file_name, include_rx):
+                skipped_count += 1
                 continue
 
-            archivo_es_test = es_test(file_name)
-            if modo == "solo_tests" and not archivo_es_test:
-                omitidos += 1
+            is_test_file = es_test(file_name)
+            if mode == "solo_tests" and not is_test_file:
+                skipped_count += 1
                 continue
-            if modo == "solo_modulos" and archivo_es_test:
-                omitidos += 1
+            if mode == "solo_modulos" and is_test_file:
+                skipped_count += 1
                 continue
 
             # --- Processing ---
             file_path = os.path.join(root, file_name)
-            rel_path = os.path.relpath(file_path, ruta_base_abs)
+            rel_path = os.path.relpath(file_path, input_path_abs)
 
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                    contenido = f.read()
+                    content = f.read()
             except (OSError, UnicodeDecodeError) as e:
                 logger.warning(f"Error reading file {rel_path}: {e}")
-                errores.append(TranscriptionError(rel_path=rel_path, error=str(e)))
+                errors.append(TranscriptionError(rel_path=rel_path, error=str(e)))
                 continue
 
             try:
-                if archivo_es_test and generar_tests:
-                    _append_entry(path_tests, rel_path, contenido)
-                    escritos_tests += 1
-                if (not archivo_es_test) and generar_modulos:
-                    _append_entry(path_modulos, rel_path, contenido)
-                    escritos_modulos += 1
+                if is_test_file and generate_tests:
+                    if not tests_file_initialized:
+                        _initialize_output_file(path_tests, "CODIGO:")
+                        tests_file_initialized = True
+                    _append_entry(path_tests, rel_path, content)
+                    tests_written += 1
 
-                procesados += 1
-                # Optional: Verbose logging for every file might be too noisy,
-                # so we stick to debug or omit it unless necessary.
+                if (not is_test_file) and generate_modules:
+                    if not modules_file_initialized:
+                        _initialize_output_file(path_modules, "CODIGO:")
+                        modules_file_initialized = True
+                    _append_entry(path_modules, rel_path, content)
+                    modules_written += 1
+
+                processed_count += 1
                 logger.debug(f"Processed: {rel_path}")
 
             except OSError as e:
                 msg = f"Error writing to output: {e}"
                 logger.error(msg)
-                errores.append(TranscriptionError(rel_path=rel_path, error=msg))
+                errors.append(TranscriptionError(rel_path=rel_path, error=msg))
                 continue
 
     # -------------------------
-    # Error Logging
+    # Lazy Error Logging
     # -------------------------
-    if save_error_log and errores:
+    actual_error_path = ""
+    if save_error_log and errors:
         try:
-            with open(path_errores, "w", encoding="utf-8") as f:
+            with open(path_errors, "w", encoding="utf-8") as f:
                 f.write("ERRORES:\n")
-                for err_item in errores:
+                for err_item in errors:
                     f.write("-" * 80 + "\n")
                     f.write(f"{err_item.rel_path}\n")
                     f.write(f"{err_item.error}\n")
-            logger.info(f"Error log saved to: {path_errores}")
+            actual_error_path = path_errors
+            logger.info(f"Error log saved to: {path_errors}")
         except OSError as e:
             logger.error(f"Failed to save error log: {e}")
 
     logger.info(
-        f"Transcription finished. Processed: {procesados}, "
-        f"Tests: {escritos_tests}, Modules: {escritos_modulos}, Errors: {len(errores)}"
+        f"Transcription finished. Processed: {processed_count}, "
+        f"Tests: {tests_written}, Modules: {modules_written}, Errors: {len(errors)}"
     )
 
     # -------------------------
     # Result Construction
     # -------------------------
-    result = {
+    return {
         "ok": True,
-        "ruta_base": ruta_base_abs,
+        "input_path": input_path_abs,
         "output_folder": output_folder_abs,
-        "modo": modo,
-        "generados": {
-            "tests": path_tests if generar_tests else "",
-            "modulos": path_modulos if generar_modulos else "",
-            "errores": path_errores if (save_error_log and errores) else (
-                path_errores if save_error_log else ""),
+        "mode": mode,
+        "generated": {
+            "tests": path_tests if tests_file_initialized else "",
+            "modules": path_modules if modules_file_initialized else "",
+            "errors": actual_error_path,
         },
-        "contadores": {
-            "procesados": procesados,
-            "omitidos": omitidos,
-            "tests_escritos": escritos_tests,
-            "modulos_escritos": escritos_modulos,
-            "errores": len(errores),
+        "counters": {
+            "processed": processed_count,
+            "skipped": skipped_count,
+            "tests_written": tests_written,
+            "modules_written": modules_written,
+            "errors": len(errors),
         },
     }
-    return result
+
+
+# -----------------------------------------------------------------------------
+# Private Helpers
+# -----------------------------------------------------------------------------
+def _initialize_output_file(file_path: str, header: str) -> None:
+    """Create a file and write the initial header."""
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(f"{header}\n")

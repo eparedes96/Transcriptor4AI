@@ -26,7 +26,7 @@ It flattens complex project structures into consolidated text files and generate
 ## 📦 Installation
 
 ### Prerequisites
-*   Python 3.9 or higher.
+*   Python 3.12 or higher.
 
 ### From Source (Recommended)
 Since this project uses a modern `src` layout, install it using `pip` to ensure dependencies and entry points are correctly configured.

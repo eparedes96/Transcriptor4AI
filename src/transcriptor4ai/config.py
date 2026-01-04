@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # -----------------------------------------------------------------------------
 CONFIG_FILE = "config.json"
-DEFAULT_OUTPUT_PREFIX = "transcripcion"
+DEFAULT_OUTPUT_PREFIX = "transcription"
 
 
 # -----------------------------------------------------------------------------
@@ -33,7 +33,7 @@ def get_default_config() -> Dict[str, Any]:
     - input_path: Current working directory.
     - output_base_dir: Current working directory.
     - output_subdir_name: 'transcript'.
-    - processing mode: 'todo' (all).
+    - processing mode: 'all' (all).
     - exclusions: Common noise files (__init__.py, .git, __pycache__).
     """
     base = os.getcwd()
@@ -42,7 +42,7 @@ def get_default_config() -> Dict[str, Any]:
         "output_base_dir": base,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": DEFAULT_OUTPUT_PREFIX,
-        "processing_mode": "todo",  # Options: todo, solo_modulos, solo_tests
+        "processing_mode": "all",  # Options: all, modules_only, tests_only
         "extensiones": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [

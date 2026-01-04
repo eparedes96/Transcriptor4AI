@@ -86,7 +86,7 @@ transcriptor-cli -i ./src \
 | `--tree` | Generate the directory tree structure. |
 | `--clases` | Include class definitions in the tree. |
 | `--funciones` | Include function definitions in the tree. |
-| `--metodos` | Include methods inside classes in the tree. |
+| `--mealls` | Include methods inside classes in the tree. |
 | `--ext` | Comma-separated extensions (e.g., `.py,.js`). |
 | `--exclude` | Regex patterns to ignore (e.g., `venv,node_modules`). |
 | `--dry-run` | Simulate execution without writing files. |
@@ -106,7 +106,7 @@ The application uses a `config.json` file for persistent settings.
 
 ```json
 {
-    "processing_mode": "todo",
+    "processing_mode": "all",
     "extensiones": [".py", ".ts"],
     "exclude_patterns": [
         "^__init__\\.py$",

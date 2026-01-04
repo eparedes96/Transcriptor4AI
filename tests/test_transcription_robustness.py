@@ -46,7 +46,7 @@ def test_transcription_resilience_to_encoding_errors(bad_files_structure, tmp_pa
 
     result = transcribe_code(
         input_path=str(bad_files_structure),
-        mode="todo",
+        mode="all",
         extensions=[".py"],
         output_folder=str(out_dir),
         save_error_log=True

@@ -64,7 +64,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- Mode / Features ---
     p.add_argument(
         "--modo",
-        choices=["todo", "solo_modulos", "solo_tests"],
+        choices=["all", "modules_only", "tests_only"],
         default=None,
         help=i18n.t("cli.args.mode"),
     )
@@ -88,7 +88,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # --- AST flags ---
     p.add_argument("--funciones", action="store_true", help=i18n.t("cli.args.func"))
     p.add_argument("--clases", action="store_true", help=i18n.t("cli.args.cls"))
-    p.add_argument("--metodos", action="store_true", help=i18n.t("cli.args.meth"))
+    p.add_argument("--mealls", action="store_true", help=i18n.t("cli.args.meth"))
 
     # --- Filters ---
     p.add_argument(
@@ -208,7 +208,7 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["show_functions"] = True
     if args.clases:
         overrides["show_classes"] = True
-    if args.metodos:
+    if args.mealls:
         overrides["show_methods"] = True
     if args.no_error_log:
         overrides["save_error_log"] = False

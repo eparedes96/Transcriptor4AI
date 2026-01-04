@@ -45,7 +45,7 @@ def test_pipeline_dry_run_does_not_write(source_structure):
         "output_base_dir": str(source_structure),
         "output_subdir_name": "out",
         "output_prefix": "dry",
-        "processing_mode": "todo"
+        "processing_mode": "all"
     }
 
     result = run_pipeline(config, dry_run=True)
@@ -66,7 +66,7 @@ def test_pipeline_full_execution(source_structure):
         "output_base_dir": str(source_structure),
         "output_subdir_name": "final",
         "output_prefix": "res",
-        "processing_mode": "todo",
+        "processing_mode": "all",
         "generate_tree": True
     }
 
@@ -108,7 +108,7 @@ def test_pipeline_overwrite_protection(source_structure):
         "output_base_dir": str(source_structure),
         "output_subdir_name": "protect",
         "output_prefix": "conflict",
-        "processing_mode": "todo"
+        "processing_mode": "all"
     }
 
     # First run: Should fail (ok=False) because file exists

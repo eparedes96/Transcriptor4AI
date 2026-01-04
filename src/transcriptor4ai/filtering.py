@@ -12,7 +12,7 @@ from typing import List
 # -----------------------------------------------------------------------------
 # Default Filters & Helpers
 # -----------------------------------------------------------------------------
-def default_extensiones() -> List[str]:
+def default_extensions() -> List[str]:
     return [".py"]
 
 

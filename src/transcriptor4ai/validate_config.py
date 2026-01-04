@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Tuple
 
 from transcriptor4ai.config import get_default_config
 from transcriptor4ai.filtering import (
-    default_extensiones,
+    default_extensions,
     default_include_patterns,
     default_exclude_patterns,
 )
@@ -92,7 +92,7 @@ def validate_config(
     )
 
     # 3. Enums and Flags Normalization
-    merged["processing_mode"] = _as_modo(
+    merged["processing_mode"] = _as_mode(
         merged.get("processing_mode"),
         defaults["processing_mode"],
         warnings,
@@ -146,7 +146,7 @@ def validate_config(
     # 4. Lists Normalization: Extensions and Patterns
     merged["extensiones"] = _as_list_str(
         merged.get("extensiones"),
-        default_extensiones(),
+        default_extensions(),
         "extensiones",
         warnings,
         strict,
@@ -252,9 +252,9 @@ def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str
     return list(fallback)
 
 
-def _as_modo(value: Any, fallback: str, warnings: List[str], strict: bool) -> str:
+def _as_mode(value: Any, fallback: str, warnings: List[str], strict: bool) -> str:
     """Validate that the processing mode is within allowed enums."""
-    allowed = {"todo", "solo_modulos", "solo_tests"}
+    allowed = {"all", "modules_only", "tests_only"}
     if value is None:
         return fallback
     if isinstance(value, str):
@@ -289,4 +289,4 @@ def _normalize_extensions(exts: List[str], warnings: List[str], strict: bool) ->
             warnings.append(f"Extension '{ext}' corrected to '.{e}'.")
             e = "." + e
         out.append(e)
-    return out if out else default_extensiones()
+    return out if out else default_extensions()

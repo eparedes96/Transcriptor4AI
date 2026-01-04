@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.filtering import (
     compile_patterns,
-    default_extensiones,
+    default_extensions,
     default_exclude_patterns,
     default_include_patterns,
     es_test,
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 def transcribe_code(
         input_path: str,
-        mode: str = "todo",
+        mode: str = "all",
         extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
@@ -48,7 +48,7 @@ def transcribe_code(
 
     Args:
         input_path: Source directory to scan.
-        mode: "todo", "solo_modulos", "solo_tests".
+        mode: "all", "modules_only", "tests_only".
         extensions: List of file extensions to process.
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
@@ -65,7 +65,7 @@ def transcribe_code(
     # Input Normalization
     # -------------------------
     if extensions is None:
-        extensions = default_extensiones()
+        extensions = default_extensions()
     if include_patterns is None:
         include_patterns = default_include_patterns()
     if exclude_patterns is None:
@@ -77,8 +77,8 @@ def transcribe_code(
     include_rx = compile_patterns(include_patterns)
     exclude_rx = compile_patterns(exclude_patterns)
 
-    generate_tests = (mode == "solo_tests" or mode == "todo")
-    generate_modules = (mode == "solo_modulos" or mode == "todo")
+    generate_tests = (mode == "tests_only" or mode == "all")
+    generate_modules = (mode == "modules_only" or mode == "all")
 
     # -------------------------
     # Prepare Output Directory
@@ -130,10 +130,10 @@ def transcribe_code(
                 continue
 
             is_test_file = es_test(file_name)
-            if mode == "solo_tests" and not is_test_file:
+            if mode == "tests_only" and not is_test_file:
                 skipped_count += 1
                 continue
-            if mode == "solo_modulos" and is_test_file:
+            if mode == "modules_only" and is_test_file:
                 skipped_count += 1
                 continue
 
@@ -152,14 +152,14 @@ def transcribe_code(
             try:
                 if is_test_file and generate_tests:
                     if not tests_file_initialized:
-                        _initialize_output_file(path_tests, "CODIGO:")
+                        _initialize_output_file(path_tests, "CODE:")
                         tests_file_initialized = True
                     _append_entry(path_tests, rel_path, content)
                     tests_written += 1
 
                 if (not is_test_file) and generate_modules:
                     if not modules_file_initialized:
-                        _initialize_output_file(path_modules, "CODIGO:")
+                        _initialize_output_file(path_modules, "CODE:")
                         modules_file_initialized = True
                     _append_entry(path_modules, rel_path, content)
                     modules_written += 1
@@ -180,7 +180,7 @@ def transcribe_code(
     if save_error_log and errors:
         try:
             with open(path_errors, "w", encoding="utf-8") as f:
-                f.write("ERRORES:\n")
+                f.write("ERRORS:\n")
                 for err_item in errors:
                     f.write("-" * 80 + "\n")
                     f.write(f"{err_item.rel_path}\n")

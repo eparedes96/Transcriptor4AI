@@ -14,7 +14,7 @@ from typing import Callable, List, Optional
 
 from transcriptor4ai.filtering import (
     compile_patterns,
-    default_extensiones,
+    default_extensions,
     default_exclude_patterns,
     default_include_patterns,
     es_test,
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 def generate_directory_tree(
         input_path: str,
-        mode: str = "todo",
+        mode: str = "all",
         extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
@@ -50,7 +50,7 @@ def generate_directory_tree(
 
     Args:
         input_path: Root directory to scan.
-        mode: Processing mode ("todo", "solo_modulos", "solo_tests").
+        mode: Processing mode ("all", "modules_only", "tests_only").
         extensions: List of allowed file extensions.
         include_patterns: Regex patterns for inclusion.
         exclude_patterns: Regex patterns for exclusion.
@@ -69,7 +69,7 @@ def generate_directory_tree(
     # Input Normalization
     # -------------------------
     if extensions is None:
-        extensions = default_extensiones()
+        extensions = default_extensions()
     if include_patterns is None:
         include_patterns = default_include_patterns()
     if exclude_patterns is None:
@@ -176,9 +176,9 @@ def _build_structure(
 
             # Check Mode (Tests/Modules)
             file_is_test = test_detect_func(file_name)
-            if mode == "solo_tests" and not file_is_test:
+            if mode == "tests_only" and not file_is_test:
                 continue
-            if mode == "solo_modulos" and file_is_test:
+            if mode == "modules_only" and file_is_test:
                 continue
 
             # Add File Node

@@ -49,19 +49,19 @@ def _run_pipeline_thread(
 # -----------------------------------------------------------------------------
 # GUI: Config Helpers
 # -----------------------------------------------------------------------------
-def actualizar_config_desde_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
+def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
     """Update the config dictionary with values from the GUI window."""
     config["input_path"] = values["input_path"]
     config["output_base_dir"] = values["output_base_dir"]
     config["output_subdir_name"] = values["output_subdir_name"]
     config["output_prefix"] = values["output_prefix"]
 
-    if values.get("modo_todo"):
-        config["processing_mode"] = "todo"
+    if values.get("modo_all"):
+        config["processing_mode"] = "all"
     elif values.get("modo_modulos"):
-        config["processing_mode"] = "solo_modulos"
+        config["processing_mode"] = "modules_only"
     elif values.get("modo_tests"):
-        config["processing_mode"] = "solo_tests"
+        config["processing_mode"] = "tests_only"
 
     config["extensiones"] = values.get("extensiones", "")
     config["include_patterns"] = values.get("include_patterns", "")
@@ -76,16 +76,16 @@ def actualizar_config_desde_gui(config: Dict[str, Any], values: Dict[str, Any]) 
     config["save_error_log"] = bool(values.get("save_error_log"))
 
 
-def volcar_config_a_gui(window: sg.Window, config: Dict[str, Any]) -> None:
+def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     """Populate the GUI fields with values from the config dictionary."""
     window["input_path"].update(config["input_path"])
     window["output_base_dir"].update(config["output_base_dir"])
     window["output_subdir_name"].update(config["output_subdir_name"])
     window["output_prefix"].update(config["output_prefix"])
 
-    window["modo_todo"].update(config["processing_mode"] == "todo")
-    window["modo_modulos"].update(config["processing_mode"] == "solo_modulos")
-    window["modo_tests"].update(config["processing_mode"] == "solo_tests")
+    window["modo_all"].update(config["processing_mode"] == "all")
+    window["modo_modulos"].update(config["processing_mode"] == "modules_only")
+    window["modo_tests"].update(config["processing_mode"] == "tests_only")
 
     exts = config["extensiones"] if isinstance(config["extensiones"], list) else []
     incl = config["include_patterns"] if isinstance(config["include_patterns"], list) else []
@@ -145,11 +145,11 @@ def _format_summary(res: PipelineResult) -> str:
     return "\n".join(lines)
 
 
-def _toggle_ui_state(window: sg.Window, disabled: bool) -> None:
+def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
     """Helper to enable/disable buttons during processing."""
     # Use explicit keys for reliable access regardless of language
     for key in ["btn_process", "btn_save", "btn_reset", "btn_explorar_in", "btn_examinar_out"]:
-        window[key].update(disabled=disabled)
+        window[key].update(disabled=is_disabled)
 
 
 # -----------------------------------------------------------------------------
@@ -204,12 +204,12 @@ def main() -> None:
         # --- Mode ---
         [sg.Text(i18n.t("gui.sections.mode"))],
         [
-            sg.Radio(i18n.t("gui.radios.all"), "RADIO1", key="modo_todo",
-                     default=(config["processing_mode"] == "todo")),
+            sg.Radio(i18n.t("gui.radios.all"), "RADIO1", key="modo_all",
+                     default=(config["processing_mode"] == "all")),
             sg.Radio(i18n.t("gui.radios.modules"), "RADIO1", key="modo_modulos",
-                     default=(config["processing_mode"] == "solo_modulos")),
+                     default=(config["processing_mode"] == "modules_only")),
             sg.Radio(i18n.t("gui.radios.tests"), "RADIO1", key="modo_tests",
-                     default=(config["processing_mode"] == "solo_tests")),
+                     default=(config["processing_mode"] == "tests_only")),
         ],
 
         # --- Filters ---
@@ -279,7 +279,7 @@ def main() -> None:
         # --- Configuration Actions ---
         if event == "btn_save":
             try:
-                actualizar_config_desde_gui(config, values)
+                update_config_from_gui(config, values)
                 clean_conf, _ = validate_config(config, strict=False)
                 clean_conf["input_path"] = paths.normalize_path(clean_conf["input_path"], os.getcwd())
                 clean_conf["output_base_dir"] = paths.normalize_path(clean_conf["output_base_dir"],
@@ -294,14 +294,14 @@ def main() -> None:
 
         if event == "btn_reset":
             config = cfg.get_default_config()
-            volcar_config_a_gui(window, config)
+            populate_gui_from_config(window, config)
             sg.popup(i18n.t("gui.status.reset"))
             logger.info("Configuration reset to defaults.")
 
         # --- PROCESS ACTION (Prepare & Thread Start) ---
         if event == "btn_process":
             try:
-                actualizar_config_desde_gui(config, values)
+                update_config_from_gui(config, values)
 
                 # 1. Validation (Gatekeeper)
                 clean_conf, warnings = validate_config(config, strict=False)
@@ -342,7 +342,7 @@ def main() -> None:
                         should_overwrite = True
 
                 # 4. Start Thread (Freeze UI)
-                _toggle_ui_state(window, disabled=True)
+                _toggle_ui_state(window, is_disabled=True)
                 window["-STATUS-"].update(visible=True)
 
                 thread_conf = clean_conf.copy()
@@ -363,7 +363,7 @@ def main() -> None:
         if event == "-THREAD-DONE-":
             # 1. Restore UI
             window["-STATUS-"].update(visible=False)
-            _toggle_ui_state(window, disabled=False)
+            _toggle_ui_state(window, is_disabled=False)
 
             # 2. Handle Result
             payload = values[event]

@@ -49,9 +49,9 @@ def get_destination_filenames(prefix: str, mode: str, include_tree: bool) -> Lis
     Uses English suffixes for consistency with the v1.1.0 roadmap.
     """
     files: List[str] = []
-    if mode in ("todo", "solo_tests"):
+    if mode in ("all", "tests_only"):
         files.append(f"{prefix}_tests.txt")
-    if mode in ("todo", "solo_modulos"):
+    if mode in ("all", "modules_only"):
         files.append(f"{prefix}_modules.txt")
     if include_tree:
         files.append(f"{prefix}_tree.txt")

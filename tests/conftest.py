@@ -21,7 +21,7 @@ def mock_config_dict() -> dict:
         "output_base_dir": "/tmp/test",
         "output_subdir_name": "transcript",
         "output_prefix": "test_output",
-        "processing_mode": "todo",
+        "processing_mode": "all",
         "extensiones": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [],

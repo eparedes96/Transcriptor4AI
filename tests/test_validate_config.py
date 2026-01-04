@@ -12,7 +12,7 @@ def test_validate_none_returns_defaults():
     cfg, warnings = validate_config(None)
 
     assert isinstance(cfg, dict)
-    assert cfg["processing_mode"] == "todo"
+    assert cfg["processing_mode"] == "all"
     assert cfg["extensiones"] == [".py"]
     # Should produce a warning about invalid type
     assert len(warnings) > 0
@@ -22,7 +22,7 @@ def test_validate_empty_dict_returns_defaults():
     """Passing an empty dict should fill in all default values."""
     cfg, warnings = validate_config({})
 
-    assert cfg["output_prefix"] == "transcripcion"
+    assert cfg["output_prefix"] == "transcription"
     assert cfg["generate_tree"] is False
     assert len(warnings) == 0
 
@@ -69,11 +69,11 @@ def test_validate_normalizes_csv_strings_to_lists():
 # -----------------------------------------------------------------------------
 
 def test_validate_modo_fallback():
-    """Invalid mode should fallback to 'todo'."""
+    """Invalid mode should fallback to 'all'."""
     raw = {"processing_mode": "invalid_mode"}
     cfg, warnings = validate_config(raw)
 
-    assert cfg["processing_mode"] == "todo"
+    assert cfg["processing_mode"] == "all"
     assert any("fallback" in w for w in warnings)
 
 

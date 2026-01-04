@@ -9,7 +9,7 @@
       "output_base": "Base output directory.",
       "subdir": "Name of the output subdirectory.",
       "prefix": "Prefix for generated files.",
-      "mode": "Processing mode: todo | solo_modulos | solo_tests.",
+      "mode": "Processing mode: all | modules_only | tests_only.",
       "tree": "Generate directory tree.",
       "tree_file": "Path to save the tree file (overrides default).",
       "print_tree": "Print the tree to console.",

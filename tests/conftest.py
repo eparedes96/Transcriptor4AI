@@ -1,4 +1,9 @@
-# tests/conftest.py
+from __future__ import annotations
+
+"""
+Test configuration and shared fixtures for transcriptor4ai.
+"""
+
 import sys
 import os
 import pytest
@@ -9,7 +14,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 @pytest.fixture
-def mock_config_dict():
+def mock_config_dict() -> dict:
     """Returns a valid, complete configuration dictionary for testing."""
     return {
         "input_path": "/tmp/test",

@@ -3,7 +3,7 @@ import pytest
 import os
 from transcriptor4ai.tree.ast_symbols import extract_definitions
 from transcriptor4ai.tree.models import FileNode, Tree
-from transcriptor4ai.tree.render import generar_estructura_texto
+from transcriptor4ai.tree.render import render_tree_structure
 
 
 # -----------------------------------------------------------------------------
@@ -66,7 +66,7 @@ def test_render_flat_structure():
         "file2.txt": FileNode(path="/tmp/file2.txt")
     }
     lines = []
-    generar_estructura_texto(structure, lines)
+    render_tree_structure(structure, lines)
 
     assert len(lines) == 2
     assert "├── file1.txt" in lines[0]
@@ -82,7 +82,7 @@ def test_render_nested_structure():
         }
     }
     lines = []
-    generar_estructura_texto(structure, lines)
+    render_tree_structure(structure, lines)
 
     assert len(lines) == 2
     assert "└── folder" in lines[0]
@@ -104,7 +104,7 @@ def test_render_with_ast_flags_enabled(tmp_path):
 
     lines = []
     # Force entry into the AST block
-    generar_estructura_texto(
+    render_tree_structure(
         structure,
         lines,
         show_classes=True

@@ -1,4 +1,12 @@
-# tests/test_pipeline_integration.py
+from __future__ import annotations
+
+"""
+Integration tests for the transcription pipeline.
+
+Verifies the end-to-end flow, including dry runs, full execution, 
+and overwrite protection logic.
+"""
+
 import os
 import pytest
 from transcriptor4ai.pipeline import run_pipeline
@@ -43,7 +51,7 @@ def test_pipeline_dry_run_does_not_write(source_structure):
     result = run_pipeline(config, dry_run=True)
 
     assert result.ok is True
-    assert result.resumen["dry_run"] is True
+    assert result.summary["dry_run"] is True
 
     # Verify folder was NOT created or is empty
     out_dir = source_structure / "out"
@@ -69,8 +77,8 @@ def test_pipeline_full_execution(source_structure):
     out_dir = source_structure / "final"
     assert out_dir.exists()
 
-    # Check Modulos
-    mod_file = out_dir / "res_modulos.txt"
+    # Check Modules (Note: filenames are now in English)
+    mod_file = out_dir / "res_modules.txt"
     assert mod_file.exists()
     content_mod = mod_file.read_text(encoding="utf-8")
     assert "src/main.py" in content_mod or "src\\main.py" in content_mod
@@ -83,7 +91,7 @@ def test_pipeline_full_execution(source_structure):
     assert "tests/test_main.py" in content_test or "tests\\test_main.py" in content_test
 
     # Check Tree
-    tree_file = out_dir / "res_arbol.txt"
+    tree_file = out_dir / "res_tree.txt"
     assert tree_file.exists()
 
 
@@ -93,7 +101,7 @@ def test_pipeline_overwrite_protection(source_structure):
     out_dir.mkdir()
 
     # Create a conflict file
-    (out_dir / "conflict_modulos.txt").write_text("exists")
+    (out_dir / "conflict_modules.txt").write_text("exists")
 
     config = {
         "input_path": str(source_structure),
@@ -106,7 +114,9 @@ def test_pipeline_overwrite_protection(source_structure):
     # First run: Should fail (ok=False) because file exists
     result = run_pipeline(config, overwrite=False)
     assert result.ok is False
-    assert "existing files" in result.error.lower() or "existing files" in str(result.resumen)
+    # Check error message or summary for existence proof
+    assert "existing files" in result.error.lower() or "existing_files" in result.summary
+
 
     # Second run: Should succeed with overwrite=True
     result_force = run_pipeline(config, overwrite=True)

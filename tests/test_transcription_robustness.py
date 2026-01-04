@@ -1,4 +1,12 @@
-# tests/test_transcription_robustness.py
+from __future__ import annotations
+
+"""
+Robustness tests for the transcription service.
+
+Ensures the service handles encoding errors gracefully and 
+validates the lazy writing logic for error logs.
+"""
+
 import pytest
 import os
 from transcriptor4ai.transcription.service import transcribe_code
@@ -37,9 +45,9 @@ def test_transcription_resilience_to_encoding_errors(bad_files_structure, tmp_pa
     out_dir = tmp_path / "out"
 
     result = transcribe_code(
-        ruta_base=str(bad_files_structure),
-        modo="todo",
-        extensiones=[".py"],
+        input_path=str(bad_files_structure),
+        mode="todo",
+        extensions=[".py"],
         output_folder=str(out_dir),
         save_error_log=True
     )
@@ -49,15 +57,13 @@ def test_transcription_resilience_to_encoding_errors(bad_files_structure, tmp_pa
 
     # 2. Counters check
     # We have 3 files. 1 valid, 2 invalid.
-    # Logic in service: try read -> except -> add to errors -> continue
-    # So 'procesados' counts successfully written files.
-    # 'errores' counts files that raised exception.
-    counters = result["contadores"]
-    assert counters["procesados"] == 1  # Only valid.py
-    assert counters["errores"] == 2  # fake.py and legacy.py
+    counters = result["counters"]
+    assert counters["processed"] == 1  # Only valid.py
+    assert counters["errors"] == 2     # fake.py and legacy.py
 
-    # 3. Verify Error Log existence
-    error_log_path = result["generados"]["errores"]
+    # 3. Verify Error Log existence (Lazy Writing: created because errors > 0)
+    error_log_path = result["generated"]["errors"]
+    assert error_log_path != ""
     assert os.path.exists(error_log_path)
 
     # 4. Verify Content of Error Log

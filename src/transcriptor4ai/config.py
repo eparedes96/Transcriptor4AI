@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+Configuration management for transcriptor4ai.
+
+Handles default settings, persistent storage in JSON, and config I/O operations.
+"""
+
 import json
 import logging
 import os

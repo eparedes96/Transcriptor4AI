@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Configuration validation and normalization gatekeeper.
+
+Ensures all input data follows the expected types and formats before 
+reaching the business logic.
+"""
+
 import logging
 from typing import Any, Dict, List, Tuple
 

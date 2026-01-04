@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Directory tree generation service.
+
+Builds a hierarchical representation of the project structure and 
+extracts AST symbols if configured.
+"""
+
 import logging
 import os
 import re

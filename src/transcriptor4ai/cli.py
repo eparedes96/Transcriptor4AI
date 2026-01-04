@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Command Line Interface (CLI) for transcriptor4ai.
+
+Handles argument parsing, configuration merging, and terminal-based 
+execution of the transcription pipeline.
+"""
+
 import argparse
 import json
 import logging

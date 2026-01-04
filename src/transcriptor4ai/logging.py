@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+"""
+Idempotent logging configuration system.
+
+Manages console and rotating file handlers for entry points (CLI/GUI).
+"""
+
 import logging
 import os
 import sys
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from typing import Optional
+
+# -----------------------------------------------------------------------------
+# Constants
+# -----------------------------------------------------------------------------
+_CONFIGURED_FLAG_ATTR = "_transcriptor4ai_configured"
+_HANDLER_TAG_ATTR = "_transcriptor4ai_handler"
 
 # =============================================================================
 # Configuration Model
@@ -41,9 +53,6 @@ class LoggingConfig:
 # =============================================================================
 # Internal State & Helpers
 # =============================================================================
-
-_CONFIGURED_FLAG_ATTR = "_transcriptor4ai_configured"
-_HANDLER_TAG_ATTR = "_transcriptor4ai_handler"
 
 _LEVEL_MAP = {
     "DEBUG": logging.DEBUG,

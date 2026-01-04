@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Source code transcription service.
+
+Recursively scans directories and consolidates files into text documents 
+based on processing modes and filters.
+"""
+
 import logging
 import os
 from typing import Any, Dict, List, Optional

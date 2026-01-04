@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+"""
+Core orchestration pipeline.
+
+Coordinates input validation, path preparation, and service execution 
+(Transcription and Tree generation).
+"""
+
 import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from transcriptor4ai.config import (
-    DEFAULT_OUTPUT_PREFIX,
-    get_default_config,
-)
+from transcriptor4ai.config import DEFAULT_OUTPUT_PREFIX, get_default_config
 from transcriptor4ai.filtering import (
     default_extensiones,
     default_exclude_patterns,

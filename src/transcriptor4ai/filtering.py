@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+File and directory filtering logic.
+
+Provides regex-based inclusion and exclusion patterns for the scanner.
+"""
+
 import re
 from typing import List
 

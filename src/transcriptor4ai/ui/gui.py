@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""
+Graphical User Interface (GUI) for transcriptor4ai.
+
+Implemented using PySimpleGUI. Manages user interactions, threaded 
+pipeline execution, and persistent configuration.
+"""
+
 import logging
 import os
 import threading

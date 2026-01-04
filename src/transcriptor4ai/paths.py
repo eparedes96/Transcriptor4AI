@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+Path manipulation and filesystem utilities.
+
+Ensures cross-platform compatibility and path normalization.
+"""
+
 import os
 from typing import List, Optional, Tuple
 

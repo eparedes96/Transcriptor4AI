@@ -4,7 +4,8 @@ from __future__ import annotations
 Command Line Interface (CLI) for transcriptor4ai.
 
 Handles argument parsing, configuration merging, and terminal-based 
-execution of the transcription pipeline.
+execution of the transcription pipeline. Synchronized with the English 
+core API and PipelineResult dataclass.
 """
 
 import argparse
@@ -12,11 +13,12 @@ import json
 import logging
 import os
 import sys
+from dataclasses import asdict
 from typing import Any, Dict, Optional
 
 from transcriptor4ai.config import load_config, get_default_config
 from transcriptor4ai.validate_config import validate_config
-from transcriptor4ai.pipeline import run_pipeline
+from transcriptor4ai.pipeline import run_pipeline, PipelineResult
 from transcriptor4ai.logging import configure_logging, LoggingConfig, get_logger
 from transcriptor4ai.utils.i18n import i18n
 
@@ -27,6 +29,7 @@ logger = get_logger(__name__)
 # CLI: Argument Parsing
 # -----------------------------------------------------------------------------
 def _build_parser() -> argparse.ArgumentParser:
+    """Build and return the argument parser for the CLI."""
     p = argparse.ArgumentParser(
         prog="transcriptor4ai",
         description=i18n.t("app.description"),
@@ -156,15 +159,15 @@ def _build_parser() -> argparse.ArgumentParser:
 # CLI: Helpers
 # -----------------------------------------------------------------------------
 def _split_csv(value: Optional[str]) -> Optional[list[str]]:
+    """Split a comma-separated string into a list of strings."""
     if value is None:
         return None
     parts = [x.strip() for x in value.split(",")]
-    parts = [x for x in parts if x]
-    return parts
+    return [x for x in parts if x]
 
 
 def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge overrides into base config."""
+    """Merge overrides into base config dictionary."""
     out = dict(base)
     keys_to_merge = [
         "input_path", "output_base_dir", "output_subdir_name", "output_prefix",
@@ -213,38 +216,55 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     return overrides
 
 
-def _print_human_summary(result: Dict[str, Any]) -> None:
-    ok = bool(result.get("ok"))
-    if not ok:
-        print(f"ERROR: {result.get('error', 'Unknown error')}", file=sys.stderr)
+def _print_human_summary(result: PipelineResult) -> None:
+    """Print a human-readable summary of the pipeline execution to stdout/stderr."""
+    if not result.ok:
+        print(f"ERROR: {result.error}", file=sys.stderr)
         return
 
-    salida = result.get("output_dir") or result.get("salida_real") or ""
-    cont = result.get("contadores") or result.get("summary") or {}
-    generados = result.get("generados") or {}
-    resumen_data = result.get("resumen") or {}
+    summary = result.summary
+    dry_run = summary.get("dry_run", False)
 
     print(i18n.t("cli.status.success"))
-    if salida:
-        print(i18n.t("cli.status.output_dir", path=salida))
 
-    # Merge counters from various possible result structures
-    counters = cont if cont else resumen_data
-    for k in ["procesados", "omitidos", "errores", "tests_escritos", "modulos_escritos"]:
-        if k in counters:
-            print(f"{k}: {counters[k]}")
+    if dry_run:
+        print(i18n.t("gui.popups.dry_run_title"))
+        print(f"Target path: {result.final_output_path}")
+        print(f"Files to generate: {summary.get('will_generate')}")
+        return
 
-    if generados:
+    if result.final_output_path:
+        print(i18n.t("cli.status.output_dir", path=result.final_output_path))
+
+    # Print Statistics using English keys
+    stats_keys = {
+        "processed": "Processed files",
+        "skipped": "Skipped files",
+        "errors": "Errors encountered"
+    }
+    for key, label in stats_keys.items():
+        if key in summary:
+            print(f"{label}: {summary[key]}")
+
+    # Print Generated Files details
+    gen_files = summary.get("generated_files", {})
+    if gen_files:
         print("\n" + i18n.t("cli.status.generated"))
-        for k, v in generados.items():
+        for k, v in gen_files.items():
             if v:
                 print(f"  - {k}: {v}")
+
+    # Tree info
+    tree_info = summary.get("tree", {})
+    if tree_info.get("generated"):
+        print(f"  - tree: {tree_info.get('path')} ({tree_info.get('lines')} lines)")
 
 
 # -----------------------------------------------------------------------------
 # Main Entry Point
 # -----------------------------------------------------------------------------
 def main(argv: Optional[list[str]] = None) -> int:
+    """CLI Main Entry Point."""
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -272,31 +292,26 @@ def main(argv: Optional[list[str]] = None) -> int:
         for w in warnings:
             logger.warning(f"Config Warning: {w}")
 
-    # Add CLI-specific runtime flags not in config schema
-    clean_conf["_cli_overwrite"] = bool(args.overwrite)
-    clean_conf["_cli_dry_run"] = bool(args.dry_run)
-    if args.tree_file:
-        clean_conf["_cli_tree_file"] = args.tree_file
-
     if args.dump_config:
         print(json.dumps(clean_conf, ensure_ascii=False, indent=2))
         return 0
 
     # 5. Basic Path Check (Pre-Pipeline)
-    ruta = clean_conf.get("input_path", "")
-    if not os.path.exists(ruta):
-        msg = i18n.t("cli.errors.path_not_exist", path=ruta)
+    input_path = clean_conf.get("input_path", "")
+    if not os.path.exists(input_path):
+        msg = i18n.t("cli.errors.path_not_exist", path=input_path)
         logger.error(msg)
         print(f"ERROR: {msg}", file=sys.stderr)
         return 2
 
     # 6. Run Pipeline
-    logger.info(f"Starting pipeline for input: {ruta}")
+    logger.info(f"Starting pipeline for input: {input_path}")
     try:
         result = run_pipeline(
             clean_conf,
             overwrite=bool(args.overwrite),
             dry_run=bool(args.dry_run),
+            tree_output_path=args.tree_file
         )
     except KeyboardInterrupt:
         msg = i18n.t("cli.status.interrupted")
@@ -304,18 +319,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(msg, file=sys.stderr)
         return 130
     except Exception as e:
-        msg = i18n.t("cli.errors.pipeline_fail", error=e)
+        msg = i18n.t("cli.errors.pipeline_fail", error=str(e))
         logger.critical(msg, exc_info=True)
         print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
     # 7. Render Output
     if args.json_output:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
     else:
         _print_human_summary(result)
 
-    return 0 if result.get("ok") else 1
+    return 0 if result.ok else 1
 
 
 if __name__ == "__main__":

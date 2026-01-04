@@ -109,8 +109,8 @@ def _format_summary(res: PipelineResult) -> str:
     if not res.ok:
         return i18n.t("gui.popups.error_process", error=res.error)
 
-    # Extract summary data safely
-    summary = res.resumen or {}
+    # Standardized access to English summary and final path
+    summary = res.summary or {}
     dry_run = summary.get("dry_run", False)
 
     lines = []
@@ -119,24 +119,28 @@ def _format_summary(res: PipelineResult) -> str:
         lines.append(i18n.t("gui.popups.dry_run_msg", files=summary.get('will_generate', [])))
     else:
         lines.append(i18n.t("gui.popups.success_title"))
-        lines.append(i18n.t("gui.popups.output_path", path=res.salida_real))
+        lines.append(i18n.t("gui.popups.output_path", path=res.final_output_path))
         lines.append("-" * 30)
+        # Update keys to English as per pipeline.py logic
         lines.append(i18n.t("gui.popups.stats",
-                            proc=summary.get('procesados', 0),
-                            skip=summary.get('omitidos', 0),
-                            err=summary.get('errores', 0)))
+                            proc=summary.get('processed', 0),
+                            skip=summary.get('skipped', 0),
+                            err=summary.get('errors', 0)))
 
         # Details about generated files
-        generados = summary.get("generados", {})
-        if generados:
+        gen_files = summary.get("generated_files", {})
+        if gen_files:
             lines.append(i18n.t("gui.popups.generated_files"))
-            if generados.get("tests"): lines.append(f" - Tests")
-            if generados.get("modulos"): lines.append(f" - Modules")
-            if generados.get("errores"): lines.append(f" - Error Log")
+            if gen_files.get("tests"):
+                lines.append(f" - Tests")
+            if gen_files.get("modules"):
+                lines.append(f" - Modules")
+            if gen_files.get("errors"):
+                lines.append(f" - Error Log")
 
-        arbol_info = summary.get("arbol", {})
-        if arbol_info.get("generado"):
-            lines.append(f" - Tree ({arbol_info.get('lineas')} lines)")
+        tree_info = summary.get("tree", {})
+        if tree_info.get("generated"):
+            lines.append(f" - Tree ({tree_info.get('lines')} lines)")
 
     return "\n".join(lines)
 
@@ -378,3 +382,7 @@ def main() -> None:
 
     window.close()
     logger.info("GUI closed.")
+
+
+if __name__ == "__main__":
+    main()

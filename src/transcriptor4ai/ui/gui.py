@@ -5,14 +5,16 @@ Graphical User Interface (GUI) for transcriptor4ai.
 
 Implemented using PySimpleGUI. Manages user interactions, threaded 
 pipeline execution, and persistent configuration.
-Refactored for v1.1.0 (Granular Selection & Flexible Output).
+Refactored for v1.1.0 (Granular Selection & Flexible Output & Results Window).
 """
 
 import logging
 import os
+import platform
+import subprocess
 import threading
 import traceback
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import PySimpleGUI as sg
 
@@ -45,6 +47,131 @@ def _run_pipeline_thread(
     except Exception as e:
         logger.critical(f"Critical failure in pipeline thread: {e}", exc_info=True)
         window.write_event_value("-THREAD-DONE-", e)
+
+
+# -----------------------------------------------------------------------------
+# System Helpers
+# -----------------------------------------------------------------------------
+def _open_file_explorer(path: str) -> None:
+    """
+    Open the file explorer at the specified path in a cross-platform way.
+    """
+    if not os.path.exists(path):
+        return
+
+    try:
+        sys_name = platform.system()
+        if sys_name == "Windows":
+            os.startfile(path)
+        elif sys_name == "Darwin":  # macOS
+            subprocess.Popen(["open", path])
+        else:  # Linux/Unix
+            subprocess.Popen(["xdg-open", path])
+    except Exception as e:
+        logger.error(f"Failed to open file explorer: {e}")
+        sg.popup_error(f"Could not open folder:\n{e}")
+
+
+# -----------------------------------------------------------------------------
+# Results Window
+# -----------------------------------------------------------------------------
+def _show_results_window(result: PipelineResult) -> None:
+    """
+    Display a modal window with detailed results and post-process actions.
+    """
+    summary = result.summary or {}
+    dry_run = summary.get("dry_run", False)
+
+    # 1. Determine Header
+    if dry_run:
+        header_text = i18n.t("gui.results_window.dry_run_header", default="SIMULATION COMPLETE")
+        header_color = "#007ACC"
+        icon_char = "ℹ"
+    else:
+        header_text = i18n.t("gui.results_window.success_header", default="PROCESS COMPLETED")
+        header_color = "green"
+        icon_char = "✔"
+
+    # 2. Prepare Stats Data
+    stats_layout = [
+        [sg.Text(f"{i18n.t('gui.results_window.stats_processed', default='Processed')}:", size=(15, 1)),
+         sg.Text(f"{summary.get('processed', 0)}", text_color="white")],
+        [sg.Text(f"{i18n.t('gui.results_window.stats_skipped', default='Skipped')}:", size=(15, 1)),
+         sg.Text(f"{summary.get('skipped', 0)}", text_color="yellow")],
+        [sg.Text(f"{i18n.t('gui.results_window.stats_errors', default='Errors')}:", size=(15, 1)),
+         sg.Text(f"{summary.get('errors', 0)}", text_color="red" if summary.get('errors', 0) > 0 else "gray")]
+    ]
+
+    # 3. Prepare Files List
+    gen_files = summary.get("generated_files", {})
+    files_list = []
+
+    # Unified file check
+    unified_path = gen_files.get("unified")
+    has_unified = bool(unified_path and os.path.exists(unified_path))
+
+    # Add items to display list
+    for key, path in gen_files.items():
+        if path:
+            name = os.path.basename(path)
+            files_list.append(f"[{key.upper()}] {name}")
+
+    # Tree check (might not be in generated_files map depending on logic, check summary)
+    tree_info = summary.get("tree", {})
+    if tree_info.get("generated"):
+        if tree_info.get("path"):
+            name = os.path.basename(tree_info.get("path"))
+            files_list.append(f"[TREE] {name} ({tree_info.get('lines')} lines)")
+
+    if dry_run:
+        # In dry run, 'will_generate' is the key
+        files_list = [f"[PENDING] {os.path.basename(f)}" for f in summary.get("will_generate", [])]
+
+    # 4. Layout
+    layout = [
+        [sg.Text(icon_char, font=("Any", 24), text_color=header_color),
+         sg.Text(header_text, font=("Any", 14, "bold"), text_color=header_color)],
+        [sg.HorizontalSeparator()],
+        [sg.Column(stats_layout)],
+        [sg.Text(i18n.t("gui.results_window.files_label", default="Generated Files:"))],
+        [sg.Listbox(values=files_list, size=(60, 6), key="-FILES_LIST-", no_scrollbar=False, expand_x=True)],
+        [sg.Text(result.final_output_path, font=("Any", 8), text_color="gray", expand_x=True)],
+        [sg.HorizontalSeparator()],
+        [
+            sg.Button(i18n.t("gui.results_window.btn_open", default="Open Folder"), key="-OPEN-"),
+            sg.Button(i18n.t("gui.results_window.btn_copy", default="Copy Unified Output"),
+                      key="-COPY-",
+                      disabled=(not has_unified or dry_run)),
+            sg.Push(),
+            sg.Button(i18n.t("gui.results_window.btn_close", default="Close"), key="-CLOSE-",
+                      button_color=("white", "red"))
+        ]
+    ]
+
+    res_window = sg.Window(i18n.t("gui.results_window.title", default="Result"), layout, modal=True, finalize=True)
+
+    # 5. Event Loop for Modal
+    while True:
+        event, values = res_window.read()
+
+        if event in (sg.WIN_CLOSED, "-CLOSE-"):
+            break
+
+        if event == "-OPEN-":
+            _open_file_explorer(result.final_output_path)
+
+        if event == "-COPY-":
+            if has_unified:
+                try:
+                    with open(unified_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    sg.clipboard_set(content)
+                    sg.popup_quick_message(i18n.t("gui.results_window.copied_msg", default="Copied to clipboard!"),
+                                           background_color="green", text_color="white")
+                except Exception as e:
+                    sg.popup_error(f"Failed to copy file:\n{e}")
+
+    res_window.close()
 
 
 # -----------------------------------------------------------------------------
@@ -112,44 +239,6 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["show_methods"].update(config["show_methods"])
     window["print_tree"].update(config["print_tree"])
     window["save_error_log"].update(config["save_error_log"])
-
-
-def _format_summary(res: PipelineResult) -> str:
-    """Format the pipeline result into a human-readable string for the popup."""
-    if not res.ok:
-        return i18n.t("gui.popups.error_process", error=res.error)
-
-    # Standardized access to summary
-    summary = res.summary or {}
-    dry_run = summary.get("dry_run", False)
-
-    lines = []
-    if dry_run:
-        lines.append(i18n.t("gui.popups.dry_run_title"))
-        lines.append(i18n.t("gui.popups.dry_run_msg", files=summary.get('will_generate', [])))
-    else:
-        lines.append(i18n.t("gui.popups.success_title"))
-        lines.append(i18n.t("gui.popups.output_path", path=res.final_output_path))
-        lines.append("-" * 30)
-
-        lines.append(i18n.t("gui.popups.stats",
-                            proc=summary.get('processed', 0),
-                            skip=summary.get('skipped', 0),
-                            err=summary.get('errors', 0)))
-
-        # Details about generated files
-        gen_files = summary.get("generated_files", {})
-        if gen_files:
-            lines.append(i18n.t("gui.popups.generated_files"))
-            for key, path in gen_files.items():
-                if path:
-                    lines.append(f" - {key.capitalize()}")
-
-        tree_info = summary.get("tree", {})
-        if tree_info.get("generated"):
-            lines.append(f" - Tree ({tree_info.get('lines')} lines)")
-
-    return "\n".join(lines)
 
 
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
@@ -419,7 +508,7 @@ def main() -> None:
             if isinstance(payload, PipelineResult):
                 if payload.ok:
                     logger.info("Pipeline thread finished successfully.")
-                    sg.popup(_format_summary(payload), title=i18n.t("gui.popups.title_result"))
+                    _show_results_window(payload)
                 else:
                     logger.error(f"Pipeline thread finished with error: {payload.error}")
                     sg.popup_error(i18n.t("gui.popups.error_process", error=payload.error))

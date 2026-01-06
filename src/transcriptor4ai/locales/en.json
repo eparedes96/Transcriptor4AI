@@ -103,6 +103,19 @@
       "error_critical": "Critical Thread Error:\n{error}",
       "overwrite_msg": "The following files will be overwritten:\n\n{files}\n\nDo you want to continue?",
       "overwrite_title": "Overwrite Warning"
+    },
+    "results_window": {
+      "title": "Result",
+      "dry_run_header": "SIMULATION COMPLETE",
+      "success_header": "PROCESS COMPLETED",
+      "stats_processed": "Processed",
+      "stats_skipped": "Skipped",
+      "stats_errors": "Errors",
+      "files_label": "Generated Files:",
+      "btn_open": "Open Folder",
+      "btn_copy": "Copy Unified Output",
+      "btn_close": "Close",
+      "copied_msg": "Copied to clipboard!"
     }
   }
 }

@@ -4,8 +4,8 @@ from __future__ import annotations
 Source code transcription service.
 
 Recursively scans directories and consolidates files into text documents 
-based on processing modes and filters. Implements lazy writing to prevent 
-the creation of empty files.
+based on granular processing flags and filters. Implements lazy writing 
+to prevent the creation of empty files.
 """
 
 import logging
@@ -33,28 +33,33 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 def transcribe_code(
         input_path: str,
-        mode: str = "all",
+        modules_output_path: str,
+        tests_output_path: str,
+        error_output_path: str,
+        process_modules: bool = True,
+        process_tests: bool = True,
         extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
-        output_prefix: str = "transcription",
-        output_folder: str = ".",
         save_error_log: bool = True,
 ) -> Dict[str, Any]:
     """
-    Consolidate source code into text files based on filtering criteria.
+    Consolidate source code into specific text files based on filtering criteria.
 
-    Implements lazy writing: files are only created if content is found.
+    This function is output-path agnostic; it writes to whatever paths are provided
+    (temporary or final) if the corresponding 'process_' flag is True.
 
     Args:
         input_path: Source directory to scan.
-        mode: "all", "modules_only", "tests_only".
+        modules_output_path: Destination path for source code (scripts).
+        tests_output_path: Destination path for test code.
+        error_output_path: Destination path for error log.
+        process_modules: If True, extract non-test files.
+        process_tests: If True, extract test files.
         extensions: List of file extensions to process.
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
-        output_prefix: Prefix for output files.
-        output_folder: Destination directory.
-        save_error_log: Whether to write a separate error log file (only if errors occur).
+        save_error_log: Whether to write the error log file (only if errors occur).
 
     Returns:
         A dictionary containing counters, paths, and status.
@@ -72,29 +77,12 @@ def transcribe_code(
         exclude_patterns = default_exclude_patterns()
 
     input_path_abs = os.path.abspath(input_path)
-    output_folder_abs = os.path.abspath(output_folder)
+
+    for p in [modules_output_path, tests_output_path, error_output_path]:
+        _safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
     include_rx = compile_patterns(include_patterns)
     exclude_rx = compile_patterns(exclude_patterns)
-
-    generate_tests = (mode == "tests_only" or mode == "all")
-    generate_modules = (mode == "modules_only" or mode == "all")
-
-    # -------------------------
-    # Prepare Output Directory
-    # -------------------------
-    ok, err = _safe_mkdir(output_folder_abs)
-    if not ok:
-        logger.error(f"Failed to create output directory: {err}")
-        return {
-            "ok": False,
-            "error": f"Output directory error '{output_folder_abs}': {err}",
-            "output_folder": output_folder_abs,
-        }
-
-    path_tests = os.path.join(output_folder_abs, f"{output_prefix}_tests.txt")
-    path_modules = os.path.join(output_folder_abs, f"{output_prefix}_modules.txt")
-    path_errors = os.path.join(output_folder_abs, f"{output_prefix}_errors.txt")
 
     # -------------------------
     # Filesystem Traversal
@@ -129,15 +117,20 @@ def transcribe_code(
                 skipped_count += 1
                 continue
 
+            # --- Classification ---
             is_test_file = is_test(file_name)
-            if mode == "tests_only" and not is_test_file:
-                skipped_count += 1
-                continue
-            if mode == "modules_only" and is_test_file:
+
+            should_process = False
+            if is_test_file and process_tests:
+                should_process = True
+            elif (not is_test_file) and process_modules:
+                should_process = True
+
+            if not should_process:
                 skipped_count += 1
                 continue
 
-            # --- Processing ---
+            # --- Extraction & Writing ---
             file_path = os.path.join(root, file_name)
             rel_path = os.path.relpath(file_path, input_path_abs)
 
@@ -150,18 +143,20 @@ def transcribe_code(
                 continue
 
             try:
-                if is_test_file and generate_tests:
+                # Write to Tests File
+                if is_test_file:
                     if not tests_file_initialized:
-                        _initialize_output_file(path_tests, "CODE:")
+                        _initialize_output_file(tests_output_path, "TESTS:")
                         tests_file_initialized = True
-                    _append_entry(path_tests, rel_path, content)
+                    _append_entry(tests_output_path, rel_path, content)
                     tests_written += 1
 
-                if (not is_test_file) and generate_modules:
+                # Write to Modules (Scripts) File
+                else:
                     if not modules_file_initialized:
-                        _initialize_output_file(path_modules, "CODE:")
+                        _initialize_output_file(modules_output_path, "SCRIPTS:")
                         modules_file_initialized = True
-                    _append_entry(path_modules, rel_path, content)
+                    _append_entry(modules_output_path, rel_path, content)
                     modules_written += 1
 
                 processed_count += 1
@@ -179,14 +174,14 @@ def transcribe_code(
     actual_error_path = ""
     if save_error_log and errors:
         try:
-            with open(path_errors, "w", encoding="utf-8") as f:
+            with open(error_output_path, "w", encoding="utf-8") as f:
                 f.write("ERRORS:\n")
                 for err_item in errors:
                     f.write("-" * 80 + "\n")
                     f.write(f"{err_item.rel_path}\n")
                     f.write(f"{err_item.error}\n")
-            actual_error_path = path_errors
-            logger.info(f"Error log saved to: {path_errors}")
+            actual_error_path = error_output_path
+            logger.info(f"Error log saved to: {error_output_path}")
         except OSError as e:
             logger.error(f"Failed to save error log: {e}")
 
@@ -201,11 +196,11 @@ def transcribe_code(
     return {
         "ok": True,
         "input_path": input_path_abs,
-        "output_folder": output_folder_abs,
-        "mode": mode,
+        "process_modules": process_modules,
+        "process_tests": process_tests,
         "generated": {
-            "tests": path_tests if tests_file_initialized else "",
-            "modules": path_modules if modules_file_initialized else "",
+            "tests": tests_output_path if tests_file_initialized else "",
+            "modules": modules_output_path if modules_file_initialized else "",
             "errors": actual_error_path,
         },
         "counters": {

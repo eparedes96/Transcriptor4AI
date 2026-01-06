@@ -5,13 +5,14 @@ Graphical User Interface (GUI) for transcriptor4ai.
 
 Implemented using PySimpleGUI. Manages user interactions, threaded 
 pipeline execution, and persistent configuration.
+Refactored for v1.1.0 (Granular Selection & Flexible Output).
 """
 
 import logging
 import os
 import threading
 import traceback
-from typing import Any, Dict, Union
+from typing import Any, Dict, List
 
 import PySimpleGUI as sg
 
@@ -56,23 +57,27 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
     config["output_subdir_name"] = values["output_subdir_name"]
     config["output_prefix"] = values["output_prefix"]
 
-    if values.get("mode_all"):
-        config["processing_mode"] = "all"
-    elif values.get("mode_modulos"):
-        config["processing_mode"] = "modules_only"
-    elif values.get("mode_tests"):
-        config["processing_mode"] = "tests_only"
+    # Content Selection
+    config["process_modules"] = bool(values.get("process_modules"))
+    config["process_tests"] = bool(values.get("process_tests"))
+    config["generate_tree"] = bool(values.get("generate_tree"))
 
+    # Output Format
+    config["create_individual_files"] = bool(values.get("create_individual_files"))
+    config["create_unified_file"] = bool(values.get("create_unified_file"))
+
+    # Filters
     config["extensions"] = values.get("extensions", "")
     config["include_patterns"] = values.get("include_patterns", "")
     config["exclude_patterns"] = values.get("exclude_patterns", "")
 
+    # AST Options
     config["show_functions"] = bool(values.get("show_functions"))
     config["show_classes"] = bool(values.get("show_classes"))
     config["show_methods"] = bool(values.get("show_methods"))
-
-    config["generate_tree"] = bool(values.get("generate_tree"))
     config["print_tree"] = bool(values.get("print_tree"))
+
+    # Logging
     config["save_error_log"] = bool(values.get("save_error_log"))
 
 
@@ -83,10 +88,16 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["output_subdir_name"].update(config["output_subdir_name"])
     window["output_prefix"].update(config["output_prefix"])
 
-    window["mode_all"].update(config["processing_mode"] == "all")
-    window["mode_modulos"].update(config["processing_mode"] == "modules_only")
-    window["mode_tests"].update(config["processing_mode"] == "tests_only")
+    # Content Selection
+    window["process_modules"].update(config["process_modules"])
+    window["process_tests"].update(config["process_tests"])
+    window["generate_tree"].update(config["generate_tree"])
 
+    # Output Format
+    window["create_individual_files"].update(config["create_individual_files"])
+    window["create_unified_file"].update(config["create_unified_file"])
+
+    # Filters
     exts = config["extensions"] if isinstance(config["extensions"], list) else []
     incl = config["include_patterns"] if isinstance(config["include_patterns"], list) else []
     excl = config["exclude_patterns"] if isinstance(config["exclude_patterns"], list) else []
@@ -95,11 +106,10 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["include_patterns"].update(",".join(incl))
     window["exclude_patterns"].update(",".join(excl))
 
+    # AST & Options
     window["show_functions"].update(config["show_functions"])
     window["show_classes"].update(config["show_classes"])
     window["show_methods"].update(config["show_methods"])
-
-    window["generate_tree"].update(config["generate_tree"])
     window["print_tree"].update(config["print_tree"])
     window["save_error_log"].update(config["save_error_log"])
 
@@ -109,7 +119,7 @@ def _format_summary(res: PipelineResult) -> str:
     if not res.ok:
         return i18n.t("gui.popups.error_process", error=res.error)
 
-    # Standardized access to English summary and final path
+    # Standardized access to summary
     summary = res.summary or {}
     dry_run = summary.get("dry_run", False)
 
@@ -121,7 +131,7 @@ def _format_summary(res: PipelineResult) -> str:
         lines.append(i18n.t("gui.popups.success_title"))
         lines.append(i18n.t("gui.popups.output_path", path=res.final_output_path))
         lines.append("-" * 30)
-        # Update keys to English as per pipeline.py logic
+
         lines.append(i18n.t("gui.popups.stats",
                             proc=summary.get('processed', 0),
                             skip=summary.get('skipped', 0),
@@ -131,12 +141,9 @@ def _format_summary(res: PipelineResult) -> str:
         gen_files = summary.get("generated_files", {})
         if gen_files:
             lines.append(i18n.t("gui.popups.generated_files"))
-            if gen_files.get("tests"):
-                lines.append(f" - Tests")
-            if gen_files.get("modules"):
-                lines.append(f" - Modules")
-            if gen_files.get("errors"):
-                lines.append(f" - Error Log")
+            for key, path in gen_files.items():
+                if path:
+                    lines.append(f" - {key.capitalize()}")
 
         tree_info = summary.get("tree", {})
         if tree_info.get("generated"):
@@ -147,8 +154,7 @@ def _format_summary(res: PipelineResult) -> str:
 
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
     """Helper to enable/disable buttons during processing."""
-    # Use explicit keys for reliable access regardless of language
-    for key in ["btn_process", "btn_save", "btn_reset", "btn_browse_in", "btn_browse_out"]:
+    for key in ["btn_process", "btn_simulate", "btn_save", "btn_reset", "btn_browse_in", "btn_browse_out"]:
         window[key].update(disabled=is_disabled)
 
 
@@ -161,7 +167,7 @@ def main() -> None:
     log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
     configure_logging(log_conf)
 
-    logger.info("GUI starting...")
+    logger.info("GUI starting (v1.1.0 logic)...")
     sg.theme("SystemDefault")
 
     # 2. Load Initial Config
@@ -176,20 +182,47 @@ def main() -> None:
         config["output_base_dir"] = config.get("input_path") or os.getcwd()
 
     # 3. Define Layout
+
+    frame_content = [
+        [
+            sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=True),
+            sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=True),
+        ],
+        [
+            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=False),
+        ],
+        [
+            sg.Text("    └─ AST:", font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", font=("Any", 8)),
+        ]
+    ]
+
+    # -- Output Format Frame --
+    frame_output_format = [
+        [
+            sg.Checkbox(i18n.t("gui.checkboxes.individual"), key="create_individual_files", default=True,
+                        tooltip="Generates separate .txt files for each component"),
+            sg.Checkbox(i18n.t("gui.checkboxes.unified"), key="create_unified_file", default=True,
+                        tooltip="Generates a single '_full_context.txt' file"),
+        ]
+    ]
+
     layout = [
         # --- Input ---
         [sg.Text(i18n.t("gui.sections.input"))],
         [
             sg.Input(default_text=config["input_path"], size=(70, 1), key="input_path",
-                     tooltip=i18n.t("gui.tooltips.input")),
+                     expand_x=True, tooltip=i18n.t("gui.tooltips.input")),
             sg.Button(i18n.t("gui.buttons.explore"), key="btn_browse_in"),
         ],
 
-        # --- Output ---
+        # --- Output Path ---
         [sg.Text(i18n.t("gui.sections.output"))],
         [
             sg.Input(default_text=config["output_base_dir"], size=(70, 1), key="output_base_dir",
-                     tooltip=i18n.t("gui.tooltips.output")),
+                     expand_x=True, tooltip=i18n.t("gui.tooltips.output")),
             sg.Button(i18n.t("gui.buttons.examine"), key="btn_browse_out"),
         ],
         [
@@ -201,58 +234,45 @@ def main() -> None:
                      tooltip=i18n.t("gui.tooltips.prefix")),
         ],
 
-        # --- Mode ---
-        [sg.Text(i18n.t("gui.sections.mode"))],
+        # --- New Flexible Config Sections ---
         [
-            sg.Radio(i18n.t("gui.radios.all"), "RADIO1", key="mode_all",
-                     default=(config["processing_mode"] == "all")),
-            sg.Radio(i18n.t("gui.radios.modules"), "RADIO1", key="mode_modulos",
-                     default=(config["processing_mode"] == "modules_only")),
-            sg.Radio(i18n.t("gui.radios.tests"), "RADIO1", key="mode_tests",
-                     default=(config["processing_mode"] == "tests_only")),
+            sg.Frame(i18n.t("gui.sections.content"), frame_content, expand_x=True),
+        ],
+        [
+            sg.Frame(i18n.t("gui.sections.format"), frame_output_format, expand_x=True)
         ],
 
         # --- Filters ---
         [sg.Text(i18n.t("gui.labels.extensions")),
-         sg.Input(",".join(config["extensions"]), size=(60, 1), key="extensions",
-                  tooltip=i18n.t("gui.tooltips.ext"))],
+         sg.Input(",".join(config["extensions"]), size=(60, 1), key="extensions", expand_x=True)],
         [sg.Text(i18n.t("gui.labels.include")),
-         sg.Input(",".join(config["include_patterns"]), size=(60, 1), key="include_patterns",
-                  tooltip=i18n.t("gui.tooltips.inc"))],
+         sg.Input(",".join(config["include_patterns"]), size=(60, 1), key="include_patterns", expand_x=True)],
         [sg.Text(i18n.t("gui.labels.exclude")),
-         sg.Input(",".join(config["exclude_patterns"]), size=(60, 1), key="exclude_patterns",
-                  tooltip=i18n.t("gui.tooltips.exc"))],
+         sg.Input(",".join(config["exclude_patterns"]), size=(60, 1), key="exclude_patterns", expand_x=True)],
 
-        # --- Tree Options ---
+        # --- Misc ---
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", default=config["show_classes"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", default=config["show_methods"]),
-        ],
-        [
-            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.print_tree"), key="print_tree", default=config["print_tree"]),
-        ],
-        [
+            sg.Checkbox(i18n.t("gui.checkboxes.print_tree"), key="print_tree", default=config["print_tree"],
+                        visible=False),  # Hidden but kept for logic
             sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="save_error_log", default=config["save_error_log"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.dry_run"), key="dry_run", default=False, text_color="blue",
-                        tooltip=i18n.t("gui.tooltips.dry_run")),
         ],
 
-        # --- Status Indicator (Hidden by default) ---
+        # --- Status Indicator ---
         [sg.Text(i18n.t("gui.status.processing"), key="-STATUS-", text_color="blue", visible=False,
                  font=("Any", 10, "bold"))],
 
         # --- Actions ---
         [
+            sg.Button(i18n.t("gui.buttons.simulate"), key="btn_simulate", button_color=("white", "#007ACC")),
             sg.Button(i18n.t("gui.buttons.process"), key="btn_process", button_color=("white", "green")),
+            sg.Push(),  # Spacer
             sg.Button(i18n.t("gui.buttons.save"), key="btn_save"),
             sg.Button(i18n.t("gui.buttons.reset"), key="btn_reset"),
             sg.Button(i18n.t("gui.buttons.exit"), key="btn_exit", button_color=("white", "red")),
         ],
     ]
 
-    window = sg.Window(i18n.t("app.name"), layout, finalize=True)
+    window = sg.Window(i18n.t("app.name"), layout, finalize=True, resizable=True)
 
     # 4. Event Loop
     while True:
@@ -284,7 +304,6 @@ def main() -> None:
                 clean_conf["input_path"] = paths.normalize_path(clean_conf["input_path"], os.getcwd())
                 clean_conf["output_base_dir"] = paths.normalize_path(clean_conf["output_base_dir"],
                                                                      clean_conf["input_path"])
-
                 cfg.save_config(clean_conf)
                 sg.popup(i18n.t("gui.status.success"))
                 logger.info("Configuration saved by user.")
@@ -298,8 +317,10 @@ def main() -> None:
             sg.popup(i18n.t("gui.status.reset"))
             logger.info("Configuration reset to defaults.")
 
-        # --- PROCESS ACTION (Prepare & Thread Start) ---
-        if event == "btn_process":
+        # --- EXECUTION ACTIONS (SIMULATE or PROCESS) ---
+        if event in ("btn_process", "btn_simulate"):
+            is_simulate = (event == "btn_simulate")
+
             try:
                 update_config_from_gui(config, values)
 
@@ -308,10 +329,23 @@ def main() -> None:
                 if warnings:
                     logger.warning(f"Config warnings: {warnings}")
 
+                # 1.1 UI specific validation
+                has_content = any(
+                    [clean_conf["process_modules"], clean_conf["process_tests"], clean_conf["generate_tree"]])
+                has_format = any([clean_conf["create_individual_files"], clean_conf["create_unified_file"]])
+
+                if not has_content:
+                    sg.popup_error("Please select at least one content type (Modules, Tests, or Tree).")
+                    continue
+                if not has_format:
+                    sg.popup_error("Please select at least one output format (Individual or Unified).")
+                    continue
+
                 # 2. Path Checks
                 input_path = paths.normalize_path(clean_conf["input_path"], os.getcwd())
                 output_base_dir = paths.normalize_path(clean_conf["output_base_dir"], input_path)
                 output_subdir_name = clean_conf["output_subdir_name"]
+                prefix = clean_conf["output_prefix"]
 
                 if not os.path.exists(input_path):
                     sg.popup_error(i18n.t("gui.popups.error_path", path=input_path))
@@ -320,17 +354,25 @@ def main() -> None:
                     sg.popup_error(i18n.t("gui.popups.error_dir", path=input_path))
                     continue
 
-                # 3. Overwrite & Dry Run Checks (Must happen in Main Thread due to Popups)
-                is_dry_run = bool(values.get("dry_run"))
+                # 3. Overwrite Check (Only if NOT Simulating)
                 should_overwrite = False
 
-                if not is_dry_run:
+                if not is_simulate:
                     salida_real = paths.get_real_output_path(output_base_dir, output_subdir_name)
-                    nombres = paths.get_destination_filenames(
-                        clean_conf["output_prefix"],
-                        clean_conf["processing_mode"],
-                        clean_conf["generate_tree"]
-                    )
+
+                    # Manual calculation of files to check based on new config
+                    nombres = []
+                    if clean_conf["create_individual_files"]:
+                        if clean_conf["process_modules"]: nombres.append(f"{prefix}_modules.txt")
+                        if clean_conf["process_tests"]: nombres.append(f"{prefix}_tests.txt")
+                        if clean_conf["generate_tree"]: nombres.append(f"{prefix}_tree.txt")
+
+                    if clean_conf["create_unified_file"]:
+                        nombres.append(f"{prefix}_full_context.txt")
+
+                    if clean_conf["save_error_log"]:
+                        nombres.append(f"{prefix}_errors.txt")
+
                     existentes = paths.check_existing_output_files(salida_real, nombres)
 
                     if existentes:
@@ -341,16 +383,22 @@ def main() -> None:
                             continue
                         should_overwrite = True
 
-                # 4. Start Thread (Freeze UI)
+                # 4. Start Thread
                 _toggle_ui_state(window, is_disabled=True)
                 window["-STATUS-"].update(visible=True)
 
+                # Visual feedback for Simulate
+                if is_simulate:
+                    window["-STATUS-"].update("SIMULATING...", text_color="#007ACC")
+                else:
+                    window["-STATUS-"].update(i18n.t("gui.status.processing"), text_color="blue")
+
                 thread_conf = clean_conf.copy()
 
-                logger.info(f"Starting pipeline thread (DryRun={is_dry_run})...")
+                logger.info(f"Starting pipeline thread (DryRun={is_simulate})...")
                 threading.Thread(
                     target=_run_pipeline_thread,
-                    args=(window, thread_conf, should_overwrite, is_dry_run),
+                    args=(window, thread_conf, should_overwrite, is_simulate),
                     daemon=True
                 ).start()
 
@@ -359,7 +407,7 @@ def main() -> None:
                 logger.critical(f"Error starting pipeline: {e}\n{tb}")
                 sg.popup_error(i18n.t("gui.popups.error_process", error=e))
 
-        # --- THREAD COMPLETION (Receive Result) ---
+        # --- THREAD COMPLETION ---
         if event == "-THREAD-DONE-":
             # 1. Restore UI
             window["-STATUS-"].update(visible=False)

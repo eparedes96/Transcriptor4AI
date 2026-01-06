@@ -9,7 +9,6 @@
       "output_base": "Base output directory.",
       "subdir": "Name of the output subdirectory.",
       "prefix": "Prefix for generated files.",
-      "mode": "Processing mode: all | modules_only | tests_only.",
       "tree": "Generate directory tree.",
       "tree_file": "Path to save the tree file (overrides default).",
       "print_tree": "Print the tree to console.",
@@ -44,9 +43,9 @@
       "output": "Base Output Directory (a subdirectory will be created inside):",
       "sub_output": "Output Subdirectory:",
       "prefix": "File Prefix:",
-      "mode": "Processing Mode:",
+      "content": "Content Selection:",
+      "format": "Output Format:",
       "filters": "Filters:",
-      "tree": "Tree & Symbols:",
       "actions": "Actions:"
     },
     "labels": {
@@ -61,27 +60,25 @@
       "prefix": "Example: project_v1 -> project_v1_modules.txt",
       "ext": "Example: .py, .js, .java",
       "inc": "Only process files matching these patterns.",
-      "exc": "Ignore files/folders matching these patterns.",
-      "dry_run": "Execute the full process without writing to disk."
-    },
-    "radios": {
-      "all": "All (Modules + Tests)",
-      "modules": "Modules Only",
-      "tests": "Tests Only"
+      "exc": "Ignore files/folders matching these patterns."
     },
     "checkboxes": {
-      "func": "Show functions (tree)",
-      "cls": "Show classes (tree)",
-      "meth": "Show methods (tree)",
-      "gen_tree": "Generate tree file",
+      "modules": "Include Modules (Source)",
+      "tests": "Include Tests",
+      "gen_tree": "Include Directory Tree",
+      "individual": "Individual Files (.txt separated)",
+      "unified": "Unified Context File (single .txt)",
+      "func": "Show functions",
+      "cls": "Show classes",
+      "meth": "Show methods",
       "print_tree": "Print tree to console",
-      "log_err": "Save error log",
-      "dry_run": "Simulation (Dry Run)"
+      "log_err": "Save error log"
     },
     "buttons": {
       "explore": "Browse",
       "examine": "Browse",
-      "process": "Process",
+      "simulate": "SIMULATE",
+      "process": "PROCESS",
       "save": "Save Config",
       "reset": "Reset Config",
       "exit": "Exit"
@@ -93,8 +90,8 @@
     },
     "popups": {
       "title_result": "Result",
-      "dry_run_title": "=== DRY RUN COMPLETE ===",
-      "dry_run_msg": "No files were generated.\nWould have generated: {files}",
+      "dry_run_title": "=== SIMULATION COMPLETE ===",
+      "dry_run_msg": "No files were written to disk.\nSimulation would have generated: {files}",
       "success_title": "=== PROCESS COMPLETED SUCCESSFULLY ===",
       "output_path": "Output: {path}",
       "stats": "Processed: {proc}\nSkipped: {skip}\nRead Errors: {err}",

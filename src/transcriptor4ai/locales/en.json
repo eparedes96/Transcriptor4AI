@@ -23,7 +23,11 @@
       "no_log": "Do not generate the error log file.",
       "defaults": "Ignore config.json and use defaults.",
       "dump": "Print final config in JSON and exit.",
-      "json": "Output result in JSON format."
+      "json": "Output result in JSON format.",
+      "no_modules": "Do not include source code modules.",
+      "no_tests": "Do not include test files.",
+      "unified_only": "Generate ONLY the unified context file.",
+      "individual_only": "Generate ONLY individual files."
     },
     "errors": {
       "path_not_exist": "Input path does not exist: {path}",

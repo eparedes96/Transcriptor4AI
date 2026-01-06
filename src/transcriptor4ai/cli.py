@@ -6,6 +6,7 @@ Command Line Interface (CLI) for transcriptor4ai.
 Handles argument parsing, configuration merging, and terminal-based 
 execution of the transcription pipeline. Synchronized with the English 
 core API and PipelineResult dataclass.
+Refactored for v1.1.0 (Granular Selection & Flexible Output).
 """
 
 import argparse
@@ -61,12 +62,16 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
     )
 
-    # --- Mode / Features ---
+    # --- Content Selection ---
     p.add_argument(
-        "--mode",
-        choices=["all", "modules_only", "tests_only"],
-        default=None,
-        help=i18n.t("cli.args.mode"),
+        "--no-modules",
+        action="store_true",
+        help=i18n.t("cli.args.no_modules", default="Do not include source code modules."),
+    )
+    p.add_argument(
+        "--no-tests",
+        action="store_true",
+        help=i18n.t("cli.args.no_tests", default="Do not include test files."),
     )
     p.add_argument(
         "--tree",
@@ -83,6 +88,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "--print-tree",
         action="store_true",
         help=i18n.t("cli.args.print_tree"),
+    )
+
+    # --- Output Format Shortcuts ---
+    p.add_argument(
+        "--unified-only",
+        action="store_true",
+        help=i18n.t("cli.args.unified_only", default="Generate ONLY the unified context file."),
+    )
+    p.add_argument(
+        "--individual-only",
+        action="store_true",
+        help=i18n.t("cli.args.individual_only", default="Generate ONLY individual files."),
     )
 
     # --- AST flags ---
@@ -171,7 +188,8 @@ def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
     out = dict(base)
     keys_to_merge = [
         "input_path", "output_base_dir", "output_subdir_name", "output_prefix",
-        "processing_mode", "extensions", "include_patterns", "exclude_patterns",
+        "process_modules", "process_tests", "create_individual_files", "create_unified_file",
+        "extensions", "include_patterns", "exclude_patterns",
         "generate_tree", "print_tree", "show_functions", "show_classes",
         "show_methods", "save_error_log",
     ]
@@ -190,9 +208,25 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     overrides["output_subdir_name"] = args.output_subdir_name
     overrides["output_prefix"] = args.output_prefix
 
-    if args.mode is not None:
-        overrides["processing_mode"] = args.mode
+    # Content Selection Mapping
+    if args.no_modules:
+        overrides["process_modules"] = False
+    if args.no_tests:
+        overrides["process_tests"] = False
 
+    # Tree mapping
+    if args.tree:
+        overrides["generate_tree"] = True
+
+    # Output Format Mapping (Shortcuts)
+    if args.unified_only:
+        overrides["create_individual_files"] = False
+        overrides["create_unified_file"] = True
+    elif args.individual_only:
+        overrides["create_individual_files"] = True
+        overrides["create_unified_file"] = False
+
+    # Filters
     if args.extensions:
         overrides["extensions"] = _split_csv(args.extensions)
     if args.include_patterns:
@@ -200,8 +234,7 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     if args.exclude_patterns:
         overrides["exclude_patterns"] = _split_csv(args.exclude_patterns)
 
-    if args.tree:
-        overrides["generate_tree"] = True
+    # AST Options
     if args.print_tree:
         overrides["print_tree"] = True
     if args.functions:
@@ -257,7 +290,12 @@ def _print_human_summary(result: PipelineResult) -> None:
     # Tree info
     tree_info = summary.get("tree", {})
     if tree_info.get("generated"):
-        print(f"  - tree: {tree_info.get('path')} ({tree_info.get('lines')} lines)")
+        tree_path = tree_info.get('path')
+        if not tree_path and 'unified' in gen_files:
+            tree_path = "(Inside Unified File)"
+
+        lines = tree_info.get('lines', 0)
+        print(f"  - tree: {tree_path} ({lines} lines)")
 
 
 # -----------------------------------------------------------------------------

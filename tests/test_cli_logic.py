@@ -19,12 +19,14 @@ def parse_args(arg_list):
 # -----------------------------------------------------------------------------
 
 def test_cli_simple_flags_mapping():
-    """Verify boolean flags are mapped correctly to config keys."""
+    """Verify boolean flags are mapped correctly."""
     args = parse_args([
         "--tree",
         "--print-tree",
         "--functions",
-        "--no-error-log"
+        "--no-error-log",
+        "--no-modules",
+        "--unified-only"
     ])
 
     overrides = _args_to_overrides(args)
@@ -33,6 +35,9 @@ def test_cli_simple_flags_mapping():
     assert overrides["print_tree"] is True
     assert overrides["show_functions"] is True
     assert overrides["save_error_log"] is False
+    assert overrides["process_modules"] is False
+    assert overrides["create_individual_files"] is False
+    assert overrides["create_unified_file"] is True
 
 
 def test_cli_csv_list_parsing():
@@ -70,10 +75,14 @@ def test_cli_defaults_are_not_in_overrides():
     If arguments are not provided, they should NOT appear in overrides.
     This allows the underlying config.json to take precedence.
     """
-    args = parse_args([])  # No arguments
+    args = parse_args([])
     overrides = _args_to_overrides(args)
 
     # Keys should be missing or None, so merge_config ignores them
     assert "generate_tree" not in overrides
     assert "extensions" not in overrides
     assert overrides["input_path"] is None
+    assert "process_modules" not in overrides
+    assert "process_tests" not in overrides
+    assert "create_unified_file" not in overrides
+    assert "create_individual_files" not in overrides

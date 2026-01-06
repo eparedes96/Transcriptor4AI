@@ -1,4 +1,3 @@
-# tests/test_filtering.py
 import re
 import pytest
 from transcriptor4ai.filtering import (
@@ -63,5 +62,5 @@ def test_es_test_identification():
 
     # Negatives
     assert is_test("api.py") is False
-    assert is_test("test_helper.txt") is False  # Extension check is usually done before, but regex expects .py
+    assert is_test("test_helper.txt") is False
     assert is_test("latest_results.py") is False

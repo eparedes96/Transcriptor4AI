@@ -1,4 +1,3 @@
-# tests/test_tree.py
 import pytest
 import os
 from transcriptor4ai.tree.ast_symbols import extract_definitions
@@ -38,7 +37,6 @@ def my_function():
     # Assertions based on English outputs (Refactored logic)
     assert "Class: MyClass" in results
     assert "Function: my_function()" in results
-    # Methods are indented with 2 spaces in the implementation
     assert any("Method: my_method()" in r for r in results)
 
 
@@ -103,7 +101,6 @@ def test_render_with_ast_flags_enabled(tmp_path):
     }
 
     lines = []
-    # Force entry into the AST block
     render_tree_structure(
         structure,
         lines,

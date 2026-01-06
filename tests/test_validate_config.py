@@ -1,4 +1,3 @@
-# tests/test_validate_config.py
 import pytest
 from transcriptor4ai.validate_config import validate_config
 
@@ -12,9 +11,12 @@ def test_validate_none_returns_defaults():
     cfg, warnings = validate_config(None)
 
     assert isinstance(cfg, dict)
-    assert cfg["processing_mode"] == "all"
+
+    assert cfg["process_modules"] is True
+    assert cfg["process_tests"] is True
+    assert cfg["create_unified_file"] is True
+
     assert cfg["extensions"] == [".py"]
-    # Should produce a warning about invalid type
     assert len(warnings) > 0
 
 
@@ -24,6 +26,7 @@ def test_validate_empty_dict_returns_defaults():
 
     assert cfg["output_prefix"] == "transcription"
     assert cfg["generate_tree"] is False
+    assert cfg["create_individual_files"] is True
     assert len(warnings) == 0
 
 
@@ -37,15 +40,21 @@ def test_validate_converts_strings_to_bools():
         "generate_tree": "true",
         "print_tree": "False",
         "show_functions": "1",
-        "show_classes": "0"
+        "process_modules": "no",
+        "create_unified_file": "yes",
+        "create_individual_files": "0"
     }
     cfg, warnings = validate_config(raw, strict=False)
 
+    # Assertions
     assert cfg["generate_tree"] is True
     assert cfg["print_tree"] is False
     assert cfg["show_functions"] is True
-    assert cfg["show_classes"] is False
-    assert len(warnings) == 4  # One warning per conversion
+    assert cfg["process_modules"] is False
+    assert cfg["create_unified_file"] is True
+    assert cfg["create_individual_files"] is False
+
+    assert len(warnings) == 6
 
 
 def test_validate_normalizes_csv_strings_to_lists():
@@ -65,17 +74,8 @@ def test_validate_normalizes_csv_strings_to_lists():
 
 
 # -----------------------------------------------------------------------------
-# 3. Enum & Logic Validation
+# 3. Logic Validation
 # -----------------------------------------------------------------------------
-
-def test_validate_mode_fallback():
-    """Invalid mode should fallback to 'all'."""
-    raw = {"processing_mode": "invalid_mode"}
-    cfg, warnings = validate_config(raw)
-
-    assert cfg["processing_mode"] == "all"
-    assert any("fallback" in w for w in warnings)
-
 
 def test_validate_extensions_adds_dots():
     """Extensions without dots should have them added."""
@@ -97,10 +97,6 @@ def test_strict_raises_on_bad_type():
     with pytest.raises(TypeError):
         validate_config(raw, strict=True)
 
-
-def test_strict_raises_on_bad_enum():
-    """Strict mode should raise ValueError on invalid mode."""
-    raw = {"processing_mode": "super_mode"}
-
-    with pytest.raises(ValueError):
-        validate_config(raw, strict=True)
+    raw2 = {"process_modules": "maybe"}
+    with pytest.raises(TypeError):
+        validate_config(raw2, strict=True)

@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 # Public API
 # -----------------------------------------------------------------------------
 def validate_config(
-    config: Any,
-    *,
-    strict: bool = False,
+        config: Any,
+        *,
+        strict: bool = False,
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
     Validate and normalize the configuration dictionary.
@@ -91,14 +91,38 @@ def validate_config(
         strict
     )
 
-    # 3. Enums and Flags Normalization
-    merged["processing_mode"] = _as_mode(
-        merged.get("processing_mode"),
-        defaults["processing_mode"],
+    # 3. Content Selection & Output Format (Booleans)
+    merged["process_modules"] = _as_bool(
+        merged.get("process_modules"),
+        defaults["process_modules"],
+        "process_modules",
         warnings,
-        strict,
+        strict
+    )
+    merged["process_tests"] = _as_bool(
+        merged.get("process_tests"),
+        defaults["process_tests"],
+        "process_tests",
+        warnings,
+        strict
     )
 
+    merged["create_individual_files"] = _as_bool(
+        merged.get("create_individual_files"),
+        defaults["create_individual_files"],
+        "create_individual_files",
+        warnings,
+        strict
+    )
+    merged["create_unified_file"] = _as_bool(
+        merged.get("create_unified_file"),
+        defaults["create_unified_file"],
+        "create_unified_file",
+        warnings,
+        strict
+    )
+
+    # 4. Feature Flags (AST & Logging)
     merged["show_functions"] = _as_bool(
         merged.get("show_functions"),
         defaults["show_functions"],
@@ -143,7 +167,7 @@ def validate_config(
         strict
     )
 
-    # 4. Lists Normalization: Extensions and Patterns
+    # 5. Lists Normalization: Extensions and Patterns
     merged["extensions"] = _as_list_str(
         merged.get("extensions"),
         default_extensions(),
@@ -250,30 +274,6 @@ def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str
     warnings.append(f"{msg} Using fallback.")
     logger.warning(msg)
     return list(fallback)
-
-
-def _as_mode(value: Any, fallback: str, warnings: List[str], strict: bool) -> str:
-    """Validate that the processing mode is within allowed enums."""
-    allowed = {"all", "modules_only", "tests_only"}
-    if value is None:
-        return fallback
-    if isinstance(value, str):
-        v = value.strip().lower()
-        if v in allowed:
-            return v
-        msg = f"Invalid 'processing_mode': '{value}'. Allowed: {sorted(allowed)}."
-        if strict:
-            raise ValueError(msg)
-        warnings.append(f"{msg} Using fallback '{fallback}'.")
-        logger.warning(msg)
-        return fallback
-
-    msg = f"Invalid 'processing_mode': expected str, received {type(value).__name__}."
-    if strict:
-        raise TypeError(msg)
-    warnings.append(f"{msg} Using fallback '{fallback}'.")
-    logger.warning(msg)
-    return fallback
 
 
 def _normalize_extensions(exts: List[str], warnings: List[str], strict: bool) -> List[str]:

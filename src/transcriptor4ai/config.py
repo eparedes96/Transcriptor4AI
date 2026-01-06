@@ -33,7 +33,10 @@ def get_default_config() -> Dict[str, Any]:
     - input_path: Current working directory.
     - output_base_dir: Current working directory.
     - output_subdir_name: 'transcript'.
-    - processing mode: 'all' (all).
+    - process_modules: True (include source code).
+    - process_tests: True (include test files).
+    - create_individual_files: True (generate separate .txt files).
+    - create_unified_file: True (generate one monolithic .txt file).
     - exclusions: Common noise files (__init__.py, .git, __pycache__).
     """
     base = os.getcwd()
@@ -42,7 +45,16 @@ def get_default_config() -> Dict[str, Any]:
         "output_base_dir": base,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": DEFAULT_OUTPUT_PREFIX,
-        "processing_mode": "all",  # Options: all, modules_only, tests_only
+
+        # Content Selection (Granular)
+        "process_modules": True,
+        "process_tests": True,
+
+        # Output Format Selection
+        "create_individual_files": True,
+        "create_unified_file": True,
+
+        # Filtering
         "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [
@@ -51,11 +63,15 @@ def get_default_config() -> Dict[str, Any]:
             r"^(__pycache__|\.git|\.idea)$",
             r"^\."
         ],
+
+        # Tree & AST Options
         "show_functions": False,
         "show_classes": False,
         "show_methods": False,
         "generate_tree": False,
         "print_tree": True,
+
+        # Logging
         "save_error_log": True
     }
 

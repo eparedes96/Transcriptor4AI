@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 @pytest.fixture
 def mock_config_dict() -> dict:
-    """Returns a valid, complete configuration dictionary for testing (v1.1.0)."""
+    """Returns a valid, complete configuration dictionary for testing (v1.1.1)."""
     return {
         "input_path": "/tmp/test",
         "output_base_dir": "/tmp/test",

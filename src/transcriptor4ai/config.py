@@ -11,14 +11,14 @@ import logging
 import os
 from typing import Any, Dict
 
-from transcriptor4ai.paths import DEFAULT_OUTPUT_SUBDIR
+from transcriptor4ai.paths import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
-CONFIG_FILE = "config.json"
+CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
 
 
@@ -93,6 +93,9 @@ def load_config() -> Dict[str, Any]:
                 logger.warning(f"Invalid config file format in {CONFIG_FILE}. Using defaults.")
         except Exception as e:
             logger.warning(f"Failed to load {CONFIG_FILE}: {e}. Using defaults.")
+    else:
+        logger.debug(f"No config file found at {CONFIG_FILE}. Using defaults.")
+
     return defaults
 
 
@@ -102,9 +105,12 @@ def save_config(config: Dict[str, Any]) -> None:
     Raises OSError if writing fails.
     """
     try:
+        # Ensure parent directory exists (redundant safe-guard for get_user_data_dir)
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
         logger.info(f"Configuration saved to {CONFIG_FILE}")
     except OSError as e:
-        logger.error(f"Failed to save configuration: {e}")
+        logger.error(f"Failed to save configuration to {CONFIG_FILE}: {e}")
         raise

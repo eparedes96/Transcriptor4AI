@@ -1,7 +1,7 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.1.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.1.1-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
@@ -110,7 +110,7 @@ The application uses a `config.json` file for persistent settings.
 *   **Location**: The file is created in the working directory after the first "Save" in the GUI.
 *   **Defaults**: Smart defaults are applied if the file is missing.
 
-**Example `config.json` (v1.1.0):**
+**Example `config.json` (v1.1.1):**
 
 ```json
 {

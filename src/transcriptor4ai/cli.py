@@ -6,7 +6,6 @@ Command Line Interface (CLI) for transcriptor4ai.
 Handles argument parsing, configuration merging, and terminal-based 
 execution of the transcription pipeline. Synchronized with the English 
 core API and PipelineResult dataclass.
-Refactored for v1.1.0 (Granular Selection & Flexible Output).
 """
 
 import argparse

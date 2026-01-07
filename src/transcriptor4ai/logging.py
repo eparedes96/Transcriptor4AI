@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
 from typing import Optional
 
+from transcriptor4ai.paths import get_user_data_dir
+
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
@@ -153,21 +155,14 @@ def get_default_gui_log_path(
     file_name: str = "transcriptor4ai.log",
 ) -> str:
     """
-    Calculate the standard OS-specific log path.
-    Windows: %LOCALAPPDATA%/app_name/logs/file_name
-    Linux/Mac: ~/.transcriptor4ai/logs/file_name
-    """
-    try:
-        if os.name == "nt":
-            base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
-            if base:
-                return os.path.join(base, app_name, "logs", file_name)
-    except Exception:
-        pass
+    Calculate the standard OS-specific log path using paths.get_user_data_dir.
 
-    # Cross-platform fallback
-    home = os.path.expanduser("~")
-    return os.path.join(home, ".transcriptor4ai", "logs", file_name)
+    Args:
+        app_name: Kept for API compatibility (handled by paths.py).
+        file_name: Name of the log file.
+    """
+    base_dir = get_user_data_dir()
+    return os.path.join(base_dir, "logs", file_name)
 
 
 def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Logger:

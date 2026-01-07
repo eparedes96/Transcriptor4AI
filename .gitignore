@@ -28,9 +28,11 @@ config.json
 
 # Output files (do not track results)
 *_tests.txt
-*_modulos.txt
-*_arbol.txt
-*_errores.txt
+*_modules.txt
+*_resources.txt
+*_tree.txt
+*_errors.txt
+*_full_context.txt
 transcript/
 
 # --- OS Specific ---

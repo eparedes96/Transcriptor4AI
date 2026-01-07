@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "1.1.1"
+version = "1.2.0"
 description = "Industrial-grade tool for consolidating codebases and generating metadata-rich directory trees for AI context injection."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -21,6 +21,7 @@ classifiers = [
 ]
 dependencies = [
     "PySimpleGUI",
+    "tiktoken>=0.7.0",
 ]
 
 [project.urls]
@@ -51,6 +52,10 @@ show_error_codes = true
 
 [[tool.mypy.overrides]]
 module = "PySimpleGUI"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tiktoken"
 ignore_missing_imports = true
 
 # =============================================================================

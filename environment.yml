@@ -11,5 +11,6 @@ dependencies:
   - setuptools
   - wheel
   - mypy
+  - tiktoken
   - pip:
       - types-setuptools

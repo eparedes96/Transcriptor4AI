@@ -16,14 +16,19 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 @pytest.fixture
 def mock_config_dict() -> dict:
-    """Returns a valid, complete configuration dictionary for testing (v1.1.1)."""
+    """Returns a valid, complete configuration dictionary for testing."""
     return {
         "input_path": "/tmp/test",
         "output_base_dir": "/tmp/test",
         "output_subdir_name": "transcript",
         "output_prefix": "test_output",
+
+        # Content Selection
         "process_modules": True,
         "process_tests": True,
+        "process_resources": False,  # V1.2
+
+        # Output Format
         "create_individual_files": True,
         "create_unified_file": True,
 
@@ -31,6 +36,7 @@ def mock_config_dict() -> dict:
         "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [],
+        "respect_gitignore": True,  # V1.2
 
         # Tree & AST
         "show_functions": False,

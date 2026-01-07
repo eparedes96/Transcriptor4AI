@@ -3,13 +3,18 @@ from __future__ import annotations
 """
 Configuration management for transcriptor4ai.
 
-Handles default settings, persistent storage in JSON, and config I/O operations.
+Handles persistent storage in JSON with support for:
+- Application Settings (Global)
+- Session Persistence (Last state)
+- User Profiles
+- Extension Stacks
+- Legacy Migration
 """
 
 import json
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from transcriptor4ai.paths import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 
@@ -20,24 +25,27 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
+CURRENT_CONFIG_VERSION = "1.2.0"
+
+# Predefined Extension Stacks (Immutable defaults)
+DEFAULT_STACKS: Dict[str, List[str]] = {
+    "Python Data": [".py", ".ipynb", ".json", ".csv", ".yaml"],
+    "Web Fullstack": [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json"],
+    "Java/Kotlin": [".java", ".kt", ".kts", ".xml", ".gradle", ".properties"],
+    "Rust": [".rs", ".toml"],
+    "Go": [".go", ".mod", ".sum"],
+    "Documentation": [".md", ".rst", ".txt", ".pdf"],
+    "DevOps": [".yaml", ".yml", ".toml", ".json", "Dockerfile", "Makefile"]
+}
 
 
 # -----------------------------------------------------------------------------
-# Configuration: Load / Save / Defaults
+# Configuration: Defaults (Runtime Flat Config)
 # -----------------------------------------------------------------------------
 def get_default_config() -> Dict[str, Any]:
     """
-    Return the default configuration dictionary.
-
-    Defaults:
-    - input_path: Current working directory.
-    - output_base_dir: Current working directory.
-    - output_subdir_name: 'transcript'.
-    - process_modules: True (include source code).
-    - process_tests: True (include test files).
-    - create_individual_files: True (generate separate .txt files).
-    - create_unified_file: True (generate one monolithic .txt file).
-    - exclusions: Common noise files (__init__.py, .git, __pycache__).
+    Return the default runtime configuration dictionary (Session State).
+    Used by CLI and Pipeline logic.
     """
     base = os.getcwd()
     return {
@@ -49,6 +57,7 @@ def get_default_config() -> Dict[str, Any]:
         # Content Selection (Granular)
         "process_modules": True,
         "process_tests": True,
+        "process_resources": False,  # [New V1.2]
 
         # Output Format Selection
         "create_individual_files": True,
@@ -60,9 +69,10 @@ def get_default_config() -> Dict[str, Any]:
         "exclude_patterns": [
             r"^__init__\.py$",
             r".*\.pyc$",
-            r"^(__pycache__|\.git|\.idea)$",
+            r"^(__pycache__|\.git|\.idea|\.vscode|node_modules)$",
             r"^\."
         ],
+        "respect_gitignore": True,  # [New V1.2]
 
         # Tree & AST Options
         "show_functions": False,
@@ -76,41 +86,104 @@ def get_default_config() -> Dict[str, Any]:
     }
 
 
+def get_default_app_state() -> Dict[str, Any]:
+    """
+    Return the full default JSON structure.
+    Includes settings, last session, profiles, and custom stacks.
+    """
+    return {
+        "version": CURRENT_CONFIG_VERSION,
+        "app_settings": {
+            "theme": "SystemDefault",
+            "locale": "en"
+        },
+        "last_session": get_default_config(),
+        "saved_profiles": {},  # Dict[str, Dict]
+        "custom_stacks": {}  # Dict[str, List[str]]
+    }
+
+
+# -----------------------------------------------------------------------------
+# I/O Operations: Full State Management
+# -----------------------------------------------------------------------------
+def load_app_state() -> Dict[str, Any]:
+    """
+    Load the complete application state from 'config.json'.
+    Handles auto-migration from V1.1 (flat) to V1.2 (hierarchical).
+    """
+    default_state = get_default_app_state()
+
+    if not os.path.exists(CONFIG_FILE):
+        logger.debug("No config file found. Using default state.")
+        return default_state
+
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            logger.warning("Invalid config format. Resetting to defaults.")
+            return default_state
+
+        # --- MIGRATION LOGIC---
+        if "input_path" in data:
+            logger.info("Detected Legacy V1.1 Config. Migrating to V1.2 structure...")
+            new_state = get_default_app_state()
+            new_state["last_session"].update(data)
+            save_app_state(new_state)
+            return new_state
+
+        # --- NORMAL LOAD ---
+        state = default_state.copy()
+
+        # Merge sub-dictionaries carefully
+        if "app_settings" in data:
+            state["app_settings"].update(data["app_settings"])
+        if "last_session" in data:
+            state["last_session"].update(data["last_session"])
+        if "saved_profiles" in data:
+            state["saved_profiles"].update(data["saved_profiles"])
+        if "custom_stacks" in data:
+            state["custom_stacks"].update(data["custom_stacks"])
+
+        return state
+
+    except Exception as e:
+        logger.error(f"Failed to load app state: {e}. Returning defaults.")
+        return default_state
+
+
+def save_app_state(state: Dict[str, Any]) -> None:
+    """Save the complete application state to 'config.json'."""
+    try:
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=4)
+        logger.debug(f"App state saved to {CONFIG_FILE}")
+    except OSError as e:
+        logger.error(f"Failed to save app state: {e}")
+
+
+# -----------------------------------------------------------------------------
+# Legacy/Convenience API (Maintains compatibility with Main/CLI)
+# -----------------------------------------------------------------------------
 def load_config() -> Dict[str, Any]:
     """
-    Load 'config.json' if it exists and merge with defaults.
-    Returns defaults if the file is missing or invalid.
-    """
-    defaults = get_default_config()
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                defaults.update(data)
-                logger.debug(f"Configuration loaded from {CONFIG_FILE}")
-            else:
-                logger.warning(f"Invalid config file format in {CONFIG_FILE}. Using defaults.")
-        except Exception as e:
-            logger.warning(f"Failed to load {CONFIG_FILE}: {e}. Using defaults.")
-    else:
-        logger.debug(f"No config file found at {CONFIG_FILE}. Using defaults.")
+    Load the active runtime configuration (Last Session).
 
+    This acts as a facade so CLI/GUI don't need to know about
+    the complex V1.2 JSON structure immediately.
+    """
+    state = load_app_state()
+    defaults = get_default_config()
+    defaults.update(state.get("last_session", {}))
     return defaults
 
 
 def save_config(config: Dict[str, Any]) -> None:
     """
-    Save the configuration to 'config.json'.
-    Raises OSError if writing fails.
+    Save the given config dict as the 'last_session' in the full state file.
     """
-    try:
-        # Ensure parent directory exists (redundant safe-guard for get_user_data_dir)
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=4)
-        logger.info(f"Configuration saved to {CONFIG_FILE}")
-    except OSError as e:
-        logger.error(f"Failed to save configuration to {CONFIG_FILE}: {e}")
-        raise
+    state = load_app_state()
+    state["last_session"] = config
+    save_app_state(state)

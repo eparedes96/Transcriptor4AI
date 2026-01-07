@@ -106,6 +106,13 @@ def validate_config(
         warnings,
         strict
     )
+    merged["process_resources"] = _as_bool(
+        merged.get("process_resources"),
+        defaults["process_resources"],
+        "process_resources",
+        warnings,
+        strict
+    )
 
     merged["create_individual_files"] = _as_bool(
         merged.get("create_individual_files"),
@@ -122,7 +129,7 @@ def validate_config(
         strict
     )
 
-    # 4. Feature Flags (AST & Logging)
+    # 4. Feature Flags (AST & Logging & Filtering)
     merged["show_functions"] = _as_bool(
         merged.get("show_functions"),
         defaults["show_functions"],
@@ -163,6 +170,13 @@ def validate_config(
         merged.get("save_error_log"),
         defaults["save_error_log"],
         "save_error_log",
+        warnings,
+        strict
+    )
+    merged["respect_gitignore"] = _as_bool(
+        merged.get("respect_gitignore"),
+        defaults["respect_gitignore"],
+        "respect_gitignore",
         warnings,
         strict
     )

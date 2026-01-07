@@ -17,7 +17,9 @@ from transcriptor4ai.filtering import (
     default_extensions,
     default_exclude_patterns,
     default_include_patterns,
+    load_gitignore_patterns,
     is_test,
+    is_resource_file,
     matches_any,
     matches_include,
 )
@@ -35,31 +37,34 @@ def transcribe_code(
         input_path: str,
         modules_output_path: str,
         tests_output_path: str,
+        resources_output_path: str,  # [New V1.2]
         error_output_path: str,
         process_modules: bool = True,
         process_tests: bool = True,
+        process_resources: bool = False,  # [New V1.2]
         extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
+        respect_gitignore: bool = True,  # [New V1.2]
         save_error_log: bool = True,
 ) -> Dict[str, Any]:
     """
-    Consolidate source code into specific text files based on filtering criteria.
-
-    This function is output-path agnostic; it writes to whatever paths are provided
-    (temporary or final) if the corresponding 'process_' flag is True.
+    Consolidate source code and resources into specific text files.
 
     Args:
         input_path: Source directory to scan.
         modules_output_path: Destination path for source code (scripts).
         tests_output_path: Destination path for test code.
+        resources_output_path: Destination path for resources (docs/config).
         error_output_path: Destination path for error log.
-        process_modules: If True, extract non-test files.
+        process_modules: If True, extract source code files.
         process_tests: If True, extract test files.
-        extensions: List of file extensions to process.
+        process_resources: If True, extract resource files.
+        extensions: List of allowed file extensions (union of all types).
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
-        save_error_log: Whether to write the error log file (only if errors occur).
+        respect_gitignore: If True, parse .gitignore and add to exclusions.
+        save_error_log: Whether to write the error log file.
 
     Returns:
         A dictionary containing counters, paths, and status.
@@ -78,24 +83,39 @@ def transcribe_code(
 
     input_path_abs = os.path.abspath(input_path)
 
-    for p in [modules_output_path, tests_output_path, error_output_path]:
+    # Ensure output directories exist
+    for p in [modules_output_path, tests_output_path, resources_output_path, error_output_path]:
         _safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
+    # -------------------------
+    # Pattern Compilation
+    # -------------------------
+    final_exclusions = list(exclude_patterns)
+    if respect_gitignore:
+        git_patterns = load_gitignore_patterns(input_path_abs)
+        if git_patterns:
+            logger.debug(f"Loaded {len(git_patterns)} patterns from .gitignore")
+            final_exclusions.extend(git_patterns)
+
     include_rx = compile_patterns(include_patterns)
-    exclude_rx = compile_patterns(exclude_patterns)
+    exclude_rx = compile_patterns(final_exclusions)
 
     # -------------------------
     # Filesystem Traversal
     # -------------------------
     errors: List[TranscriptionError] = []
+
+    # Counters
     processed_count = 0
     skipped_count = 0
     tests_written = 0
     modules_written = 0
+    resources_written = 0
 
     # Lazy initialization flags
     tests_file_initialized = False
     modules_file_initialized = False
+    resources_file_initialized = False
 
     for root, dirs, files in os.walk(input_path_abs):
         dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
@@ -105,32 +125,46 @@ def transcribe_code(
         for file_name in files:
             _, ext = os.path.splitext(file_name)
 
-            # --- Filtering ---
-            if ext not in extensions:
-                skipped_count += 1
-                continue
-
+            # --- 1. Basic Filtering ---
+            # Check explicit exclusions (Regex/Gitignore)
             if matches_any(file_name, exclude_rx):
                 skipped_count += 1
                 continue
+
+            # Check inclusions (whitelist)
             if not matches_include(file_name, include_rx):
                 skipped_count += 1
                 continue
 
-            # --- Classification ---
-            is_test_file = is_test(file_name)
-
-            should_process = False
-            if is_test_file and process_tests:
-                should_process = True
-            elif (not is_test_file) and process_modules:
-                should_process = True
-
-            if not should_process:
+            # Check Extension
+            if ext not in extensions and file_name not in extensions:
                 skipped_count += 1
                 continue
 
-            # --- Extraction & Writing ---
+            # --- 2. Classification & Routing (V1.2) ---
+            file_is_test = is_test(file_name)
+            file_is_resource = is_resource_file(file_name)
+
+            target_mode = "skip"
+
+            if file_is_test:
+                if process_tests:
+                    target_mode = "test"
+            elif file_is_resource:
+                if process_resources:
+                    target_mode = "resource"
+                elif process_modules:
+                    target_mode = "module"
+            else:
+                # Standard source code
+                if process_modules:
+                    target_mode = "module"
+
+            if target_mode == "skip":
+                skipped_count += 1
+                continue
+
+            # --- 3. Extraction & Writing ---
             file_path = os.path.join(root, file_name)
             rel_path = os.path.relpath(file_path, input_path_abs)
 
@@ -143,24 +177,30 @@ def transcribe_code(
                 continue
 
             try:
-                # Write to Tests File
-                if is_test_file:
+                # Write to specific output
+                if target_mode == "test":
                     if not tests_file_initialized:
                         _initialize_output_file(tests_output_path, "TESTS:")
                         tests_file_initialized = True
                     _append_entry(tests_output_path, rel_path, content)
                     tests_written += 1
 
-                # Write to Modules (Scripts) File
-                else:
+                elif target_mode == "resource":
+                    if not resources_file_initialized:
+                        _initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
+                        resources_file_initialized = True
+                    _append_entry(resources_output_path, rel_path, content)
+                    resources_written += 1
+
+                elif target_mode == "module":
                     if not modules_file_initialized:
-                        _initialize_output_file(modules_output_path, "SCRIPTS:")
+                        _initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
                         modules_file_initialized = True
                     _append_entry(modules_output_path, rel_path, content)
                     modules_written += 1
 
                 processed_count += 1
-                logger.debug(f"Processed: {rel_path}")
+                logger.debug(f"Processed ({target_mode}): {rel_path}")
 
             except OSError as e:
                 msg = f"Error writing to output: {e}"
@@ -186,8 +226,9 @@ def transcribe_code(
             logger.error(f"Failed to save error log: {e}")
 
     logger.info(
-        f"Transcription finished. Processed: {processed_count}, "
-        f"Tests: {tests_written}, Modules: {modules_written}, Errors: {len(errors)}"
+        f"Transcription finished. Processed: {processed_count}. "
+        f"[Tests: {tests_written}, Modules: {modules_written}, Resources: {resources_written}]. "
+        f"Errors: {len(errors)}"
     )
 
     # -------------------------
@@ -198,9 +239,11 @@ def transcribe_code(
         "input_path": input_path_abs,
         "process_modules": process_modules,
         "process_tests": process_tests,
+        "process_resources": process_resources,
         "generated": {
             "tests": tests_output_path if tests_file_initialized else "",
             "modules": modules_output_path if modules_file_initialized else "",
+            "resources": resources_output_path if resources_file_initialized else "",
             "errors": actual_error_path,
         },
         "counters": {
@@ -208,6 +251,7 @@ def transcribe_code(
             "skipped": skipped_count,
             "tests_written": tests_written,
             "modules_written": modules_written,
+            "resources_written": resources_written,
             "errors": len(errors),
         },
     }

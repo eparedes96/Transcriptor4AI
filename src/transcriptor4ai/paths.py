@@ -13,11 +13,49 @@ from typing import List, Optional, Tuple
 # Constants
 # -----------------------------------------------------------------------------
 DEFAULT_OUTPUT_SUBDIR = "transcript"
+APP_DIR_NAME = "Transcriptor4AI"
+UNIX_APP_DIR_NAME = ".transcriptor4ai"
 
 
 # -----------------------------------------------------------------------------
 # Path Helpers
 # -----------------------------------------------------------------------------
+def get_user_data_dir() -> str:
+    """
+    Get the standard OS-specific user data directory for the application.
+    Ensures the directory exists.
+
+    Windows: %LOCALAPPDATA%/Transcriptor4AI
+    Linux/Mac: ~/.transcriptor4ai
+
+    Returns:
+        Absolute path to the user data directory.
+    """
+    path: str = ""
+
+    # Windows Logic
+    try:
+        if os.name == "nt":
+            base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+            if base:
+                path = os.path.join(base, APP_DIR_NAME)
+    except Exception:
+        pass
+
+    # Fallback or Non-Windows (Linux/Mac)
+    if not path:
+        home = os.path.expanduser("~")
+        path = os.path.join(home, UNIX_APP_DIR_NAME)
+
+    # Ensure directory exists
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        pass
+
+    return os.path.abspath(path)
+
+
 def normalize_path(path: Optional[str], fallback: str) -> str:
     """
     Normalize a directory path.

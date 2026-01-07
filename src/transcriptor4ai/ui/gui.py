@@ -5,7 +5,6 @@ Graphical User Interface (GUI) for transcriptor4ai.
 
 Implemented using PySimpleGUI. Manages user interactions, threaded 
 pipeline execution, and persistent configuration.
-Refactored for v1.1.0 (Granular Selection & Flexible Output & Results Window).
 """
 
 import logging
@@ -274,26 +273,26 @@ def main() -> None:
 
     frame_content = [
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=True),
-            sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=True),
+            sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=config["process_tests"]),
         ],
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=False),
+            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"]),
         ],
         [
             sg.Text("    └─ AST:", font=("Any", 8)),
-            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", font=("Any", 8)),
-            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", font=("Any", 8)),
-            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"], font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", default=config["show_classes"], font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", default=config["show_methods"], font=("Any", 8)),
         ]
     ]
 
     # -- Output Format Frame --
     frame_output_format = [
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.individual"), key="create_individual_files", default=True,
+            sg.Checkbox(i18n.t("gui.checkboxes.individual"), key="create_individual_files", default=config["create_individual_files"],
                         tooltip="Generates separate .txt files for each component"),
-            sg.Checkbox(i18n.t("gui.checkboxes.unified"), key="create_unified_file", default=True,
+            sg.Checkbox(i18n.t("gui.checkboxes.unified"), key="create_unified_file", default=config["create_unified_file"],
                         tooltip="Generates a single '_full_context.txt' file"),
         ]
     ]

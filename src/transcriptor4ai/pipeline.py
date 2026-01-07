@@ -4,7 +4,7 @@ from __future__ import annotations
 Core orchestration pipeline.
 
 Coordinates input validation, path preparation, service execution 
-(Transcription and Tree generation), and output unification.
+(Transcription and Tree generation), output unification, and token estimation.
 """
 
 import logging
@@ -22,6 +22,7 @@ from transcriptor4ai.paths import (
 )
 from transcriptor4ai.transcription.service import transcribe_code
 from transcriptor4ai.tree.service import generate_directory_tree
+from transcriptor4ai.utils.token_counter import count_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class PipelineResult:
     # Flags
     process_modules: bool
     process_tests: bool
+    process_resources: bool
     create_individual_files: bool
     create_unified_file: bool
 
@@ -55,6 +57,9 @@ class PipelineResult:
     transcription_res: Dict[str, Any]
     tree_lines: List[str]
     tree_path: str
+
+    # Metrics
+    token_count: int  #
 
     # Summary
     summary: Dict[str, Any]
@@ -73,8 +78,9 @@ def run_pipeline(
     """
     Execute the full transcription pipeline.
 
-    Orchestrates the creation of individual parts (Tree, Modules, Tests)
-    and optionally assembles them into a unified context file.
+    Orchestrates the creation of individual parts (Tree, Modules, Tests, Resources)
+    and optionally assembles them into a unified context file. Also calculates
+    token usage estimate.
 
     Args:
         config: Configuration dictionary (will be validated).
@@ -119,6 +125,8 @@ def run_pipeline(
             files_to_check.append(f"{prefix}_modules.txt")
         if cfg["process_tests"]:
             files_to_check.append(f"{prefix}_tests.txt")
+        if cfg["process_resources"]:
+            files_to_check.append(f"{prefix}_resources.txt")
         if cfg["generate_tree"]:
             files_to_check.append(f"{prefix}_tree.txt")
 
@@ -151,6 +159,7 @@ def run_pipeline(
                 "dry_run": True,
                 "existing_files": list(existing_files),
                 "will_generate": list(files_to_check),
+                "token_estimate": "N/A (Dry Run)"
             }
         )
 
@@ -176,6 +185,7 @@ def run_pipeline(
     # Define Paths for Components
     path_modules = os.path.join(staging_dir, f"{prefix}_modules.txt")
     path_tests = os.path.join(staging_dir, f"{prefix}_tests.txt")
+    path_resources = os.path.join(staging_dir, f"{prefix}_resources.txt")
     path_tree = tree_output_path if tree_output_path else os.path.join(staging_dir, f"{prefix}_tree.txt")
 
     path_errors = os.path.join(final_output_path, f"{prefix}_errors.txt")
@@ -202,17 +212,20 @@ def run_pipeline(
             save_path=path_tree,
         )
 
-    # B. Transcribe Code
+    # B. Transcribe Code & Resources
     trans_res = transcribe_code(
         input_path=base_path,
         modules_output_path=path_modules,
         tests_output_path=path_tests,
+        resources_output_path=path_resources,
         error_output_path=path_errors,
         process_modules=bool(cfg["process_modules"]),
         process_tests=bool(cfg["process_tests"]),
+        process_resources=bool(cfg["process_resources"]),
         extensions=cfg["extensions"],
         include_patterns=cfg["include_patterns"],
         exclude_patterns=cfg["exclude_patterns"],
+        respect_gitignore=bool(cfg["respect_gitignore"]),
         save_error_log=bool(cfg["save_error_log"]),
     )
 
@@ -227,6 +240,8 @@ def run_pipeline(
     # 6) Assembly (Unified File)
     # -------------------------------------------------------------------------
     unified_created = False
+    final_token_count = 0
+
     if cfg["create_unified_file"]:
         try:
             with open(path_unified, "w", encoding="utf-8") as outfile:
@@ -255,8 +270,26 @@ def run_pipeline(
                         shutil.copyfileobj(infile, outfile)
                     outfile.write("\n\n")
 
+                # 4. Append Resources (Docs/Config)
+                generated_resources = trans_res.get("generated", {}).get("resources")
+                if cfg["process_resources"] and generated_resources and os.path.exists(generated_resources):
+                    with open(generated_resources, "r", encoding="utf-8") as infile:
+                        shutil.copyfileobj(infile, outfile)
+                    outfile.write("\n\n")
+
             unified_created = True
             logger.info(f"Unified context file created: {path_unified}")
+
+            # -----------------------------------------------------------------
+            # 6.5) Token Estimation
+            # -----------------------------------------------------------------
+            try:
+                with open(path_unified, "r", encoding="utf-8") as f:
+                    full_text = f.read()
+                    final_token_count = count_tokens(full_text)
+                    logger.info(f"Estimated token count: {final_token_count}")
+            except Exception as e:
+                logger.warning(f"Failed to count tokens: {e}")
 
         except OSError as e:
             logger.error(f"Failed to create unified file: {e}")
@@ -277,6 +310,7 @@ def run_pipeline(
     if not cfg["create_individual_files"]:
         gen_files_map.pop("modules", None)
         gen_files_map.pop("tests", None)
+        gen_files_map.pop("resources", None)
 
     counters = trans_res.get("counters", {}) or {}
     summary = {
@@ -284,6 +318,7 @@ def run_pipeline(
         "processed": int(counters.get("processed", 0)),
         "skipped": int(counters.get("skipped", 0)),
         "errors": int(counters.get("errors", 0)),
+        "token_count": final_token_count,
         "generated_files": gen_files_map,
         "tree": {
             "generated": bool(cfg.get("generate_tree")),
@@ -297,7 +332,7 @@ def run_pipeline(
     logger.info("Pipeline completed successfully.")
     return _build_success_result(
         cfg, base_path, final_output_path, existing_files,
-        trans_res, tree_lines, path_tree, summary
+        trans_res, tree_lines, path_tree, final_token_count, summary
     )
 
 
@@ -321,6 +356,7 @@ def _build_error_result(
         output_prefix=cfg.get("output_prefix", ""),
         process_modules=cfg.get("process_modules", False),
         process_tests=cfg.get("process_tests", False),
+        process_resources=cfg.get("process_resources", False),
         create_individual_files=cfg.get("create_individual_files", False),
         create_unified_file=cfg.get("create_unified_file", False),
         final_output_path=final_output_path,
@@ -328,6 +364,7 @@ def _build_error_result(
         transcription_res={},
         tree_lines=[],
         tree_path="",
+        token_count=0,
         summary=summary_extra or {},
     )
 
@@ -340,6 +377,7 @@ def _build_success_result(
         trans_res: Dict[str, Any] = None,
         tree_lines: List[str] = None,
         tree_path: str = "",
+        token_count: int = 0,
         summary_extra: Dict[str, Any] = None
 ) -> PipelineResult:
     return PipelineResult(
@@ -351,6 +389,7 @@ def _build_success_result(
         output_prefix=cfg.get("output_prefix", ""),
         process_modules=cfg.get("process_modules", True),
         process_tests=cfg.get("process_tests", True),
+        process_resources=cfg.get("process_resources", True),
         create_individual_files=cfg.get("create_individual_files", True),
         create_unified_file=cfg.get("create_unified_file", True),
         final_output_path=final_output_path,
@@ -358,5 +397,6 @@ def _build_success_result(
         transcription_res=trans_res or {},
         tree_lines=tree_lines or [],
         tree_path=tree_path,
+        token_count=token_count,
         summary=summary_extra or {},
     )

@@ -81,17 +81,35 @@ def get_real_output_path(output_base_dir: str, output_subdir_name: str) -> str:
     return os.path.join(output_base_dir, sub)
 
 
-def get_destination_filenames(prefix: str, mode: str, include_tree: bool) -> List[str]:
+def get_destination_filenames(
+        prefix: str,
+        mode: str,
+        include_tree: bool,
+        include_resources: bool = False
+) -> List[str]:
     """
     Return a list of potential output filenames based on configuration.
+
+    Args:
+        prefix: The filename prefix (e.g., 'transcription').
+        mode: 'all', 'modules_only', or 'tests_only'.
+        include_tree: Whether tree generation is active.
+        include_resources: Whether resource processing is active.
     """
     files: List[str] = []
+
     if mode in ("all", "tests_only"):
         files.append(f"{prefix}_tests.txt")
+
     if mode in ("all", "modules_only"):
         files.append(f"{prefix}_modules.txt")
+
+    if include_resources:
+        files.append(f"{prefix}_resources.txt")
+
     if include_tree:
         files.append(f"{prefix}_tree.txt")
+
     return files
 
 

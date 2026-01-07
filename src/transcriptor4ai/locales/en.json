@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Transcriptor4AI",
-    "description": "Code transcription tool (Tests/Modules) with directory tree generation support."
+    "description": "Code transcription tool (Tests/Modules/Resources) with directory tree generation support."
   },
   "cli": {
     "args": {
@@ -26,6 +26,8 @@
       "json": "Output result in JSON format.",
       "no_modules": "Do not include source code modules.",
       "no_tests": "Do not include test files.",
+      "resources": "Include resource files (docs, config, data).",
+      "no_gitignore": "Do not read .gitignore files.",
       "unified_only": "Generate ONLY the unified context file.",
       "individual_only": "Generate ONLY individual files."
     },
@@ -55,7 +57,9 @@
     "labels": {
       "extensions": "Extensions (comma-separated):",
       "include": "Include Patterns (Regex):",
-      "exclude": "Exclude Patterns (Regex):"
+      "exclude": "Exclude Patterns (Regex):",
+      "stack": "Extension Stack:",
+      "profile": "Profile:"
     },
     "tooltips": {
       "input": "Root folder containing the source code.",
@@ -69,6 +73,7 @@
     "checkboxes": {
       "modules": "Include Modules (Source)",
       "tests": "Include Tests",
+      "resources": "Include Resources (.md, .json, etc.)",
       "gen_tree": "Include Directory Tree",
       "individual": "Individual Files (.txt separated)",
       "unified": "Unified Context File (single .txt)",
@@ -76,20 +81,31 @@
       "cls": "Show classes",
       "meth": "Show methods",
       "print_tree": "Print tree to console",
-      "log_err": "Save error log"
+      "log_err": "Save error log",
+      "gitignore": "Respect .gitignore rules"
     },
     "buttons": {
       "explore": "Browse",
       "examine": "Browse",
       "simulate": "SIMULATE",
       "process": "PROCESS",
-      "save": "Save Config",
+      "save": "Save Session",
       "reset": "Reset Config",
       "exit": "Exit"
     },
+    "profiles": {
+      "load": "Load",
+      "save": "Save",
+      "del": "Del",
+      "prompt_name": "Enter name for new profile:",
+      "saved": "Profile '{name}' saved!",
+      "deleted": "Profile deleted.",
+      "confirm_delete": "Delete profile '{name}'?",
+      "error_select": "Please select a valid profile from the list."
+    },
     "status": {
       "processing": "⏳ Processing... Please wait.",
-      "success": "Configuration saved to config.json",
+      "success": "Session saved successfully.",
       "reset": "Configuration reset to defaults."
     },
     "popups": {
@@ -115,6 +131,7 @@
       "stats_processed": "Processed",
       "stats_skipped": "Skipped",
       "stats_errors": "Errors",
+      "stats_tokens": "Est. Tokens",
       "files_label": "Generated Files:",
       "btn_open": "Open Folder",
       "btn_copy": "Copy Unified Output",

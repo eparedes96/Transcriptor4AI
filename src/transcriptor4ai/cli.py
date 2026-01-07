@@ -73,6 +73,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help=i18n.t("cli.args.no_tests", default="Do not include test files."),
     )
     p.add_argument(
+        "--resources",
+        action="store_true",
+        help=i18n.t("cli.args.resources", default="Include resource files (docs, config, data)."),
+    )
+    p.add_argument(
         "--tree",
         action="store_true",
         help=i18n.t("cli.args.tree"),
@@ -124,6 +129,11 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="exclude_patterns",
         default=None,
         help=i18n.t("cli.args.exc"),
+    )
+    p.add_argument(
+        "--no-gitignore",
+        action="store_true",
+        help=i18n.t("cli.args.no_gitignore", default="Do not read .gitignore files."),
     )
 
     # --- Safety / UX ---
@@ -187,10 +197,11 @@ def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
     out = dict(base)
     keys_to_merge = [
         "input_path", "output_base_dir", "output_subdir_name", "output_prefix",
-        "process_modules", "process_tests", "create_individual_files", "create_unified_file",
+        "process_modules", "process_tests", "process_resources",
+        "create_individual_files", "create_unified_file",
         "extensions", "include_patterns", "exclude_patterns",
         "generate_tree", "print_tree", "show_functions", "show_classes",
-        "show_methods", "save_error_log",
+        "show_methods", "save_error_log", "respect_gitignore"
     ]
     for k in keys_to_merge:
         if k in overrides and overrides[k] is not None:
@@ -212,6 +223,8 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["process_modules"] = False
     if args.no_tests:
         overrides["process_tests"] = False
+    if args.resources:
+        overrides["process_resources"] = True
 
     # Tree mapping
     if args.tree:
@@ -232,6 +245,8 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["include_patterns"] = _split_csv(args.include_patterns)
     if args.exclude_patterns:
         overrides["exclude_patterns"] = _split_csv(args.exclude_patterns)
+    if args.no_gitignore:
+        overrides["respect_gitignore"] = False
 
     # AST Options
     if args.print_tree:
@@ -267,6 +282,10 @@ def _print_human_summary(result: PipelineResult) -> None:
 
     if result.final_output_path:
         print(i18n.t("cli.status.output_dir", path=result.final_output_path))
+
+    # Token Count
+    if result.token_count > 0:
+        print(f"Estimated Tokens: {result.token_count:,}")
 
     # Print Statistics using English keys
     stats_keys = {

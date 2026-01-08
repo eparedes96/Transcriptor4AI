@@ -32,10 +32,14 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
     "Python Data": [".py", ".ipynb", ".json", ".csv", ".yaml"],
     "Web Fullstack": [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json"],
     "Java/Kotlin": [".java", ".kt", ".kts", ".xml", ".gradle", ".properties"],
+    "C# / .NET": [".cs", ".csproj", ".sln", ".xml", ".config", ".json"],
+    "C / C++": [".c", ".cpp", ".h", ".hpp", "CMakeLists.txt", "Makefile"],
+    "Mobile (Swift/Dart)": [".swift", ".dart", ".yaml", ".xml", ".plist"],
     "Rust": [".rs", ".toml"],
     "Go": [".go", ".mod", ".sum"],
+    "PHP Legacy": [".php", ".phtml", "composer.json", ".ini"],
+    "Shell / Ops": [".sh", ".bash", ".zsh", ".ps1", ".bat", "Dockerfile", ".dockerignore", ".yaml", ".yml"],
     "Documentation": [".md", ".rst", ".txt", ".pdf"],
-    "DevOps": [".yaml", ".yml", ".toml", ".json", "Dockerfile", "Makefile"]
 }
 
 
@@ -57,13 +61,13 @@ def get_default_config() -> Dict[str, Any]:
         # Content Selection (Granular)
         "process_modules": True,
         "process_tests": True,
-        "process_resources": False,  # [New V1.2]
+        "process_resources": False,
 
         # Output Format Selection
         "create_individual_files": True,
         "create_unified_file": True,
 
-        # Filtering
+        # Filters
         "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [
@@ -72,7 +76,9 @@ def get_default_config() -> Dict[str, Any]:
             r"^(__pycache__|\.git|\.idea|\.vscode|node_modules)$",
             r"^\."
         ],
-        "respect_gitignore": True,  # [New V1.2]
+        "respect_gitignore": True,
+
+        "target_model": "GPT-4o / GPT-5",
 
         # Tree & AST Options
         "show_functions": False,

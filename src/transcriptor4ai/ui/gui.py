@@ -13,7 +13,7 @@ import platform
 import subprocess
 import threading
 import traceback
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import PySimpleGUI as sg
 
@@ -191,18 +191,19 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
     # Content Selection
     config["process_modules"] = bool(values.get("process_modules"))
     config["process_tests"] = bool(values.get("process_tests"))
-    config["process_resources"] = bool(values.get("process_resources"))  # V1.2
+    config["process_resources"] = bool(values.get("process_resources"))
     config["generate_tree"] = bool(values.get("generate_tree"))
 
     # Output Format
     config["create_individual_files"] = bool(values.get("create_individual_files"))
     config["create_unified_file"] = bool(values.get("create_unified_file"))
 
-    # Filters
+    # Filters & Models
     config["extensions"] = values.get("extensions", "")
     config["include_patterns"] = values.get("include_patterns", "")
     config["exclude_patterns"] = values.get("exclude_patterns", "")
     config["respect_gitignore"] = bool(values.get("respect_gitignore"))
+    config["target_model"] = values.get("target_model", "GPT-4o / GPT-5")
 
     # AST Options
     config["show_functions"] = bool(values.get("show_functions"))
@@ -231,7 +232,7 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["create_individual_files"].update(config["create_individual_files"])
     window["create_unified_file"].update(config["create_unified_file"])
 
-    # Filters
+    # Filters & Models
     exts = config["extensions"] if isinstance(config["extensions"], list) else []
     incl = config["include_patterns"] if isinstance(config["include_patterns"], list) else []
     excl = config["exclude_patterns"] if isinstance(config["exclude_patterns"], list) else []
@@ -240,6 +241,7 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["include_patterns"].update(",".join(incl))
     window["exclude_patterns"].update(",".join(excl))
     window["respect_gitignore"].update(config.get("respect_gitignore", True))
+    window["target_model"].update(config.get("target_model", "GPT-4o / GPT-5"))
 
     # AST & Options
     window["show_functions"].update(config["show_functions"])
@@ -252,7 +254,7 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
     """Helper to enable/disable buttons during processing."""
     keys = [
-        "btn_process", "btn_simulate", "btn_save", "btn_reset",
+        "btn_process", "btn_simulate", "btn_reset",
         "btn_browse_in", "btn_browse_out",
         "btn_load_profile", "btn_save_profile", "btn_del_profile"
     ]
@@ -270,7 +272,7 @@ def main() -> None:
     log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
     configure_logging(log_conf)
 
-    logger.info("GUI starting (v1.2.0 logic)...")
+    logger.info("GUI starting (v1.2.1 logic)...")
     sg.theme("SystemDefault")
 
     # 2. Load Application State
@@ -279,7 +281,6 @@ def main() -> None:
         config = cfg.get_default_config()
         config.update(app_state.get("last_session", {}))
 
-        # Ensure critical paths are normalized
         if not config.get("output_base_dir"):
             config["output_base_dir"] = config.get("input_path") or os.getcwd()
 
@@ -297,11 +298,12 @@ def main() -> None:
     # --- Profile Bar ---
     frame_profiles = [
         [
-            sg.Text("Profile:", font=("Any", 8)),
+            sg.Text(i18n.t("gui.labels.profile"), font=("Any", 8)),
             sg.Combo(values=profile_names, key="-PROFILE_LIST-", size=(20, 1), readonly=True),
-            sg.Button("Load", key="btn_load_profile", size=(6, 1), font=("Any", 8)),
-            sg.Button("Save", key="btn_save_profile", size=(6, 1), font=("Any", 8)),
-            sg.Button("Del", key="btn_del_profile", size=(4, 1), font=("Any", 8), button_color="gray"),
+            sg.Button(i18n.t("gui.profiles.load"), key="btn_load_profile", size=(6, 1), font=("Any", 8)),
+            sg.Button(i18n.t("gui.profiles.save"), key="btn_save_profile", size=(8, 1), font=("Any", 8)),
+            sg.Button(i18n.t("gui.profiles.del"), key="btn_del_profile", size=(4, 1), font=("Any", 8),
+                      button_color="gray"),
         ]
     ]
 
@@ -310,7 +312,7 @@ def main() -> None:
             sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),
             sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=config["process_tests"]),
             sg.Checkbox("Resources (.md, .json...)", key="process_resources",
-                        default=config.get("process_resources", False)),  # V1.2
+                        default=config.get("process_resources", False)),
         ],
         [
             sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"]),
@@ -338,8 +340,15 @@ def main() -> None:
         ]
     ]
 
-    # -- Stack Selector data --
+    # -- Data for Combos --
     stack_names = ["-- Select Stack --"] + sorted(list(cfg.DEFAULT_STACKS.keys()))
+    model_names = [
+        "GPT-4o / GPT-5",
+        "GPT-4 Turbo / Legacy",
+        "Claude 3.5 / Opus",
+        "Llama 3 / 4",
+        "Gemini Pro"
+    ]
 
     layout = [
         # --- Profile Manager (Top) ---
@@ -370,7 +379,7 @@ def main() -> None:
                      tooltip=i18n.t("gui.tooltips.prefix")),
         ],
 
-        # --- New Flexible Config Sections ---
+        # --- Flexible Config Sections ---
         [
             sg.Frame(i18n.t("gui.sections.content"), frame_content, expand_x=True),
         ],
@@ -378,9 +387,12 @@ def main() -> None:
             sg.Frame(i18n.t("gui.sections.format"), frame_output_format, expand_x=True)
         ],
 
-        # --- Filters ---
-        [sg.Text("Extension Stack:", font=("Any", 8, "bold")),
-         sg.Combo(stack_names, key="-STACK_SELECTOR-", enable_events=True, readonly=True, size=(30, 1))],
+        # --- Filters & Optimization ---
+        [sg.Text(i18n.t("gui.labels.stack"), font=("Any", 8, "bold")),
+         sg.Combo(stack_names, key="-STACK_SELECTOR-", enable_events=True, readonly=True, size=(30, 1)),
+         sg.Text(i18n.t("gui.labels.target_model"), font=("Any", 8, "bold")),  # V1.2.1
+         sg.Combo(model_names, key="target_model", default_value=config.get("target_model"), readonly=True,
+                  size=(25, 1))],
 
         [sg.Text(i18n.t("gui.labels.extensions")),
          sg.Input(",".join(config["extensions"]), size=(60, 1), key="extensions", expand_x=True)],
@@ -389,13 +401,14 @@ def main() -> None:
         [sg.Text(i18n.t("gui.labels.exclude")),
          sg.Input(",".join(config["exclude_patterns"]), size=(60, 1), key="exclude_patterns", expand_x=True)],
         [
-            sg.Checkbox("Respect .gitignore", key="respect_gitignore", default=config.get("respect_gitignore", True))
+            sg.Checkbox(i18n.t("gui.checkboxes.gitignore"), key="respect_gitignore",
+                        default=config.get("respect_gitignore", True))
         ],
 
         # --- Misc ---
         [
             sg.Checkbox(i18n.t("gui.checkboxes.print_tree"), key="print_tree", default=config["print_tree"],
-                        visible=False),  # Hidden but kept for logic
+                        visible=False),
             sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="save_error_log", default=config["save_error_log"]),
         ],
 
@@ -403,12 +416,11 @@ def main() -> None:
         [sg.Text(i18n.t("gui.status.processing"), key="-STATUS-", text_color="blue", visible=False,
                  font=("Any", 10, "bold"))],
 
-        # --- Actions ---
+        # --- Actions  ---
         [
             sg.Button(i18n.t("gui.buttons.simulate"), key="btn_simulate", button_color=("white", "#007ACC")),
             sg.Button(i18n.t("gui.buttons.process"), key="btn_process", button_color=("white", "green")),
-            sg.Push(),
-            sg.Button(i18n.t("gui.buttons.save"), key="btn_save"),
+            sg.Push(),  # Spacer
             sg.Button(i18n.t("gui.buttons.reset"), key="btn_reset"),
             sg.Button(i18n.t("gui.buttons.exit"), key="btn_exit", button_color=("white", "red")),
         ],
@@ -419,7 +431,24 @@ def main() -> None:
     # 4. Event Loop
     while True:
         event, values = window.read()
+
+        # --- Silent Auto-Save on Exit ---
         if event in (sg.WIN_CLOSED, "btn_exit"):
+            try:
+                if values:
+                    update_config_from_gui(config, values)
+                    clean_conf, _ = validate_config(config, strict=False)
+                    clean_conf["input_path"] = paths.normalize_path(clean_conf["input_path"], os.getcwd())
+                    clean_conf["output_base_dir"] = paths.normalize_path(clean_conf["output_base_dir"],
+                                                                         clean_conf["input_path"])
+
+                    # Persist
+                    app_state["last_session"] = clean_conf
+                    cfg.save_app_state(app_state)
+                    logger.info("Session auto-saved on exit.")
+            except Exception as e:
+                logger.warning(f"Auto-save failed on exit: {e}")
+
             break
 
         # --- File Browsing ---
@@ -455,13 +484,13 @@ def main() -> None:
                 temp_conf.update(prof_data)
 
                 populate_gui_from_config(window, temp_conf)
-                config.update(temp_conf)
+                config.update(temp_conf)  # Update internal state
                 sg.popup(f"Profile '{sel_profile}' loaded!")
             else:
-                sg.popup_error("Please select a valid profile from the list.")
+                sg.popup_error(i18n.t("gui.profiles.error_select"))
 
         if event == "btn_save_profile":
-            name = sg.popup_get_text("Enter name for new profile:", title="Save Profile")
+            name = sg.popup_get_text(i18n.t("gui.profiles.prompt_name"), title="Save Profile")
             if name:
                 name = name.strip()
                 # Get current UI state
@@ -478,38 +507,20 @@ def main() -> None:
                 profile_names = sorted(list(app_state["saved_profiles"].keys()))
                 window["-PROFILE_LIST-"].update(values=profile_names)
                 window["-PROFILE_LIST-"].update(value=name)
-                sg.popup(f"Profile '{name}' saved!")
+                sg.popup(i18n.t("gui.profiles.saved", name=name))
 
         if event == "btn_del_profile":
             sel_profile = values.get("-PROFILE_LIST-")
             if sel_profile and sel_profile in app_state.get("saved_profiles", {}):
-                if sg.popup_yes_no(f"Delete profile '{sel_profile}'?") == "Yes":
+                if sg.popup_yes_no(i18n.t("gui.profiles.confirm_delete", name=sel_profile)) == "Yes":
                     del app_state["saved_profiles"][sel_profile]
                     cfg.save_app_state(app_state)
 
                     profile_names = sorted(list(app_state["saved_profiles"].keys()))
                     window["-PROFILE_LIST-"].update(values=profile_names, value="")
-                    sg.popup("Profile deleted.")
+                    sg.popup(i18n.t("gui.profiles.deleted"))
 
         # --- Configuration Actions ---
-        if event == "btn_save":  # Save Session
-            try:
-                update_config_from_gui(config, values)
-                clean_conf, _ = validate_config(config, strict=False)
-                clean_conf["input_path"] = paths.normalize_path(clean_conf["input_path"], os.getcwd())
-                clean_conf["output_base_dir"] = paths.normalize_path(clean_conf["output_base_dir"],
-                                                                     clean_conf["input_path"])
-
-                # Save as last_session in AppState
-                app_state["last_session"] = clean_conf
-                cfg.save_app_state(app_state)
-
-                sg.popup(i18n.t("gui.status.success"))
-                logger.info("Session state saved.")
-            except Exception as e:
-                logger.error(f"Save config failed: {e}")
-                sg.popup_error(i18n.t("gui.popups.error_save", error=e))
-
         if event == "btn_reset":
             config = cfg.get_default_config()
             populate_gui_from_config(window, config)

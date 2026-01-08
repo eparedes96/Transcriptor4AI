@@ -285,10 +285,11 @@ def run_pipeline(
             # 6.5) Token Estimation
             # -----------------------------------------------------------------
             try:
+                target_model = cfg.get("target_model", "GPT-4o / GPT-5")
                 with open(path_unified, "r", encoding="utf-8") as f:
                     full_text = f.read()
-                    final_token_count = count_tokens(full_text)
-                    logger.info(f"Estimated token count: {final_token_count}")
+                    final_token_count = count_tokens(full_text, model=target_model)
+                    logger.info(f"Estimated token count ({target_model}): {final_token_count}")
             except Exception as e:
                 logger.warning(f"Failed to count tokens: {e}")
 

@@ -90,6 +90,14 @@ def validate_config(
         warnings,
         strict
     )
+    # Context Optimization
+    merged["target_model"] = _as_str(
+        merged.get("target_model"),
+        defaults.get("target_model", "GPT-4o / GPT-5"),
+        "target_model",
+        warnings,
+        strict
+    )
 
     # 3. Content Selection & Output Format (Booleans)
     merged["process_modules"] = _as_bool(

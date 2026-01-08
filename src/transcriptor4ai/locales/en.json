@@ -59,6 +59,7 @@
       "include": "Include Patterns (Regex):",
       "exclude": "Exclude Patterns (Regex):",
       "stack": "Extension Stack:",
+      "target_model": "Target AI Model:",
       "profile": "Profile:"
     },
     "tooltips": {
@@ -95,7 +96,7 @@
     },
     "profiles": {
       "load": "Load",
-      "save": "Save",
+      "save": "Save As...",
       "del": "Del",
       "prompt_name": "Enter name for new profile:",
       "saved": "Profile '{name}' saved!",

@@ -3,13 +3,14 @@ from __future__ import annotations
 """
 Token counting utility for Transcriptor4AI (2026 Standard).
 
-Provides token estimation for LLM contexts, aligned with the state of the art
-as of Jan 2026 (GPT-5, Llama 4, Claude 4/5, Mistral Large 3).
+Provides token estimation for LLM contexts, aligned with the state of the art.
+Includes heuristics for non-OpenAI models.
 
 Strategy:
-1. Tiktoken (Exact): Prioritizes 'o200k_base' encoding (High efficiency).
-2. Fallback Encodings: Drops to 'cl100k_base' if the newer one is missing.
-3. Heuristic (Approx): Uses character density analysis (chars / 4) if no library.
+1. Identify Model Type (GPT, Claude, Llama, Gemini).
+2. Tiktoken (Exact/Base): Uses 'o200k_base' or 'cl100k_base' depending on model generation.
+3. Multipliers: Applies correction factors for models known to be more verbose than GPT-4o.
+4. Fallback: Uses character density analysis if library missing.
 """
 
 import logging
@@ -32,16 +33,19 @@ except ImportError:
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
-# As of 2026, roughly 4 chars/token is still the standard safe heuristic
-# for English code and text. Multilingual/dense code might be 3.5-3.8.
-CHARS_PER_TOKEN = 4
+# Heuristics
+CHARS_PER_TOKEN_AVG = 4
 
-# The standard encoding for GPT-4o, GPT-5, and compatible open models (Llama 4)
-MODERN_ENCODING = "o200k_base"
-LEGACY_ENCODING = "cl100k_base"
+# Encodings
+MODERN_ENCODING = "o200k_base"  # GPT-4o, GPT-5, Llama 4
+LEGACY_ENCODING = "cl100k_base"  # GPT-4, GPT-3.5
 
-# Default fallback model if none provided
-DEFAULT_MODEL = "gpt-5"
+# Multipliers relative to o200k_base (Approximations)
+CLAUDE_FACTOR = 1.05
+GEMINI_FACTOR = 1.0
+
+# Default
+DEFAULT_MODEL = "GPT-4o / GPT-5"
 
 
 # -----------------------------------------------------------------------------
@@ -49,11 +53,11 @@ DEFAULT_MODEL = "gpt-5"
 # -----------------------------------------------------------------------------
 def count_tokens(text: str, model: str = DEFAULT_MODEL) -> int:
     """
-    Estimate the number of tokens in a text string.
+    Estimate the number of tokens in a text string based on the target model.
 
     Args:
         text: The content string to analyze.
-        model: The target model name (e.g., "gpt-5", "claude-4", "llama-4").
+        model: The target model name (e.g., "Claude 3.5", "GPT-4 Legacy").
 
     Returns:
         Integer count of tokens. Returns 0 for empty input.
@@ -61,12 +65,29 @@ def count_tokens(text: str, model: str = DEFAULT_MODEL) -> int:
     if not text:
         return 0
 
+    model_lower = (model or "").lower()
+
     if TIKTOKEN_AVAILABLE:
         try:
-            return _count_with_tiktoken(text, model)
+            # 1. Determine Encoding Base
+            encoding_name = MODERN_ENCODING
+            if "legacy" in model_lower or "gpt-3.5" in model_lower or "gpt-4 " in model_lower:
+                encoding_name = LEGACY_ENCODING
+
+            # 2. Count Base Tokens
+            base_count = _count_with_encoding(text, encoding_name)
+
+            # 3. Apply Correction Factors for non-native models
+            if "claude" in model_lower:
+                return int(base_count * CLAUDE_FACTOR)
+
+            # Llama/Gemini/GPT use base count
+            return base_count
+
         except Exception as e:
             logger.debug(f"Tiktoken calculation failed: {e}. Falling back to heuristic.")
 
+    # 4. Fallback Heuristic
     return _count_heuristic(text)
 
 
@@ -78,35 +99,15 @@ def is_tiktoken_available() -> bool:
 # -----------------------------------------------------------------------------
 # Internal Helpers
 # -----------------------------------------------------------------------------
-def _get_encoding(model_name: str) -> Any:
+def _count_with_encoding(text: str, encoding_name: str) -> int:
     """
-    Retrieve the best available encoding object from tiktoken.
-    Prioritizes model-specific, then modern generic, then legacy generic.
+    Use tiktoken with a specific encoding.
     """
-    # 1. Try specific model name (e.g., "gpt-5-turbo")
     try:
-        return tiktoken.encoding_for_model(model_name)
-    except KeyError:
-        pass
-
-    # 2. Try Modern Encoding (GPT-4o/5 Standard)
-    try:
-        return tiktoken.get_encoding(MODERN_ENCODING)
+        encoding = tiktoken.get_encoding(encoding_name)
     except ValueError:
-        pass
+        encoding = tiktoken.get_encoding("cl100k_base")
 
-    # 3. Try Legacy Encoding (GPT-4 Standard)
-    try:
-        return tiktoken.get_encoding(LEGACY_ENCODING)
-    except ValueError:
-        return tiktoken.get_encoding("p50k_base")
-
-
-def _count_with_tiktoken(text: str, model: str) -> int:
-    """
-    Use tiktoken for precise counting.
-    """
-    encoding = _get_encoding(model)
     tokens = encoding.encode(text, disallowed_special=())
     return len(tokens)
 
@@ -114,10 +115,6 @@ def _count_with_tiktoken(text: str, model: str) -> int:
 def _count_heuristic(text: str) -> int:
     """
     Approximate tokens based on character count.
-
     Formula: ceil(len(text) / 4)
-    This is a conservative estimate for most modern tokenizers (Tekken, Sentinel, o200k)
-    which are generally more efficient than 4 chars/token, ensuring we don't
-    underestimate the cost/size too significantly.
     """
-    return math.ceil(len(text) / CHARS_PER_TOKEN)
+    return math.ceil(len(text) / CHARS_PER_TOKEN_AVG)

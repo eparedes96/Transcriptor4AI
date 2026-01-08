@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 """
-Unit tests for Configuration Migration logic (V1.1 -> V1.2).
+Unit tests for Configuration Migration logic (V1.1 -> V1.2+).
 """
 
 import json
 import os
 import pytest
-from transcriptor4ai.config import load_app_state, get_default_app_state
+from transcriptor4ai.config import (
+    load_app_state,
+    get_default_app_state,
+    CURRENT_CONFIG_VERSION
+)
 
 
 def test_migration_v1_1_to_v1_2(tmp_path):
@@ -40,6 +44,9 @@ def test_migration_v1_1_to_v1_2(tmp_path):
         assert "last_session" in state
         assert "app_settings" in state
 
+        # Ensure the migrated state adopts the current version
+        assert state["version"] == CURRENT_CONFIG_VERSION
+
         # Check data preservation
         session = state["last_session"]
         assert session["input_path"] == "/legacy/path"
@@ -53,7 +60,7 @@ def test_migration_v1_1_to_v1_2(tmp_path):
         cfg.CONFIG_FILE = orig_file
 
 
-def test_load_fresh_v1_2_state(tmp_path):
+def test_load_fresh_state(tmp_path):
     """Verify loading a fresh state returns defaults if file missing."""
     import transcriptor4ai.config as cfg
     orig_file = cfg.CONFIG_FILE
@@ -61,7 +68,7 @@ def test_load_fresh_v1_2_state(tmp_path):
 
     try:
         state = load_app_state()
-        assert state["version"] == "1.2.0"
+        assert state["version"] == CURRENT_CONFIG_VERSION
         assert state["last_session"]["process_resources"] is False
     finally:
         cfg.CONFIG_FILE = orig_file

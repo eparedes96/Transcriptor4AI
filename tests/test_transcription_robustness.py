@@ -44,16 +44,20 @@ def test_transcription_resilience_to_encoding_errors(bad_files_structure, tmp_pa
     out_dir = tmp_path / "out"
     modules_out = out_dir / "test_modules.txt"
     tests_out = out_dir / "test_tests.txt"
+    resources_out = out_dir / "test_resources.txt"
     errors_out = out_dir / "test_errors.txt"
 
     result = transcribe_code(
         input_path=str(bad_files_structure),
         modules_output_path=str(modules_out),
         tests_output_path=str(tests_out),
+        resources_output_path=str(resources_out),
         error_output_path=str(errors_out),
         process_modules=True,
         process_tests=True,
+        process_resources=False,
         extensions=[".py"],
+        respect_gitignore=False,
         save_error_log=True
     )
 

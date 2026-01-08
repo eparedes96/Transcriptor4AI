@@ -59,7 +59,7 @@ class PipelineResult:
     tree_path: str
 
     # Metrics
-    token_count: int  #
+    token_count: int
 
     # Summary
     summary: Dict[str, Any]
@@ -205,6 +205,7 @@ def run_pipeline(
             extensions=cfg["extensions"],
             include_patterns=cfg["include_patterns"],
             exclude_patterns=cfg["exclude_patterns"],
+            respect_gitignore=bool(cfg.get("respect_gitignore")),
             show_functions=bool(cfg.get("show_functions")),
             show_classes=bool(cfg.get("show_classes")),
             show_methods=bool(cfg.get("show_methods")),

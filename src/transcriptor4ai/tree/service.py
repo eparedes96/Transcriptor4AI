@@ -17,6 +17,7 @@ from transcriptor4ai.filtering import (
     default_extensions,
     default_exclude_patterns,
     default_include_patterns,
+    load_gitignore_patterns,
     is_test,
     matches_any,
     matches_include,
@@ -36,6 +37,7 @@ def generate_directory_tree(
         extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
+        respect_gitignore: bool = True,
         show_functions: bool = False,
         show_classes: bool = False,
         show_methods: bool = False,
@@ -54,6 +56,7 @@ def generate_directory_tree(
         extensions: List of allowed file extensions.
         include_patterns: Regex patterns for inclusion.
         exclude_patterns: Regex patterns for exclusion.
+        respect_gitignore: If True, parse .gitignore and add to exclusions.
         show_functions: If True, parse and show top-level functions.
         show_classes: If True, parse and show top-level classes.
         show_methods: If True (and classes=True), show methods.
@@ -77,8 +80,19 @@ def generate_directory_tree(
 
     input_path_abs = os.path.abspath(input_path)
 
+    # -------------------------
+    # Pattern Compilation
+    # -------------------------
+    # Merge gitignore patterns if requested
+    final_exclusions = list(exclude_patterns)
+    if respect_gitignore:
+        git_patterns = load_gitignore_patterns(input_path_abs)
+        if git_patterns:
+            logger.debug(f"Tree generator loaded {len(git_patterns)} patterns from .gitignore")
+            final_exclusions.extend(git_patterns)
+
     include_rx = compile_patterns(include_patterns)
-    exclude_rx = compile_patterns(exclude_patterns)
+    exclude_rx = compile_patterns(final_exclusions)
 
     # -------------------------
     # Build Structure
@@ -164,14 +178,13 @@ def _build_structure(
 
         # Process Files
         for file_name in files:
-            _, ext = os.path.splitext(file_name)
-            if ext not in extensions:
-                continue
-
-            # Check Patterns
+            # Check Patterns (now includes gitignore patterns)
             if matches_any(file_name, exclude_patterns_rx):
                 continue
             if not matches_include(file_name, include_patterns_rx):
+                continue
+            _, ext = os.path.splitext(file_name)
+            if ext not in extensions:
                 continue
 
             # Check Mode (Tests/Modules)

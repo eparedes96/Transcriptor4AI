@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Integration tests for the transcription pipeline.
 
-Verifies the end-to-end flow, including dry runs, full execution, 
-and overwrite protection logic.
+Verifies the end-to-end flow, covering dry runs, full execution with 
+modern features (Resources, Gitignore, Tokens), and configuration flexibility.
 """
 
 import os
@@ -20,6 +20,9 @@ def source_structure(tmp_path):
     /src/utils.py
     /tests/test_main.py
     /ignored/__init__.py
+    /docs/readme.md           (Resource)
+    .gitignore                (Gitignore rule)
+    secret.key                (Should be ignored if respect_gitignore=True)
     """
     src = tmp_path / "src"
     src.mkdir()
@@ -30,6 +33,15 @@ def source_structure(tmp_path):
     tests = tmp_path / "tests"
     tests.mkdir()
     (tests / "test_main.py").write_text("def test_one(): pass", encoding="utf-8")
+
+    # Resource file
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "readme.md").write_text("# Documentation", encoding="utf-8")
+
+    # Gitignore and ignored file
+    (tmp_path / ".gitignore").write_text("*.key", encoding="utf-8")
+    (tmp_path / "secret.key").write_text("SECRET_API_KEY", encoding="utf-8")
 
     return tmp_path
 
@@ -60,56 +72,93 @@ def test_pipeline_dry_run_does_not_write(source_structure):
         assert len(list(out_dir.iterdir())) == 0
 
 
-def test_pipeline_full_execution(source_structure):
+def test_pipeline_comprehensive_execution(source_structure):
     """
-    Full execution should generate individual files AND the unified context file.
+    Test:
+    - Modules + Tests + Resources enabled.
+    - Gitignore active (should exclude secret.key).
+    - Tree generation.
+    - Token counting.
+    - Unified file assembly.
     """
     config = {
         "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
-        "output_subdir_name": "final",
-        "output_prefix": "res",
+        "output_subdir_name": "full_run",
+        "output_prefix": "all",
         "process_modules": True,
         "process_tests": True,
+        "process_resources": True,
+        "respect_gitignore": True,
         "create_individual_files": True,
         "create_unified_file": True,
-        "generate_tree": True
+        "generate_tree": True,
+        "extensions": [".py", ".md", ".key"]
     }
 
     result = run_pipeline(config, dry_run=False)
 
     assert result.ok is True
-
-    out_dir = source_structure / "final"
+    out_dir = source_structure / "full_run"
     assert out_dir.exists()
 
-    # 1. Check Individual Modules
-    mod_file = out_dir / "res_modules.txt"
-    assert mod_file.exists()
-    content_mod = mod_file.read_text(encoding="utf-8")
-    assert "src/main.py" in content_mod or "src\\main.py" in content_mod
+    # 1. Check Output Files Existence
+    assert (out_dir / "all_modules.txt").exists()
+    assert (out_dir / "all_tests.txt").exists()
+    assert (out_dir / "all_resources.txt").exists()
+    assert (out_dir / "all_tree.txt").exists()
+    assert (out_dir / "all_full_context.txt").exists()
 
-    # 2. Check Individual Tests
-    test_file = out_dir / "res_tests.txt"
-    assert test_file.exists()
-    content_test = test_file.read_text(encoding="utf-8")
-    assert "tests/test_main.py" in content_test or "tests\\test_main.py" in content_test
+    # 2. Check Gitignore Logic (secret.key must be absent)
+    full_text = (out_dir / "all_full_context.txt").read_text(encoding="utf-8")
+    assert "secret.key" not in full_text
+    assert "SECRET_API_KEY" not in full_text
 
-    # 3. Check Individual Tree
-    tree_file = out_dir / "res_tree.txt"
-    assert tree_file.exists()
+    # 3. Check Resource Logic (readme.md must be present)
+    assert "readme.md" in full_text
+    assert "# Documentation" in full_text
 
-    # 4. Check Unified Context File
-    unified_file = out_dir / "res_full_context.txt"
-    assert unified_file.exists()
-    content_unified = unified_file.read_text(encoding="utf-8")
+    # 4. Check Token Count
+    assert result.token_count > 0
+    assert isinstance(result.token_count, int)
 
-    # Unified file should contain headers and content from all parts
-    assert "PROJECT CONTEXT" in content_unified
-    assert "PROJECT STRUCTURE" in content_unified
-    assert "SCRIPTS:" in content_unified
-    assert "TESTS:" in content_unified
-    assert "def main(): pass" in content_unified
+
+def test_pipeline_selective_config_behavior(source_structure):
+    """
+    Test configuration flexibility (Simulate "Legacy" or "Unsafe" mode):
+    - NO Resources (should not generate _resources.txt).
+    - NO Gitignore (should INCLUDE secret.key).
+    """
+    config = {
+        "input_path": str(source_structure),
+        "output_base_dir": str(source_structure),
+        "output_subdir_name": "unsafe_run",
+        "output_prefix": "unsafe",
+        "process_modules": True,
+        "process_tests": True,
+        "process_resources": False,
+        "respect_gitignore": False,
+        "create_individual_files": True,
+        "create_unified_file": True
+    }
+
+    result = run_pipeline(config, dry_run=False)
+    assert result.ok is True
+    out_dir = source_structure / "unsafe_run"
+
+    # 1. Check Resources are missing
+    assert not (out_dir / "unsafe_resources.txt").exists()
+
+    full_text = (out_dir / "unsafe_full_context.txt").read_text(encoding="utf-8")
+    assert "RESOURCES (CONFIG/DATA/DOCS):" not in full_text
+
+    # 2. Check Gitignore ignored (secret.key MUST be present)
+    config["extensions"] = [".py", ".key"]
+    result = run_pipeline(config, overwrite=True)
+    full_text = (out_dir / "unsafe_full_context.txt").read_text(encoding="utf-8")
+
+    assert "secret.key" in full_text
+    assert "SECRET_API_KEY" in full_text
 
 
 def test_pipeline_unified_only(source_structure):

@@ -1,26 +1,33 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.1.1-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.2.1-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-**Transcriptor4AI** is a robust tool designed to prepare codebases for Large Language Models (LLMs) like ChatGPT, Claude, or Copilot.
+**Transcriptor4AI** is an industrial-grade context extraction tool designed for the AI era. It prepares entire codebases for Large Language Models (LLMs) like **GPT-4o**, **Claude 3.5**, or **Llama 3**.
 
-It flattens complex project structures into consolidated text files and generates detailed directory trees with AST analysis (Classes, Functions, Methods), making it effortless to provide context to AI assistants.
+It goes beyond simple text flattening: it provides intelligent token estimation, AST-enhanced directory trees, and resource management, creating a single, optimized context file (`_full_context.txt`) ready for your prompt window.
 
-## 🚀 Features
+---
 
-*   **Flexible Output**: Choose between individual files (separated by type) or a **Unified Context File** (`_full_context.txt`) ready to copy-paste into an LLM.
-*   **Granular Control**: Select exactly what to include: Source Modules, Tests, and/or Directory Tree.
-*   **AST Analysis**: Generates a visual directory tree that "sees inside" files, listing Classes, Functions, and Methods without executing code.
-*   **Dual Interface**:
-    *   **GUI**: Modern interface with a **Simulation Mode**, interactive results window (Open Folder / Copy to Clipboard), and threaded processing.
-    *   **CLI**: Powerful command-line interface for automation and CI/CD pipelines.
-*   **Intelligent Filtering**: Regex-based inclusion/exclusion patterns (ignores `.git`, `__pycache__` by default).
-*   **Robustness**: Thread-safe execution, lazy error logging, and input sanitization.
-*   **Internationalization (i18n)**: Built-in support for multiple languages (Default: English).
+## 🚀 Key Features
+
+### 🧠 Smart Context Management
+*   **Token Estimator**: Real-time estimation of context size using `tiktoken`. Select your target model (GPT, Claude, Llama) to get precise counts before sending data.
+*   **Profile Manager**: Save, load, and delete named configurations (e.g., "Backend Only", "Full Documentation").
+*   **Session Persistence**: The application automatically saves your state on exit. Pick up exactly where you left off.
+
+### 🔍 Advanced Filtering & Security
+*   **Native .gitignore**: Automatically respects your project's ignore rules. No more accidental `node_modules` or secrets in your context.
+*   **Resource Processing**: First-class support for non-code assets. Include `README.md`, `.json` configs, `.yaml` workflows, and `Dockerfiles`.
+*   **Extension Stacks**: One-click configuration for ecosystems like **Python**, **Web**, **C#/.NET**, **Rust**, **Go**, and **DevOps**.
+
+### 🛠️ Core Capabilities
+*   **Flexible Output**: Generate a **Unified Context File** for easy copy-pasting or individual components for documentation.
+*   **AST Analysis**: Visual directory tree that "sees inside" files, listing Classes, Functions, and Methods without executing code.
+*   **Dual Interface**: A modern GUI for visual workflows and a powerful CLI for CI/CD automation.
 
 ---
 
@@ -57,29 +64,29 @@ Launch the visual tool:
 transcriptor-gui
 ```
 
-*   **Content Selection**: Check "Include Modules", "Include Tests", or "Directory Tree".
-*   **Output Format**: Choose "Individual Files", "Unified Context File", or both.
-*   **Simulation**: Use the blue **"SIMULATE"** button to validate paths and see what would be generated without writing to disk.
-*   **Results**: After processing, use the "Copy Unified Output" button to grab the entire context immediately.
+*   **Profiles**: Use the top bar to Load/Save specific configurations.
+*   **Stacks**: Select "Python Data" or "Web Fullstack" to auto-fill extensions.
+*   **Target Model**: Choose your destination LLM (e.g., GPT-4o) for accurate token counts.
+*   **Simulation**: Use **"SIMULATE"** to validate paths and see the projected file list and token count without writing to disk.
 
 ### 2. Command Line Interface (CLI)
-Ideal for scripts or quick operations.
+Ideal for scripts, automation, or quick operations.
 
 **Basic Example:**
 
 ```bash
-transcriptor-cli -i ./my_project -o ./dist --tree --unified-only
+transcriptor-cli -i ./my_project -o ./dist --resources --tree
 ```
 
-**Advanced Example (Unified Output Only):**
+**Advanced Example (Resources + Unified Output):**
 
 ```bash
 transcriptor-cli -i ./src \
                  -o ./output \
                  --unified-only \
+                 --resources \
                  --tree --classes --functions \
-                 --exclude "venv,tests" \
-                 --json
+                 --dry-run
 ```
 
 #### CLI Arguments Reference
@@ -87,18 +94,15 @@ transcriptor-cli -i ./src \
 | Flag | Description |
 | :--- | :--- |
 | `-i`, `--input` | Path to the source directory to process. |
-| `-o`, `--output-base` | Base output directory (a subdirectory is created inside). |
-| `--unified-only` | **New**: Generate ONLY the single `_full_context.txt` file. |
-| `--individual-only` | **New**: Generate ONLY separate files (`_modules.txt`, etc.). |
-| `--no-modules` | **New**: Skip source code processing (enabled by default). |
-| `--no-tests` | **New**: Skip test file processing (enabled by default). |
+| `-o`, `--output-base` | Base output directory. |
+| `--resources` | Include resource files (docs, config, data). |
+| `--no-gitignore` | Disable `.gitignore` parsing (read everything). |
+| `--unified-only` | Generate ONLY the single `_full_context.txt` file. |
 | `--tree` | Generate the directory tree structure. |
 | `--classes` | Include class definitions in the tree. |
 | `--functions` | Include function definitions in the tree. |
 | `--ext` | Comma-separated extensions (e.g., `.py,.js`). |
-| `--exclude` | Regex patterns to ignore (e.g., `venv,node_modules`). |
-| `--dry-run` | Simulate execution without writing files. |
-| `--json` | Output execution result in JSON format (useful for piping). |
+| `--dry-run` | Simulate execution and show **Token Estimate**. |
 
 Use `transcriptor-cli --help` for the full list of options.
 
@@ -106,26 +110,27 @@ Use `transcriptor-cli --help` for the full list of options.
 
 ## ⚙️ Configuration
 
-The application uses a `config.json` file for persistent settings.
-*   **Location**: The file is created in the working directory after the first "Save" in the GUI.
-*   **Defaults**: Smart defaults are applied if the file is missing.
+The application uses a `config.json` file for persistent settings and profiles.
+*   **Location**: OS User Data Directory (e.g., `%LOCALAPPDATA%\Transcriptor4AI` on Windows).
+*   **Structure**: Hierarchical JSON storing `app_settings`, `last_session`, and `saved_profiles`.
 
-**Example `config.json` (v1.1.1):**
+**Example Structure:**
 
 ```json
 {
-    "process_modules": true,
-    "process_tests": true,
-    "create_individual_files": true,
-    "create_unified_file": true,
-    "extensions": [".py", ".ts"],
-    "exclude_patterns": [
-        "^__init__\\.py$",
-        "^(__pycache__|\\.git|node_modules)$"
-    ],
-    "generate_tree": true,
-    "show_classes": true,
-    "save_error_log": true
+    "version": "1.2.0",
+    "last_session": {
+        "process_modules": true,
+        "process_resources": true,
+        "respect_gitignore": true,
+        "target_model": "GPT-4o / GPT-5",
+        "extensions": [".py", ".md", ".json"],
+        "generate_tree": true
+    },
+    "saved_profiles": {
+        "Backend Only": { ... },
+        "Full Documentation": { ... }
+    }
 }
 ```
 
@@ -133,13 +138,13 @@ The application uses a `config.json` file for persistent settings.
 
 ## 📂 Output Structure
 
-After running the tool, the output folder will contain (depending on your selection):
+The output folder will contain (depending on configuration):
 
-1.  **`{prefix}_full_context.txt`**: The master file containing Tree + Scripts + Tests (Ideal for LLMs).
-2.  **`{prefix}_modules.txt`**: Consolidated source code (non-test files).
-3.  **`{prefix}_tests.txt`**: Consolidated test files (files matching `test_*.py` or `*_test.py`).
-4.  **`{prefix}_tree.txt`**: Hierarchical view of the project structure.
-5.  **`{prefix}_errors.txt`**: (Optional) Log of files that could not be read.
+1.  **`{prefix}_full_context.txt`**: The master file (Tree + Scripts + Tests + Resources). **This is what you feed the AI.**
+2.  **`{prefix}_resources.txt`**: Consolidated documentation and config files.
+3.  **`{prefix}_modules.txt`**: Consolidated source code.
+4.  **`{prefix}_tests.txt`**: Consolidated test files.
+5.  **`{prefix}_tree.txt`**: Hierarchical view of the project structure.
 
 ---
 
@@ -160,15 +165,11 @@ pytest -v
 To generate a standalone `.exe` file (Windows) or binary (Linux/Mac):
 
 ```bash
-# Install build tools
+# 1. Install build tools
 pip install pyinstaller
 
-# Generate executable (One-File mode)
-pyinstaller --name "transcriptor4ai" \
-            --onefile \
-            --noconsole \
-            --add-data "src/transcriptor4ai/locales/*.json;transcriptor4ai/locales" \
-            src/transcriptor4ai/main.py
+# 2. Run the build script
+python build.py
 ```
 
 ---

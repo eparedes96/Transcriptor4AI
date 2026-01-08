@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
-CURRENT_CONFIG_VERSION = "1.2.0"
+CURRENT_CONFIG_VERSION = "1.2.1"
 
 # Predefined Extension Stacks (Immutable defaults)
 DEFAULT_STACKS: Dict[str, List[str]] = {

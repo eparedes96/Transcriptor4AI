@@ -279,7 +279,7 @@ def main() -> None:
     log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
     configure_logging(log_conf)
 
-    logger.info("GUI starting (v1.2.0 logic)...")
+    logger.info("GUI starting (v1.2.1 logic)...")
     sg.theme("SystemDefault")
 
     # 2. Load Application State

@@ -346,8 +346,8 @@ def _build_error_result(
         cfg: Dict[str, Any],
         base_path: str,
         final_output_path: str = "",
-        existing_files: List[str] = None,
-        summary_extra: Dict[str, Any] = None
+        existing_files: Optional[List[str]] = None,
+        summary_extra: Optional[Dict[str, Any]] = None
 ) -> PipelineResult:
     return PipelineResult(
         ok=False,
@@ -376,11 +376,11 @@ def _build_success_result(
         base_path: str,
         final_output_path: str,
         existing_files: List[str],
-        trans_res: Dict[str, Any] = None,
-        tree_lines: List[str] = None,
+        trans_res: Optional[Dict[str, Any]] = None,
+        tree_lines: Optional[List[str]] = None,
         tree_path: str = "",
         token_count: int = 0,
-        summary_extra: Dict[str, Any] = None
+        summary_extra: Optional[Dict[str, Any]] = None
 ) -> PipelineResult:
     return PipelineResult(
         ok=True,

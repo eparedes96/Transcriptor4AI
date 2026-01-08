@@ -13,7 +13,7 @@ import platform
 import subprocess
 import threading
 import traceback
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import PySimpleGUI as sg
 
@@ -62,13 +62,20 @@ def _open_file_explorer(path: str) -> None:
         sys_name = platform.system()
         if sys_name == "Windows":
             os.startfile(path)
-        elif sys_name == "Darwin":  # macOS
+        elif sys_name == "Darwin":
             subprocess.Popen(["open", path])
-        else:  # Linux/Unix
+        else:
             subprocess.Popen(["xdg-open", path])
     except Exception as e:
         logger.error(f"Failed to open file explorer: {e}")
         sg.popup_error(f"Could not open folder:\n{e}")
+
+
+def _parse_list_from_string(value: str) -> List[str]:
+    """Helper to convert comma-separated strings from GUI into clean lists."""
+    if not value:
+        return []
+    return [x.strip() for x in value.split(",") if x.strip()]
 
 
 # -----------------------------------------------------------------------------
@@ -315,7 +322,8 @@ def main() -> None:
                         default=config.get("process_resources", False)),
         ],
         [
-            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree",
+                        default=config["generate_tree"], enable_events=True),
         ],
         [
             sg.Text("    └─ AST:", font=("Any", 8)),
@@ -428,6 +436,11 @@ def main() -> None:
 
     window = sg.Window(i18n.t("app.name"), layout, finalize=True, resizable=True)
 
+    # 3.1 Initial UI Constraints (Apply disabled state based on default config)
+    init_tree_enabled = bool(config["generate_tree"])
+    for k in ["show_functions", "show_classes", "show_methods"]:
+        window[k].update(disabled=not init_tree_enabled)
+
     # 4. Event Loop
     while True:
         event, values = window.read()
@@ -450,6 +463,12 @@ def main() -> None:
                 logger.warning(f"Auto-save failed on exit: {e}")
 
             break
+
+        # --- Reactive Logic: Tree Options ---
+        if event == "generate_tree":
+            is_tree_enabled = bool(values["generate_tree"])
+            for k in ["show_functions", "show_classes", "show_methods"]:
+                window[k].update(disabled=not is_tree_enabled)
 
         # --- File Browsing ---
         if event == "btn_browse_in":
@@ -484,7 +503,13 @@ def main() -> None:
                 temp_conf.update(prof_data)
 
                 populate_gui_from_config(window, temp_conf)
-                config.update(temp_conf)  # Update internal state
+                config.update(temp_conf)
+
+                # Update UI Constraints after load
+                loaded_tree_enabled = bool(temp_conf.get("generate_tree"))
+                for k in ["show_functions", "show_classes", "show_methods"]:
+                    window[k].update(disabled=not loaded_tree_enabled)
+
                 sg.popup(f"Profile '{sel_profile}' loaded!")
             else:
                 sg.popup_error(i18n.t("gui.profiles.error_select"))
@@ -493,9 +518,22 @@ def main() -> None:
             name = sg.popup_get_text(i18n.t("gui.profiles.prompt_name"), title="Save Profile")
             if name:
                 name = name.strip()
+
+                # Overwrite Protection
+                if name in app_state.get("saved_profiles", {}):
+                    confirm_msg = i18n.t("gui.profiles.confirm_overwrite_msg", name=name)
+                    confirm_title = i18n.t("gui.profiles.confirm_overwrite_title")
+                    if sg.popup_yes_no(confirm_msg, title=confirm_title, icon="warning") != "Yes":
+                        continue
+
                 # Get current UI state
                 temp_conf = config.copy()
                 update_config_from_gui(temp_conf, values)
+
+                # Explicitly convert comma-separated strings to lists for storage
+                temp_conf["extensions"] = _parse_list_from_string(values.get("extensions", ""))
+                temp_conf["include_patterns"] = _parse_list_from_string(values.get("include_patterns", ""))
+                temp_conf["exclude_patterns"] = _parse_list_from_string(values.get("exclude_patterns", ""))
 
                 # Save to state
                 if "saved_profiles" not in app_state:
@@ -524,6 +562,10 @@ def main() -> None:
         if event == "btn_reset":
             config = cfg.get_default_config()
             populate_gui_from_config(window, config)
+            init_tree_enabled = bool(config["generate_tree"])
+            for k in ["show_functions", "show_classes", "show_methods"]:
+                window[k].update(disabled=not init_tree_enabled)
+
             sg.popup(i18n.t("gui.status.reset"))
             logger.info("Configuration reset to defaults.")
 

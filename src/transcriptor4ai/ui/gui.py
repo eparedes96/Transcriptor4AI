@@ -272,7 +272,7 @@ def main() -> None:
     log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
     configure_logging(log_conf)
 
-    logger.info("GUI starting (v1.2.1 logic)...")
+    logger.info("GUI starting (v1.2.0 logic)...")
     sg.theme("SystemDefault")
 
     # 2. Load Application State
@@ -390,7 +390,7 @@ def main() -> None:
         # --- Filters & Optimization ---
         [sg.Text(i18n.t("gui.labels.stack"), font=("Any", 8, "bold")),
          sg.Combo(stack_names, key="-STACK_SELECTOR-", enable_events=True, readonly=True, size=(30, 1)),
-         sg.Text(i18n.t("gui.labels.target_model"), font=("Any", 8, "bold")),  # V1.2.1
+         sg.Text(i18n.t("gui.labels.target_model"), font=("Any", 8, "bold")),
          sg.Combo(model_names, key="target_model", default_value=config.get("target_model"), readonly=True,
                   size=(25, 1))],
 

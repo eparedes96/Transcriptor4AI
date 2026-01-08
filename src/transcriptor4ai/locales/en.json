@@ -102,6 +102,8 @@
       "saved": "Profile '{name}' saved!",
       "deleted": "Profile deleted.",
       "confirm_delete": "Delete profile '{name}'?",
+      "confirm_overwrite_title": "Profile Exists",
+      "confirm_overwrite_msg": "The profile '{name}' already exists. Overwrite?",
       "error_select": "Please select a valid profile from the list."
     },
     "status": {

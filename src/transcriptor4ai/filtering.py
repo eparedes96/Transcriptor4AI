@@ -85,10 +85,18 @@ def matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
 def is_test(file_name: str) -> bool:
     """
     Detect if a file is a test file based on naming convention.
-    Matches: test_*.py or *_test.py (and typical JS/TS test patterns).
+
+    Matches patterns:
+    - Standard: test_*.py, *_test.py
+    - Java/C#: *Test.java, *Tests.cs, *TestCase.java
+    - Web/Modern: *.spec.ts, *.test.js, *.e2e.js, *.cy.ts
+    - Go: *_test.go
     """
-    return re.match(r"^(test_.*|.*_test|.*\.spec|.*\.test)\.(py|js|ts|jsx|tsx|java|kt|go|rs)$", file_name,
-                    re.IGNORECASE) is not None
+    pattern = (
+        r"^(test_.*|.*_test|.*Test|.*Tests|.*TestCase|.*\.spec|.*\.test|.*\.e2e|.*\.cy)"
+        r"\.(py|js|ts|jsx|tsx|java|kt|go|rs|cs|cpp|c|h|hpp|swift|php)$"
+    )
+    return re.match(pattern, file_name, re.IGNORECASE) is not None
 
 
 def is_resource_file(file_name: str) -> bool:

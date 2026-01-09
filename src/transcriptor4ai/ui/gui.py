@@ -198,7 +198,7 @@ def _show_results_window(result: PipelineResult) -> None:
         [sg.Text(f"{i18n.t('gui.results_window.stats_processed')}:", size=(15, 1)),
          sg.Text(f"{summary.get('processed', 0)}", text_color="white")],
         [sg.Text(f"{i18n.t('gui.results_window.stats_skipped')}:", size=(15, 1)),
-         sg.Text(f"{summary.get('skipped', 0)}", text_color="yellow")],
+         sg.Text(f"{summary.get('skipped', 0)}", text_color="orange")],
         [sg.Text(f"{i18n.t('gui.results_window.stats_errors')}:", size=(15, 1)),
          sg.Text(f"{summary.get('errors', 0)}", text_color="red" if summary.get('errors', 0) > 0 else "gray")],
         [sg.HorizontalSeparator()],
@@ -271,7 +271,7 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
 
 
 def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
-    """Populate UI fields from a config dictionary."""
+    """Populate UI fields from a config dictionary and refresh states."""
     keys = ["input_path", "output_base_dir", "output_subdir_name", "output_prefix",
             "process_modules", "process_tests", "generate_tree", "create_individual_files",
             "create_unified_file", "show_functions", "show_classes", "show_methods",
@@ -285,6 +285,11 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["extensions"].update(",".join(config.get("extensions", [])))
     window["include_patterns"].update(",".join(config.get("include_patterns", [])))
     window["exclude_patterns"].update(",".join(config.get("exclude_patterns", [])))
+
+    # Refresh disabled states based on the loaded Tree setting
+    tree_enabled = bool(config.get("generate_tree", False))
+    for k in ["show_functions", "show_classes", "show_methods"]:
+        window[k].update(disabled=not tree_enabled)
 
 
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
@@ -420,6 +425,7 @@ def main() -> None:
             show_feedback_window()
 
         if event == "Check for Updates":
+            logger.info("Manual update check triggered.")
             window["-UPDATE_BAR-"].update("Checking...")
             threading.Thread(target=_check_updates_thread, args=(window, True), daemon=True).start()
 
@@ -427,16 +433,42 @@ def main() -> None:
             res, is_manual = values[event]
 
             if res.get("has_update"):
-                msg = f"New version available: v{res['latest_version']}. Click to download."
+                latest = res.get('latest_version')
+                logger.info(f"Update found: v{latest}")
+                msg = f"New version available: v{latest}. Click to download."
                 window["-UPDATE_BAR-"].update(msg)
                 if sg.popup_yes_no(
-                        f"A new version (v{res['latest_version']}) is available!\n\n{res['changelog']}\n\nOpen download page?") == "Yes":
+                        f"A new version (v{latest}) is available!\n\n{res['changelog']}\n\nOpen download page?") == "Yes":
                     webbrowser.open(res["download_url"])
-            elif is_manual:
-                window["-UPDATE_BAR-"].update("Up to date.")
-                sg.popup(f"Transcriptor4AI is up to date (v{cfg.CURRENT_CONFIG_VERSION}).")
             else:
-                window["-UPDATE_BAR-"].update("")
+                if is_manual:
+                    logger.info("Update check: Already up to date.")
+                    window["-UPDATE_BAR-"].update("Up to date.")
+                    sg.popup(f"Transcriptor4AI is up to date (v{cfg.CURRENT_CONFIG_VERSION}).")
+                else:
+                    window["-UPDATE_BAR-"].update("")
+
+        # --- Configuration Events ---
+        if event in ("btn_reset", "Reset Config"):
+            logger.info("Configuration reset triggered.")
+            config = cfg.get_default_config()
+            populate_gui_from_config(window, config)
+            sg.popup(i18n.t("gui.status.reset"))
+
+        if event == "btn_load_profile":
+            sel_profile = values.get("-PROFILE_LIST-")
+            if sel_profile and sel_profile in app_state.get("saved_profiles", {}):
+                logger.info(f"Loading profile: {sel_profile}")
+                prof_data = app_state["saved_profiles"][sel_profile]
+                temp_conf = cfg.get_default_config()
+                temp_conf.update(prof_data)
+
+                # Apply data and refresh UI
+                populate_gui_from_config(window, temp_conf)
+                config.update(temp_conf)
+                sg.popup(f"Profile '{sel_profile}' loaded!")
+            else:
+                sg.popup_error(i18n.t("gui.profiles.error_select"))
 
         # --- Standard Events ---
         if event == "generate_tree":

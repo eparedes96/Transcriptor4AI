@@ -1,13 +1,26 @@
-import PyInstaller.__main__
+from __future__ import annotations
+
+"""
+Industrial-grade Build Script for Transcriptor4AI.
+
+Automates the creation of a standalone executable using PyInstaller.
+Handles data resources (locales), icons, and dependency collection
+for network-enabled features.
+"""
+
 import os
 import platform
 import shutil
+import sys
+import PyInstaller.__main__
 
-def clean_artifacts():
-    """Remove previous build artifacts to ensure a clean build."""
-    for folder in ["build", "dist"]:
+
+def _clean_artifacts() -> None:
+    """Remove previous build artifacts to ensure a clean build environment."""
+    folders_to_clean = ["build", "dist"]
+    for folder in folders_to_clean:
         if os.path.exists(folder):
-            print(f"Cleaning {folder}...")
+            print(f"[*] Cleaning {folder}...")
             shutil.rmtree(folder)
 
     spec_file = "transcriptor4ai.spec"
@@ -15,59 +28,66 @@ def clean_artifacts():
         os.remove(spec_file)
 
 
-def build():
+def build() -> None:
+    """
+    Configure and execute the PyInstaller build process.
+    """
     print("======================================================")
-    print("Starting Build Process for Transcriptor4AI v1.3.0")
+    print("Starting Build Process for Transcriptor4AI")
     print("======================================================")
 
-    # 1. Clean previous builds
-    clean_artifacts()
+    # 1. Environment Preparation
+    _clean_artifacts()
 
-    # 2. Determine OS path separator for --add-data
+    # 2. Resource Path Management
     sep = ';' if platform.system() == 'Windows' else ':'
 
-    # 3. Define Data Resources (Locales)
+    # Locales (Translations)
     locales_src = os.path.join("src", "transcriptor4ai", "locales", "*.json")
     locales_dest = os.path.join("transcriptor4ai", "locales")
-    add_data_arg = f"{locales_src}{sep}{locales_dest}"
 
-    # 4. Define Icon Path
+    # Sidecar Updater (Included as data to be extracted or run externally)
+    updater_src = "updater.py"
+
+    data_args = [
+        f"{locales_src}{sep}{locales_dest}",
+        f"{updater_src}{sep}."
+    ]
+
+    # 3. Branding (Icon)
     icon_path = os.path.join("assets", "icon.ico")
 
-    # 5. Base PyInstaller Arguments
+    # 4. PyInstaller Configuration
     args = [
         'main.py',
         '--name=transcriptor4ai',
         '--onefile',
         '--console',
         '--paths=src',
-        f'--add-data={add_data_arg}',
         '--clean',
         '--collect-submodules=requests',
         '--collect-submodules=PySimpleGUI',
     ]
 
-    # 6. Conditionally add Icon
+    # Add data resources
+    for data in data_args:
+        args.append(f'--add-data={data}')
+
+    # Add icon if available
     if os.path.exists(icon_path):
-        print(f"Icon found: {icon_path}")
+        print(f"[*] Icon found: {icon_path}")
         args.append(f'--icon={icon_path}')
     else:
-        print("WARNING: Icon not found in 'assets/icon.ico'. Building with default icon.")
+        print("[!] WARNING: Icon not found in 'assets/icon.ico'. Using default.")
 
-    # 7. OS Specific adjustments
-    if platform.system() == "Windows":
-        pass
-    elif platform.system() == "Darwin":
-        pass
-
-    print(f"Running PyInstaller with args: {args}")
-
-    # 8. Execute Build
+    # 5. Execution
+    print(f"[*] Running PyInstaller with following configuration...")
     try:
         PyInstaller.__main__.run(args)
-        print("\nBuild Complete! Check the 'dist/' folder.")
+        print("\n[+] Build Successful! Executable located in 'dist/' folder.")
     except Exception as e:
-        print(f"\nBUILD FAILED: {e}")
+        print(f"\n[!] CRITICAL BUILD FAILURE: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -3,10 +3,11 @@ from __future__ import annotations
 """
 Standalone Updater Utility for Transcriptor4AI.
 
-This script handles the file swap mechanism:
-1. Waits for the main application process to exit.
-2. Replaces the old executable with the new downloaded version.
-3. Restarts the application.
+This script is independent of the transcriptor4ai package to avoid
+import shadowing conflicts. It handles the binary swap lifecycle:
+1. Process termination wait.
+2. File replacement with rollback safety.
+3. Application restart.
 """
 
 import os
@@ -16,12 +17,22 @@ import subprocess
 import argparse
 import logging
 
+# Configure basic logging for the standalone script
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("updater")
 
 
-def wait_for_pid(pid: int, timeout: int = 30):
-    """Wait for a process ID to terminate."""
+def wait_for_pid(pid: int, timeout: int = 30) -> bool:
+    """
+    Wait for a process ID to terminate.
+
+    Args:
+        pid: Process ID to monitor.
+        timeout: Maximum seconds to wait.
+
+    Returns:
+        True if the process terminated, False on timeout.
+    """
     logger.info(f"Waiting for process {pid} to exit...")
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -33,8 +44,15 @@ def wait_for_pid(pid: int, timeout: int = 30):
     return False
 
 
-def run_update(old_exe: str, new_exe: str, pid: int):
-    """Perform the file swap and restart."""
+def run_update(old_exe: str, new_exe: str, pid: int) -> None:
+    """
+    Perform the file swap and restart the application.
+
+    Args:
+        old_exe: Path to the current executable to be replaced.
+        new_exe: Path to the new version downloaded.
+        pid: PID of the running application to wait for.
+    """
 
     # 1. Wait for the main app to close
     if not wait_for_pid(pid):
@@ -47,31 +65,39 @@ def run_update(old_exe: str, new_exe: str, pid: int):
             logger.error(f"New version not found at: {new_exe}")
             sys.exit(1)
 
-        # On Windows, we often need to wait a fraction longer for locks to release
+        # Buffer time for OS file locks to release
         time.sleep(1)
 
         logger.info(f"Updating {old_exe}...")
 
-        # We use a rename strategy to allow rollback if possible
+        # Rename strategy for atomic-like swap and rollback support
         backup_exe = old_exe + ".old"
         if os.path.exists(backup_exe):
-            os.remove(backup_exe)
+            try:
+                os.remove(backup_exe)
+            except OSError:
+                pass
 
         os.rename(old_exe, backup_exe)
-        os.rename(new_exe, old_exe)
 
-        logger.info("Update applied successfully.")
-
-        # Remove backup
         try:
-            os.remove(backup_exe)
+            os.rename(new_exe, old_exe)
+            logger.info("Update applied successfully.")
+        except Exception as e:
+            logger.error(f"Failed to move new executable: {e}. Rolling back...")
+            if os.path.exists(backup_exe):
+                os.rename(backup_exe, old_exe)
+            raise
+
+        # Cleanup backup
+        try:
+            if os.path.exists(backup_exe):
+                os.remove(backup_exe)
         except Exception:
             pass
 
     except Exception as e:
-        logger.error(f"Failed to apply update: {e}")
-        if os.path.exists(old_exe + ".old") and not os.path.exists(old_exe):
-            os.rename(old_exe + ".old", old_exe)
+        logger.error(f"Critical error during swap: {e}")
         sys.exit(1)
 
     # 3. Restart the application
@@ -80,13 +106,14 @@ def run_update(old_exe: str, new_exe: str, pid: int):
         if sys.platform == "win32":
             os.startfile(old_exe)
         else:
-            subprocess.Popen([old_exe])
+            subprocess.Popen([old_exe], start_new_session=True)
     except Exception as e:
         logger.error(f"Failed to restart application: {e}")
         sys.exit(1)
 
 
-def main():
+def main() -> None:
+    """Entry point for the updater CLI."""
     parser = argparse.ArgumentParser(description="Transcriptor4AI Sidecar Updater")
     parser.add_argument("--pid", type=int, required=True, help="PID of the process to wait for")
     parser.add_argument("--old", type=str, required=True, help="Path to the current executable")
@@ -94,11 +121,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Give the OS a moment to initialize the updater process
+    # Safety delay
     time.sleep(0.5)
 
     run_update(args.old, args.new, args.pid)
-    logger.info("Updater finished.")
+    logger.info("Updater lifecycle finished.")
 
 
 if __name__ == "__main__":

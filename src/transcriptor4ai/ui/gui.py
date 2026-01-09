@@ -6,6 +6,7 @@ Graphical User Interface (GUI) for transcriptor4ai.
 Implemented using PySimpleGUI. Manages user interactions, threaded 
 pipeline execution, persistent configuration, and community feedback.
 Ensures semantic layout for AST options and update lifecycle management.
+Includes a pro-active Smart Error Reporter for critical failure analysis.
 """
 
 import logging
@@ -70,6 +71,12 @@ def _submit_feedback_thread(window: sg.Window, payload: Dict[str, Any]) -> None:
     """Submit feedback in a background thread."""
     success, msg = network.submit_feedback(payload)
     window.write_event_value("-FEEDBACK-SUBMITTED-", (success, msg))
+
+
+def _submit_error_report_thread(window: sg.Window, payload: Dict[str, Any]) -> None:
+    """Submit a technical crash report in a background thread."""
+    success, msg = network.submit_error_report(payload)
+    window.write_event_value("-ERROR-REPORT-SUBMITTED-", (success, msg))
 
 
 # -----------------------------------------------------------------------------
@@ -161,24 +168,82 @@ def show_feedback_window() -> None:
 
 
 def show_crash_modal(error_msg: str, stack_trace: str) -> None:
-    """Display a technical modal for critical unhandled exceptions."""
+    """
+    Display a technical modal for critical unhandled exceptions.
+    Allows users to provide context and send a report to developers.
+    """
     layout = [
         [sg.Text("⚠️ Critical Error Detected", font=("Any", 14, "bold"), text_color="red")],
         [sg.Text("The application has encountered an unexpected problem.")],
-        [sg.Multiline(f"Error: {error_msg}\n\n{stack_trace}", size=(70, 15), font=("Courier", 8), disabled=True)],
+
+        # Technical details section
+        [sg.Multiline(f"Error: {error_msg}\n\n{stack_trace}",
+                      size=(75, 10),
+                      font=("Courier", 8),
+                      disabled=True,
+                      background_color="#F0F0F0")],
+
+        [sg.HorizontalSeparator()],
+
+        # User context section
+        [sg.Text("What were you doing when this happened? (Optional):", font=("Any", 9, "bold"))],
+        [sg.Multiline(key="-CRASH_COMMENT-", size=(75, 3),
+                      tooltip="E.g.: I was loading a profile while the scan was running.")],
+
+        [sg.Text("Note: Technical logs and system info will be attached to the report.",
+                 font=("Any", 7), text_color="gray")],
+
         [
             sg.Button("Copy to Clipboard", key="-COPY_ERR-"),
-            sg.Button("Close", key="-EXIT_ERR-")
-        ]
+            sg.Button("Send Error Report", key="-SEND_REPORT-", button_color="green"),
+            sg.Push(),
+            sg.Button("Close", key="-EXIT_ERR-", button_color="red")
+        ],
+        [sg.Text("", key="-REPORT_STATUS-", visible=False, font=("Any", 9, "bold"))]
     ]
-    window = sg.Window("Crash Reporter", layout, modal=True)
+
+    window = sg.Window("Crash Reporter", layout, modal=True, finalize=True)
+
     while True:
-        event, _ = window.read()
+        event, values = window.read()
+
         if event in (sg.WIN_CLOSED, "-EXIT_ERR-"):
             break
+
         if event == "-COPY_ERR-":
-            sg.clipboard_set(stack_trace)
-            sg.popup_quick_message("Copied!")
+            sg.clipboard_set(f"Error: {error_msg}\n\n{stack_trace}")
+            sg.popup_quick_message("Copied to clipboard!")
+
+        if event == "-SEND_REPORT-":
+            window["-SEND_REPORT-"].update(disabled=True)
+            window["-REPORT_STATUS-"].update("Sending report...", visible=True, text_color="blue")
+
+            payload = {
+                "error": error_msg,
+                "stack_trace": stack_trace,
+                "user_comment": values.get("-CRASH_COMMENT-", ""),
+                "app_version": cfg.CURRENT_CONFIG_VERSION,
+                "os": platform.system(),
+                "logs": get_recent_logs(150)
+            }
+
+            threading.Thread(
+                target=_submit_error_report_thread,
+                args=(window, payload),
+                daemon=True
+            ).start()
+
+        if event == "-ERROR-REPORT-SUBMITTED-":
+            success, msg = values[event]
+            if success:
+                window["-REPORT_STATUS-"].update("Report sent! Thank you.", text_color="green")
+                sg.popup("Error report submitted successfully. We will investigate this issue.")
+                break
+            else:
+                window["-REPORT_STATUS-"].update("Failed to send report.", text_color="red")
+                window["-SEND_REPORT-"].update(disabled=False)
+                sg.popup_error(f"Error report failed:\n{msg}")
+
     window.close()
 
 
@@ -286,9 +351,11 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["include_patterns"].update(",".join(config.get("include_patterns", [])))
     window["exclude_patterns"].update(",".join(config.get("exclude_patterns", [])))
 
+    # Reset Stack selection combo to default visual state
     if "-STACK-" in window.AllKeysDict:
         window["-STACK-"].update(value="-- Select --")
 
+    # Refresh disabled states based on the loaded Tree setting
     tree_enabled = bool(config.get("generate_tree", False))
     for k in ["show_functions", "show_classes", "show_methods"]:
         window[k].update(disabled=not tree_enabled)
@@ -519,8 +586,7 @@ def main() -> None:
                 else:
                     sg.popup_error(f"Error: {res.error}")
             elif isinstance(res, Exception):
-                tb = traceback.format_exc()
-                show_crash_modal(str(res), tb)
+                show_crash_modal(str(res), traceback.format_exc())
 
     window.close()
 

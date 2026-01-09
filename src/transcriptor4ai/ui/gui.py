@@ -286,7 +286,9 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["include_patterns"].update(",".join(config.get("include_patterns", [])))
     window["exclude_patterns"].update(",".join(config.get("exclude_patterns", [])))
 
-    # Refresh disabled states based on the loaded Tree setting
+    if "-STACK-" in window.AllKeysDict:
+        window["-STACK-"].update(value="-- Select --")
+
     tree_enabled = bool(config.get("generate_tree", False))
     for k in ["show_functions", "show_classes", "show_methods"]:
         window[k].update(disabled=not tree_enabled)
@@ -337,7 +339,7 @@ def main() -> None:
         sg.Button("Feedback Hub", key="btn_feedback", button_color=("white", "#4A90E2"), font=("Any", 8, "bold"))
     ]]
 
-    # Content selection layout with hierarchical Tree/AST grouping
+    # Content selection layout with proper visual hierarchy
     frame_content = [
         [
             sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),
@@ -348,7 +350,9 @@ def main() -> None:
         [
             sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"],
                         enable_events=True),
-            sg.Text(" └─ AST symbols:", font=("Any", 8)),
+        ],
+        [
+            sg.Text("      └─ AST symbols:", font=("Any", 8)),
             sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"],
                         font=("Any", 8)),
             sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", default=config["show_classes"],

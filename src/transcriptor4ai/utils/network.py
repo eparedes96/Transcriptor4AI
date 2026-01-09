@@ -40,12 +40,7 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
         current_version: The semantic version string of the running application.
 
     Returns:
-        A dictionary containing:
-        - 'has_update' (bool): True if a newer version exists.
-        - 'latest_version' (str): The version string found on the server.
-        - 'download_url' (str): URL to the release page.
-        - 'changelog' (str): Release notes from the server.
-        - 'error' (Optional[str]): Error message if the request failed.
+        A dictionary containing update status, latest version and changelog.
     """
     result: Dict[str, Any] = {
         "has_update": False,
@@ -56,26 +51,34 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
     }
 
     headers = {"User-Agent": USER_AGENT}
+    logger.info(f"Checking for updates... (Local version: v{current_version})")
 
     try:
         response = requests.get(GITHUB_API_URL, headers=headers, timeout=TIMEOUT)
         response.raise_for_status()
         data = response.json()
 
-        # Clean tag
+        # Clean tag from GitHub (often starts with 'v')
         latest_tag = data.get("tag_name", "").lstrip("v")
 
+        logger.info(f"Update check: Remote version found is v{latest_tag}")
+
         if _is_newer(current_version, latest_tag):
+            logger.info(f"Status: New version available! (v{current_version} -> v{latest_tag})")
             result["has_update"] = True
             result["latest_version"] = latest_tag
             result["download_url"] = data.get("html_url", "")
             result["changelog"] = data.get("body", "No changelog provided.")
+        else:
+            logger.info("Status: Application is up to date.")
 
     except requests.exceptions.RequestException as e:
-        logger.error(f"GitHub API update check failed: {e}")
-        result["error"] = str(e)
+        msg = f"GitHub API update check failed: {e}"
+        logger.error(msg)
+        result["error"] = msg
     except Exception as e:
-        logger.error(f"Unexpected error during update check: {e}")
+        msg = f"Unexpected error during update check: {e}"
+        logger.error(msg)
         result["error"] = "Unexpected local error"
 
     return result
@@ -122,11 +125,22 @@ def _is_newer(current: str, latest: str) -> bool:
     """
     try:
         def parse(v: str) -> Tuple[int, ...]:
-            return tuple(map(int, v.split(".")))
+            # Filter out non-numeric parts if any (e.g. 1.3.0-beta)
+            parts = []
+            for p in v.split("."):
+                # Take only the digit part
+                clean_p = "".join(filter(str.isdigit, p))
+                parts.append(int(clean_p) if clean_p else 0)
+            return tuple(parts)
 
-        return parse(latest) > parse(current)
-    except (ValueError, AttributeError):
-        logger.warning(f"Version comparison failed for current='{current}' latest='{latest}'")
+        v_current = parse(current)
+        v_latest = parse(latest)
+
+        logger.debug(f"Comparing semantic versions: Local{v_current} vs Remote{v_latest}")
+        return v_latest > v_current
+
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Version comparison failed for current='{current}' latest='{latest}'. Error: {e}")
         return False
 
 

@@ -165,7 +165,7 @@ def show_crash_modal(error_msg: str, stack_trace: str) -> None:
     layout = [
         [sg.Text("⚠️ Critical Error Detected", font=("Any", 14, "bold"), text_color="red")],
         [sg.Text("The application has encountered an unexpected problem.")],
-        [sg.Multiline(f"Error: {error_msg}\n\n{stack_trace}", size=(70, 15), font=("Courier", 8), readonly=True)],
+        [sg.Multiline(f"Error: {error_msg}\n\n{stack_trace}", size=(70, 15), font=("Courier", 8), disabled=True)],
         [
             sg.Button("Copy to Clipboard", key="-COPY_ERR-"),
             sg.Button("Close", key="-EXIT_ERR-")
@@ -339,7 +339,7 @@ def main() -> None:
         sg.Button("Feedback Hub", key="btn_feedback", button_color=("white", "#4A90E2"), font=("Any", 8, "bold"))
     ]]
 
-    # Content selection layout with proper visual hierarchy
+    # Content selection layout with hierarchical visual grouping
     frame_content = [
         [
             sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),

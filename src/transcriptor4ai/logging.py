@@ -231,3 +231,23 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
 def get_logger(name: str) -> logging.Logger:
     """Convenience accessor for named loggers."""
     return logging.getLogger(name)
+
+
+def get_recent_logs(n_lines: int = 100) -> str:
+    """
+    Retrieve the last N lines from the active application log file.
+    Useful for crash reporting and feedback attachments.
+
+    Returns:
+        String containing the concatenated log lines.
+    """
+    log_path = get_default_gui_log_path()
+    if not os.path.exists(log_path):
+        return "Log file not found."
+
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+            return "".join(lines[-n_lines:])
+    except Exception as e:
+        return f"Error retrieving logs: {e}"

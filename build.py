@@ -3,7 +3,6 @@ import os
 import platform
 import shutil
 
-
 def clean_artifacts():
     """Remove previous build artifacts to ensure a clean build."""
     for folder in ["build", "dist"]:
@@ -17,7 +16,9 @@ def clean_artifacts():
 
 
 def build():
-    print("Starting Build Process for Transcriptor4AI...")
+    print("======================================================")
+    print("Starting Build Process for Transcriptor4AI v1.3.0")
+    print("======================================================")
 
     # 1. Clean previous builds
     clean_artifacts()
@@ -25,7 +26,7 @@ def build():
     # 2. Determine OS path separator for --add-data
     sep = ';' if platform.system() == 'Windows' else ':'
 
-    # 3. Define Data Resources
+    # 3. Define Data Resources (Locales)
     locales_src = os.path.join("src", "transcriptor4ai", "locales", "*.json")
     locales_dest = os.path.join("transcriptor4ai", "locales")
     add_data_arg = f"{locales_src}{sep}{locales_dest}"
@@ -42,6 +43,8 @@ def build():
         '--paths=src',
         f'--add-data={add_data_arg}',
         '--clean',
+        '--collect-submodules=requests',
+        '--collect-submodules=PySimpleGUI',
     ]
 
     # 6. Conditionally add Icon
@@ -51,12 +54,20 @@ def build():
     else:
         print("WARNING: Icon not found in 'assets/icon.ico'. Building with default icon.")
 
+    # 7. OS Specific adjustments
+    if platform.system() == "Windows":
+        pass
+    elif platform.system() == "Darwin":
+        pass
+
     print(f"Running PyInstaller with args: {args}")
 
-    # 7. Execute
-    PyInstaller.__main__.run(args)
-
-    print("\nBuild Complete! Check the 'dist/' folder.")
+    # 8. Execute Build
+    try:
+        PyInstaller.__main__.run(args)
+        print("\nBuild Complete! Check the 'dist/' folder.")
+    except Exception as e:
+        print(f"\nBUILD FAILED: {e}")
 
 
 if __name__ == "__main__":

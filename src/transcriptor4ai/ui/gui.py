@@ -4,7 +4,7 @@ from __future__ import annotations
 Graphical User Interface (GUI) for transcriptor4ai.
 
 Implemented using PySimpleGUI. Manages user interactions, threaded 
-pipeline execution, and persistent configuration.
+pipeline execution, persistent configuration, and community feedback.
 """
 
 import logging
@@ -13,33 +13,30 @@ import platform
 import subprocess
 import threading
 import traceback
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import PySimpleGUI as sg
 
 from transcriptor4ai import config as cfg
 from transcriptor4ai import paths
-from transcriptor4ai.logging import configure_logging, LoggingConfig, get_default_gui_log_path
+from transcriptor4ai.logging import (
+    configure_logging,
+    LoggingConfig,
+    get_default_gui_log_path,
+    get_recent_logs
+)
 from transcriptor4ai.validate_config import validate_config
 from transcriptor4ai.pipeline import run_pipeline, PipelineResult
 from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.utils import network
 
 logger = logging.getLogger(__name__)
 
 
 # -----------------------------------------------------------------------------
-# Threading Helper
+# Threading Helpers
 # -----------------------------------------------------------------------------
-def _run_pipeline_thread(
-        window: sg.Window,
-        config: Dict[str, Any],
-        overwrite: bool,
-        dry_run: bool
-) -> None:
-    """
-    Wrapper to execute the pipeline in a separate thread.
-    Sends the result back to the main GUI thread via window event.
-    """
+def _run_pipeline_thread(window: sg.Window, config: Dict[str, Any], overwrite: bool, dry_run: bool) -> None:
     try:
         result = run_pipeline(config, overwrite=overwrite, dry_run=dry_run)
         window.write_event_value("-THREAD-DONE-", result)
@@ -48,16 +45,24 @@ def _run_pipeline_thread(
         window.write_event_value("-THREAD-DONE-", e)
 
 
+def _check_updates_thread(window: sg.Window) -> None:
+    """Check for updates in a background thread."""
+    res = network.check_for_updates(cfg.CURRENT_CONFIG_VERSION)
+    if res.get("has_update"):
+        window.write_event_value("-UPDATE-FOUND-", res)
+
+
+def _submit_feedback_thread(window: sg.Window, payload: Dict[str, Any]) -> None:
+    """Submit feedback in a background thread."""
+    success, msg = network.submit_feedback(payload)
+    window.write_event_value("-FEEDBACK-SUBMITTED-", (success, msg))
+
+
 # -----------------------------------------------------------------------------
 # System Helpers
 # -----------------------------------------------------------------------------
 def _open_file_explorer(path: str) -> None:
-    """
-    Open the file explorer at the specified path in a cross-platform way.
-    """
-    if not os.path.exists(path):
-        return
-
+    if not os.path.exists(path): return
     try:
         sys_name = platform.system()
         if sys_name == "Windows":
@@ -72,260 +77,255 @@ def _open_file_explorer(path: str) -> None:
 
 
 def _parse_list_from_string(value: str) -> List[str]:
-    """Helper to convert comma-separated strings from GUI into clean lists."""
-    if not value:
-        return []
+    if not value: return []
     return [x.strip() for x in value.split(",") if x.strip()]
+
+
+# -----------------------------------------------------------------------------
+# Community & Feedback Windows
+# -----------------------------------------------------------------------------
+def show_feedback_window() -> None:
+    """Display the Feedback Hub window."""
+    layout = [
+        [sg.Text("Feedback Hub", font=("Any", 14, "bold"))],
+        [sg.Text("Help us improve Transcriptor4AI with your suggestions or bug reports.")],
+        [sg.Text("Type:"), sg.Combo(["Bug Report", "Feature Request", "Other"], key="-FB_TYPE-", readonly=True,
+                                    default_value="Bug Report")],
+        [sg.Text("Subject:"), sg.Input(key="-FB_SUB-", expand_x=True)],
+        [sg.Text("Message:")],
+        [sg.Multiline(key="-FB_MSG-", size=(60, 10), expand_x=True)],
+        [sg.Checkbox("Include recent logs (Recommended for bugs)", key="-FB_LOGS-", default=True)],
+        [
+            sg.Button("Send Feedback", key="-SEND_FB-", button_color="green"),
+            sg.Button("Cancel", key="-CANCEL_FB-")
+        ],
+        [sg.Text("", key="-FB_STATUS-", visible=False)]
+    ]
+
+    fb_window = sg.Window("Send Feedback", layout, modal=True, finalize=True)
+
+    while True:
+        event, values = fb_window.read()
+        if event in (sg.WIN_CLOSED, "-CANCEL_FB-"): break
+
+        if event == "-SEND_FB-":
+            if not values["-FB_SUB-"] or not values["-FB_MSG-"]:
+                sg.popup_error("Please fill in both Subject and Message.")
+                continue
+
+            fb_window["-SEND_FB-"].update(disabled=True)
+            fb_window["-FB_STATUS-"].update("Sending...", visible=True, text_color="blue")
+
+            payload = {
+                "type": values["-FB_TYPE-"],
+                "subject": values["-FB_SUB-"],
+                "message": values["-FB_MSG-"],
+                "version": cfg.CURRENT_CONFIG_VERSION,
+                "os": platform.system()
+            }
+            if values["-FB_LOGS-"]:
+                payload["logs"] = get_recent_logs(100)
+
+            threading.Thread(target=_submit_feedback_thread, args=(fb_window, payload), daemon=True).start()
+
+        if event == "-FEEDBACK-SUBMITTED-":
+            success, msg = values[event]
+            if success:
+                sg.popup("Thank you! Your feedback has been sent.")
+                break
+            else:
+                sg.popup_error(f"Failed to send feedback:\n{msg}")
+                fb_window["-SEND_FB-"].update(disabled=False)
+                fb_window["-FB_STATUS-"].update("Error", text_color="red")
+
+    fb_window.close()
+
+
+def show_crash_modal(error_msg: str, stack_trace: str) -> None:
+    """Modal for critical unhandled exceptions."""
+    layout = [
+        [sg.Text("⚠️ Critical Error Detected", font=("Any", 14, "bold"), text_color="red")],
+        [sg.Text("The application has encountered an unexpected problem.")],
+        [sg.Multiline(f"Error: {error_msg}\n\n{stack_trace}", size=(70, 15), font=("Courier", 8), readonly=True)],
+        [
+            sg.Button("Copy to Clipboard", key="-COPY_ERR-"),
+            sg.Button("Close", key="-EXIT_ERR-")
+        ]
+    ]
+    window = sg.Window("Crash Reporter", layout, modal=True)
+    while True:
+        event, _ = window.read()
+        if event in (sg.WIN_CLOSED, "-EXIT_ERR-"): break
+        if event == "-COPY_ERR-":
+            sg.clipboard_set(stack_trace)
+            sg.popup_quick_message("Copied!")
+    window.close()
 
 
 # -----------------------------------------------------------------------------
 # Results Window
 # -----------------------------------------------------------------------------
 def _show_results_window(result: PipelineResult) -> None:
-    """
-    Display a modal window with detailed results and post-process actions.
-    """
     summary = result.summary or {}
     dry_run = summary.get("dry_run", False)
-
-    # 1. Determine Header
-    if dry_run:
-        header_text = i18n.t("gui.results_window.dry_run_header", default="SIMULATION COMPLETE")
-        header_color = "#007ACC"
-        icon_char = "ℹ"
-    else:
-        header_text = i18n.t("gui.results_window.success_header", default="PROCESS COMPLETED")
-        header_color = "green"
-        icon_char = "✔"
-
-    # 2. Prepare Stats Data
-    token_str = f"{result.token_count:,}" if result.token_count > 0 else "N/A"
+    header_text = i18n.t("gui.results_window.dry_run_header") if dry_run else i18n.t(
+        "gui.results_window.success_header")
+    header_color = "#007ACC" if dry_run else "green"
+    icon_char = "ℹ" if dry_run else "✔"
 
     stats_layout = [
-        [sg.Text(f"{i18n.t('gui.results_window.stats_processed', default='Processed')}:", size=(15, 1)),
+        [sg.Text(f"{i18n.t('gui.results_window.stats_processed')}:", size=(15, 1)),
          sg.Text(f"{summary.get('processed', 0)}", text_color="white")],
-        [sg.Text(f"{i18n.t('gui.results_window.stats_skipped', default='Skipped')}:", size=(15, 1)),
+        [sg.Text(f"{i18n.t('gui.results_window.stats_skipped')}:", size=(15, 1)),
          sg.Text(f"{summary.get('skipped', 0)}", text_color="yellow")],
-        [sg.Text(f"{i18n.t('gui.results_window.stats_errors', default='Errors')}:", size=(15, 1)),
+        [sg.Text(f"{i18n.t('gui.results_window.stats_errors')}:", size=(15, 1)),
          sg.Text(f"{summary.get('errors', 0)}", text_color="red" if summary.get('errors', 0) > 0 else "gray")],
         [sg.HorizontalSeparator()],
         [sg.Text("Est. Tokens:", size=(15, 1), font=("Any", 10, "bold")),
-         sg.Text(token_str, text_color="#569CD6", font=("Any", 10, "bold"))]
+         sg.Text(f"{result.token_count:,}", text_color="#569CD6", font=("Any", 10, "bold"))]
     ]
 
-    # 3. Prepare Files List
     gen_files = summary.get("generated_files", {})
     files_list = []
-
-    # Unified file check
     unified_path = gen_files.get("unified")
     has_unified = bool(unified_path and os.path.exists(unified_path))
 
-    # Add items to display list
     for key, path in gen_files.items():
-        if path:
-            name = os.path.basename(path)
-            files_list.append(f"[{key.upper()}] {name}")
+        if path: files_list.append(f"[{key.upper()}] {os.path.basename(path)}")
 
-    # Tree check
     tree_info = summary.get("tree", {})
-    if tree_info.get("generated"):
-        if tree_info.get("path"):
-            name = os.path.basename(tree_info.get("path"))
-            files_list.append(f"[TREE] {name} ({tree_info.get('lines')} lines)")
+    if tree_info.get("generated") and tree_info.get("path"):
+        files_list.append(f"[TREE] {os.path.basename(tree_info.get('path'))} ({tree_info.get('lines')} lines)")
 
-    if dry_run:
-        # In dry run, 'will_generate' is the key
-        files_list = [f"[PENDING] {os.path.basename(f)}" for f in summary.get("will_generate", [])]
-
-    # 4. Layout
     layout = [
         [sg.Text(icon_char, font=("Any", 24), text_color=header_color),
          sg.Text(header_text, font=("Any", 14, "bold"), text_color=header_color)],
         [sg.HorizontalSeparator()],
         [sg.Column(stats_layout)],
-        [sg.Text(i18n.t("gui.results_window.files_label", default="Generated Files:"))],
-        [sg.Listbox(values=files_list, size=(60, 6), key="-FILES_LIST-", no_scrollbar=False, expand_x=True)],
-        [sg.Text(result.final_output_path, font=("Any", 8), text_color="gray", expand_x=True)],
+        [sg.Text(i18n.t("gui.results_window.files_label"))],
+        [sg.Listbox(values=files_list, size=(60, 6), key="-FILES_LIST-", expand_x=True)],
+        [sg.Text(result.final_output_path, font=("Any", 8), text_color="gray")],
         [sg.HorizontalSeparator()],
         [
-            sg.Button(i18n.t("gui.results_window.btn_open", default="Open Folder"), key="-OPEN-"),
-            sg.Button(i18n.t("gui.results_window.btn_copy", default="Copy Unified Output"),
-                      key="-COPY-",
-                      disabled=(not has_unified or dry_run)),
+            sg.Button(i18n.t("gui.results_window.btn_open"), key="-OPEN-"),
+            sg.Button(i18n.t("gui.results_window.btn_copy"), key="-COPY-", disabled=(not has_unified or dry_run)),
             sg.Push(),
-            sg.Button(i18n.t("gui.results_window.btn_close", default="Close"), key="-CLOSE-",
-                      button_color=("white", "red"))
+            sg.Button(i18n.t("gui.results_window.btn_close"), key="-CLOSE-", button_color=("white", "red"))
         ]
     ]
-
-    res_window = sg.Window(i18n.t("gui.results_window.title", default="Result"), layout, modal=True, finalize=True)
-
-    # 5. Event Loop for Modal
+    res_window = sg.Window(i18n.t("gui.results_window.title"), layout, modal=True, finalize=True)
     while True:
-        event, values = res_window.read()
-
-        if event in (sg.WIN_CLOSED, "-CLOSE-"):
-            break
-
-        if event == "-OPEN-":
-            _open_file_explorer(result.final_output_path)
-
+        event, _ = res_window.read()
+        if event in (sg.WIN_CLOSED, "-CLOSE-"): break
+        if event == "-OPEN-": _open_file_explorer(result.final_output_path)
         if event == "-COPY-":
             if has_unified:
                 try:
                     with open(unified_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    sg.clipboard_set(content)
-                    sg.popup_quick_message(i18n.t("gui.results_window.copied_msg", default="Copied to clipboard!"),
-                                           background_color="green", text_color="white")
+                        sg.clipboard_set(f.read())
+                    sg.popup_quick_message(i18n.t("gui.results_window.copied_msg"))
                 except Exception as e:
-                    sg.popup_error(f"Failed to copy file:\n{e}")
-
+                    sg.popup_error(f"Copy failed: {e}")
     res_window.close()
 
 
 # -----------------------------------------------------------------------------
-# GUI: Config Helpers
+# GUI Config Helpers
 # -----------------------------------------------------------------------------
 def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
-    """Update the config dictionary with values from the GUI window."""
-    config["input_path"] = values["input_path"]
-    config["output_base_dir"] = values["output_base_dir"]
-    config["output_subdir_name"] = values["output_subdir_name"]
-    config["output_prefix"] = values["output_prefix"]
+    for k in ["input_path", "output_base_dir", "output_subdir_name", "output_prefix", "target_model"]:
+        config[k] = values.get(k)
+    for k in ["process_modules", "process_tests", "process_resources", "generate_tree",
+              "create_individual_files", "create_unified_file", "show_functions",
+              "show_classes", "show_methods", "print_tree", "save_error_log", "respect_gitignore"]:
+        config[k] = bool(values.get(k))
 
-    # Content Selection
-    config["process_modules"] = bool(values.get("process_modules"))
-    config["process_tests"] = bool(values.get("process_tests"))
-    config["process_resources"] = bool(values.get("process_resources"))
-    config["generate_tree"] = bool(values.get("generate_tree"))
-
-    # Output Format
-    config["create_individual_files"] = bool(values.get("create_individual_files"))
-    config["create_unified_file"] = bool(values.get("create_unified_file"))
-
-    # Filters & Models
-    config["extensions"] = values.get("extensions", "")
-    config["include_patterns"] = values.get("include_patterns", "")
-    config["exclude_patterns"] = values.get("exclude_patterns", "")
-    config["respect_gitignore"] = bool(values.get("respect_gitignore"))
-    config["target_model"] = values.get("target_model", "GPT-4o / GPT-5")
-
-    # AST Options
-    config["show_functions"] = bool(values.get("show_functions"))
-    config["show_classes"] = bool(values.get("show_classes"))
-    config["show_methods"] = bool(values.get("show_methods"))
-    config["print_tree"] = bool(values.get("print_tree"))
-
-    # Logging
-    config["save_error_log"] = bool(values.get("save_error_log"))
+    config["extensions"] = _parse_list_from_string(values.get("extensions", ""))
+    config["include_patterns"] = _parse_list_from_string(values.get("include_patterns", ""))
+    config["exclude_patterns"] = _parse_list_from_string(values.get("exclude_patterns", ""))
 
 
 def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
-    """Populate the GUI fields with values from the config dictionary."""
-    window["input_path"].update(config["input_path"])
-    window["output_base_dir"].update(config["output_base_dir"])
-    window["output_subdir_name"].update(config["output_subdir_name"])
-    window["output_prefix"].update(config["output_prefix"])
+    keys = ["input_path", "output_base_dir", "output_subdir_name", "output_prefix",
+            "process_modules", "process_tests", "generate_tree", "create_individual_files",
+            "create_unified_file", "show_functions", "show_classes", "show_methods",
+            "print_tree", "save_error_log", "respect_gitignore"]
+    for k in keys:
+        if k in window.AllKeysDict: window[k].update(config.get(k))
 
-    # Content Selection
-    window["process_modules"].update(config["process_modules"])
-    window["process_tests"].update(config["process_tests"])
     window["process_resources"].update(config.get("process_resources", False))
-    window["generate_tree"].update(config["generate_tree"])
-
-    # Output Format
-    window["create_individual_files"].update(config["create_individual_files"])
-    window["create_unified_file"].update(config["create_unified_file"])
-
-    # Filters & Models
-    exts = config["extensions"] if isinstance(config["extensions"], list) else []
-    incl = config["include_patterns"] if isinstance(config["include_patterns"], list) else []
-    excl = config["exclude_patterns"] if isinstance(config["exclude_patterns"], list) else []
-
-    window["extensions"].update(",".join(exts))
-    window["include_patterns"].update(",".join(incl))
-    window["exclude_patterns"].update(",".join(excl))
-    window["respect_gitignore"].update(config.get("respect_gitignore", True))
     window["target_model"].update(config.get("target_model", "GPT-4o / GPT-5"))
-
-    # AST & Options
-    window["show_functions"].update(config["show_functions"])
-    window["show_classes"].update(config["show_classes"])
-    window["show_methods"].update(config["show_methods"])
-    window["print_tree"].update(config["print_tree"])
-    window["save_error_log"].update(config["save_error_log"])
+    window["extensions"].update(",".join(config.get("extensions", [])))
+    window["include_patterns"].update(",".join(config.get("include_patterns", [])))
+    window["exclude_patterns"].update(",".join(config.get("exclude_patterns", [])))
 
 
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
-    """Helper to enable/disable buttons during processing."""
-    keys = [
-        "btn_process", "btn_simulate", "btn_reset",
-        "btn_browse_in", "btn_browse_out",
-        "btn_load_profile", "btn_save_profile", "btn_del_profile"
-    ]
+    keys = ["btn_process", "btn_simulate", "btn_reset", "btn_browse_in", "btn_browse_out",
+            "btn_load_profile", "btn_save_profile", "btn_del_profile", "btn_feedback"]
     for key in keys:
-        if key in window.AllKeysDict:
-            window[key].update(disabled=is_disabled)
+        if key in window.AllKeysDict: window[key].update(disabled=is_disabled)
 
 
 # -----------------------------------------------------------------------------
 # Main GUI Entry Point
 # -----------------------------------------------------------------------------
 def main() -> None:
-    # 1. Setup Logging
     log_path = get_default_gui_log_path()
-    log_conf = LoggingConfig(level="INFO", console=True, log_file=log_path)
-    configure_logging(log_conf)
-
-    logger.info("GUI starting (v1.2.1 logic)...")
+    configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
+    logger.info(f"GUI Starting - Version {cfg.CURRENT_CONFIG_VERSION}")
     sg.theme("SystemDefault")
 
-    # 2. Load Application State
     try:
         app_state = cfg.load_app_state()
-        config = cfg.get_default_config()
-        config.update(app_state.get("last_session", {}))
-
-        if not config.get("output_base_dir"):
-            config["output_base_dir"] = config.get("input_path") or os.getcwd()
-
+        config = cfg.load_config()
         saved_profiles = app_state.get("saved_profiles", {})
         profile_names = sorted(list(saved_profiles.keys()))
-
     except Exception as e:
-        logger.error(f"Failed to load app state: {e}")
+        logger.error(f"State load failed: {e}")
         app_state = cfg.get_default_app_state()
         config = cfg.get_default_config()
         profile_names = []
 
-    # 3. Define Layout
+    # --- Layout Definitions ---
+    menu_def = [['&File', ['&Reset Config', '---', 'E&xit']],
+                ['&Community', ['&Send Feedback', '&Check for Updates']],
+                ['&Help', ['&About']]]
 
-    # --- Profile Bar ---
-    frame_profiles = [
-        [
-            sg.Text(i18n.t("gui.labels.profile"), font=("Any", 8)),
-            sg.Combo(values=profile_names, key="-PROFILE_LIST-", size=(20, 1), readonly=True),
-            sg.Button(i18n.t("gui.profiles.load"), key="btn_load_profile", size=(6, 1), font=("Any", 8)),
-            sg.Button(i18n.t("gui.profiles.save"), key="btn_save_profile", size=(8, 1), font=("Any", 8)),
-            sg.Button(i18n.t("gui.profiles.del"), key="btn_del_profile", size=(4, 1), font=("Any", 8),
-                      button_color="gray"),
-        ]
-    ]
+    frame_profiles = [[
+        sg.Text(i18n.t("gui.labels.profile"), font=("Any", 8)),
+        sg.Combo(values=profile_names, key="-PROFILE_LIST-", size=(20, 1), readonly=True),
+        sg.Button(i18n.t("gui.profiles.load"), key="btn_load_profile", font=("Any", 8)),
+        sg.Button(i18n.t("gui.profiles.save"), key="btn_save_profile", font=("Any", 8)),
+        sg.Button(i18n.t("gui.profiles.del"), key="btn_del_profile", font=("Any", 8), button_color="gray"),
+        sg.Push(),
+        sg.Button("Feedback Hub", key="btn_feedback", button_color=("white", "#4A90E2"), font=("Any", 8, "bold"))
+    ]]
 
-    frame_content = [
+    layout = [
+        [sg.Menu(menu_def)],
+        [sg.Column(frame_profiles, expand_x=True)],
+        [sg.HorizontalSeparator()],
+        [sg.Text(i18n.t("gui.sections.input"))],
+        [sg.Input(default_text=config["input_path"], key="input_path", expand_x=True),
+         sg.Button(i18n.t("gui.buttons.explore"), key="btn_browse_in")],
+        [sg.Text(i18n.t("gui.sections.output"))],
+        [sg.Input(default_text=config["output_base_dir"], key="output_base_dir", expand_x=True),
+         sg.Button(i18n.t("gui.buttons.examine"), key="btn_browse_out")],
         [
+            sg.Text(i18n.t("gui.sections.sub_output")),
+            sg.Input(config["output_subdir_name"], size=(15, 1), key="output_subdir_name"),
+            sg.Text(i18n.t("gui.sections.prefix")),
+            sg.Input(config["output_prefix"], size=(15, 1), key="output_prefix"),
+        ],
+        [sg.Frame(i18n.t("gui.sections.content"), [[
             sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),
             sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=config["process_tests"]),
             sg.Checkbox("Resources (.md, .json...)", key="process_resources",
                         default=config.get("process_resources", False)),
-        ],
-        [
-            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree",
-                        default=config["generate_tree"], enable_events=True),
-        ],
-        [
+            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"],
+                        enable_events=True),
+        ], [
             sg.Text("    └─ AST:", font=("Any", 8)),
             sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"],
                         font=("Any", 8)),
@@ -333,359 +333,117 @@ def main() -> None:
                         font=("Any", 8)),
             sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", default=config["show_methods"],
                         font=("Any", 8)),
-        ]
-    ]
-
-    # -- Output Format Frame --
-    frame_output_format = [
-        [
+        ]], expand_x=True)],
+        [sg.Frame(i18n.t("gui.sections.format"), [[
             sg.Checkbox(i18n.t("gui.checkboxes.individual"), key="create_individual_files",
-                        default=config["create_individual_files"],
-                        tooltip="Generates separate .txt files for each component"),
+                        default=config["create_individual_files"]),
             sg.Checkbox(i18n.t("gui.checkboxes.unified"), key="create_unified_file",
-                        default=config["create_unified_file"],
-                        tooltip="Generates a single '_full_context.txt' file"),
-        ]
-    ]
-
-    # -- Data for Combos --
-    stack_names = ["-- Select Stack --"] + sorted(list(cfg.DEFAULT_STACKS.keys()))
-    model_names = [
-        "GPT-4o / GPT-5",
-        "GPT-4 Turbo / Legacy",
-        "Claude 3.5 / Opus",
-        "Llama 3 / 4",
-        "Gemini Pro"
-    ]
-
-    layout = [
-        # --- Profile Manager (Top) ---
-        [sg.Column(frame_profiles, pad=(0, 5), expand_x=True)],
-        [sg.HorizontalSeparator()],
-
-        # --- Input ---
-        [sg.Text(i18n.t("gui.sections.input"))],
-        [
-            sg.Input(default_text=config["input_path"], size=(70, 1), key="input_path",
-                     expand_x=True, tooltip=i18n.t("gui.tooltips.input")),
-            sg.Button(i18n.t("gui.buttons.explore"), key="btn_browse_in"),
-        ],
-
-        # --- Output Path ---
-        [sg.Text(i18n.t("gui.sections.output"))],
-        [
-            sg.Input(default_text=config["output_base_dir"], size=(70, 1), key="output_base_dir",
-                     expand_x=True, tooltip=i18n.t("gui.tooltips.output")),
-            sg.Button(i18n.t("gui.buttons.examine"), key="btn_browse_out"),
-        ],
-        [
-            sg.Text(i18n.t("gui.sections.sub_output")),
-            sg.Input(default_text=config["output_subdir_name"], size=(20, 1), key="output_subdir_name",
-                     tooltip=i18n.t("gui.tooltips.subdir")),
-            sg.Text(i18n.t("gui.sections.prefix")),
-            sg.Input(default_text=config["output_prefix"], size=(20, 1), key="output_prefix",
-                     tooltip=i18n.t("gui.tooltips.prefix")),
-        ],
-
-        # --- Flexible Config Sections ---
-        [
-            sg.Frame(i18n.t("gui.sections.content"), frame_content, expand_x=True),
-        ],
-        [
-            sg.Frame(i18n.t("gui.sections.format"), frame_output_format, expand_x=True)
-        ],
-
-        # --- Filters & Optimization ---
-        [sg.Text(i18n.t("gui.labels.stack"), font=("Any", 8, "bold")),
-         sg.Combo(stack_names, key="-STACK_SELECTOR-", enable_events=True, readonly=True, size=(30, 1)),
-         sg.Text(i18n.t("gui.labels.target_model"), font=("Any", 8, "bold")),
-         sg.Combo(model_names, key="target_model", default_value=config.get("target_model"), readonly=True,
-                  size=(25, 1))],
-
-        [sg.Text(i18n.t("gui.labels.extensions")),
-         sg.Input(",".join(config["extensions"]), size=(60, 1), key="extensions", expand_x=True)],
-        [sg.Text(i18n.t("gui.labels.include")),
-         sg.Input(",".join(config["include_patterns"]), size=(60, 1), key="include_patterns", expand_x=True)],
-        [sg.Text(i18n.t("gui.labels.exclude")),
-         sg.Input(",".join(config["exclude_patterns"]), size=(60, 1), key="exclude_patterns", expand_x=True)],
-        [
-            sg.Checkbox(i18n.t("gui.checkboxes.gitignore"), key="respect_gitignore",
-                        default=config.get("respect_gitignore", True))
-        ],
-
-        # --- Misc ---
-        [
-            sg.Checkbox(i18n.t("gui.checkboxes.print_tree"), key="print_tree", default=config["print_tree"],
-                        visible=False),
-            sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="save_error_log", default=config["save_error_log"]),
-        ],
-
-        # --- Status Indicator ---
-        [sg.Text(i18n.t("gui.status.processing"), key="-STATUS-", text_color="blue", visible=False,
-                 font=("Any", 10, "bold"))],
-
-        # --- Actions  ---
+                        default=config["create_unified_file"]),
+        ]], expand_x=True)],
+        [sg.Text("Extension Stack:", font=("Any", 8, "bold")),
+         sg.Combo(["-- Select --"] + sorted(list(cfg.DEFAULT_STACKS.keys())), key="-STACK-", enable_events=True,
+                  readonly=True),
+         sg.Text("Target Model:", font=("Any", 8, "bold")),
+         sg.Combo(["GPT-4o / GPT-5", "Claude 3.5", "Gemini Pro"], key="target_model",
+                  default_value=config.get("target_model"), readonly=True)],
+        [sg.Text("Extensions:"), sg.Input(",".join(config["extensions"]), key="extensions", expand_x=True)],
+        [sg.Text("Include:"), sg.Input(",".join(config["include_patterns"]), key="include_patterns", expand_x=True)],
+        [sg.Text("Exclude:"), sg.Input(",".join(config["exclude_patterns"]), key="exclude_patterns", expand_x=True)],
+        [sg.Checkbox("Respect .gitignore", key="respect_gitignore", default=config.get("respect_gitignore", True)),
+         sg.Checkbox("Save error log", key="save_error_log", default=config["save_error_log"])],
+        [sg.Text("", key="-STATUS-", visible=False, font=("Any", 10, "bold"))],
         [
             sg.Button(i18n.t("gui.buttons.simulate"), key="btn_simulate", button_color=("white", "#007ACC")),
             sg.Button(i18n.t("gui.buttons.process"), key="btn_process", button_color=("white", "green")),
-            sg.Push(),  # Spacer
+            sg.Push(),
             sg.Button(i18n.t("gui.buttons.reset"), key="btn_reset"),
             sg.Button(i18n.t("gui.buttons.exit"), key="btn_exit", button_color=("white", "red")),
         ],
+        [sg.Text(f"v{cfg.CURRENT_CONFIG_VERSION}", font=("Any", 7), text_color="gray"), sg.Push(),
+         sg.Text("", key="-UPDATE_BAR-", font=("Any", 7), text_color="blue", enable_events=True)]
     ]
 
-    window = sg.Window(i18n.t("app.name"), layout, finalize=True, resizable=True)
+    window = sg.Window(f"Transcriptor4AI - v{cfg.CURRENT_CONFIG_VERSION}", layout, finalize=True, resizable=True)
 
-    # 3.1 Initial UI Constraints (Apply disabled state based on default config)
-    init_tree_enabled = bool(config["generate_tree"])
-    for k in ["show_functions", "show_classes", "show_methods"]:
-        window[k].update(disabled=not init_tree_enabled)
+    # --- Start Background Tasks ---
+    if app_state["app_settings"].get("auto_check_updates"):
+        threading.Thread(target=_check_updates_thread, args=(window,), daemon=True).start()
 
-    # 4. Event Loop
     while True:
         event, values = window.read()
 
-        # --- Silent Auto-Save on Exit ---
-        if event in (sg.WIN_CLOSED, "btn_exit"):
-            try:
-                if values:
-                    update_config_from_gui(config, values)
-                    clean_conf, _ = validate_config(config, strict=False)
-                    clean_conf["input_path"] = paths.normalize_path(clean_conf["input_path"], os.getcwd())
-                    clean_conf["output_base_dir"] = paths.normalize_path(clean_conf["output_base_dir"],
-                                                                         clean_conf["input_path"])
-
-                    # Persist
-                    app_state["last_session"] = clean_conf
-                    cfg.save_app_state(app_state)
-                    logger.info("Session auto-saved on exit.")
-            except Exception as e:
-                logger.warning(f"Auto-save failed on exit: {e}")
-
+        if event in (sg.WIN_CLOSED, "btn_exit", "Exit"):
+            if values:
+                update_config_from_gui(config, values)
+                app_state["last_session"] = config
+                cfg.save_app_state(app_state)
             break
 
-        # --- Reactive Logic: Tree Options ---
-        if event == "generate_tree":
-            is_tree_enabled = bool(values["generate_tree"])
-            for k in ["show_functions", "show_classes", "show_methods"]:
-                window[k].update(disabled=not is_tree_enabled)
+        # --- Community Events ---
+        if event in ("btn_feedback", "Send Feedback"):
+            show_feedback_window()
 
-        # --- File Browsing ---
+        if event == "Check for Updates":
+            window["-UPDATE_BAR-"].update("Checking...")
+            threading.Thread(target=_check_updates_thread, args=(window,), daemon=True).start()
+
+        if event == "-UPDATE-FOUND-":
+            res = values[event]
+            msg = f"New version available: v{res['latest_version']}. Click to download."
+            window["-UPDATE_BAR-"].update(msg)
+            if sg.popup_yes_no(
+                    f"A new version (v{res['latest_version']}) is available!\n\n{res['changelog']}\n\nOpen download page?") == "Yes":
+                webbrowser.open(res["download_url"]) if "webbrowser" in globals() else subprocess.Popen(
+                    ["open", res["download_url"]])
+
+        if event == "-UPDATE_BAR-" and "New version" in window["-UPDATE_BAR-"].get():
+            pass
+
+        # --- Standard Events ---
+        if event == "generate_tree":
+            enabled = bool(values["generate_tree"])
+            for k in ["show_functions", "show_classes", "show_methods"]: window[k].update(disabled=not enabled)
+
+        if event == "-STACK-":
+            stack = values["-STACK-"]
+            if stack in cfg.DEFAULT_STACKS: window["extensions"].update(",".join(cfg.DEFAULT_STACKS[stack]))
+
         if event == "btn_browse_in":
-            initial = paths.normalize_path(values.get("input_path", ""), os.getcwd())
-            folder = sg.popup_get_folder(i18n.t("gui.tooltips.input"), default_path=initial)
-            if folder:
-                window["input_path"].update(folder)
-                curr_out = (values.get("output_base_dir") or "").strip()
-                if not curr_out or os.path.abspath(curr_out) == os.path.abspath(initial):
-                    window["output_base_dir"].update(folder)
+            folder = sg.popup_get_folder("Select Input", default_path=values["input_path"])
+            if folder: window["input_path"].update(folder)
 
         if event == "btn_browse_out":
-            initial = paths.normalize_path(values.get("output_base_dir", ""), values.get("input_path", ""))
-            folder = sg.popup_get_folder(i18n.t("gui.tooltips.output"), default_path=initial)
-            if folder:
-                window["output_base_dir"].update(folder)
+            folder = sg.popup_get_folder("Select Output", default_path=values["output_base_dir"])
+            if folder: window["output_base_dir"].update(folder)
 
-        # --- Stack Selection ---
-        if event == "-STACK_SELECTOR-":
-            stack_key = values.get("-STACK_SELECTOR-")
-            if stack_key and stack_key in cfg.DEFAULT_STACKS:
-                ext_list = cfg.DEFAULT_STACKS[stack_key]
-                window["extensions"].update(",".join(ext_list))
-                logger.info(f"Applied stack: {stack_key}")
+        if event == "btn_process" or event == "btn_simulate":
+            is_sim = (event == "btn_simulate")
+            update_config_from_gui(config, values)
 
-        # --- Profile Management ---
-        if event == "btn_load_profile":
-            sel_profile = values.get("-PROFILE_LIST-")
-            if sel_profile and sel_profile in app_state.get("saved_profiles", {}):
-                prof_data = app_state["saved_profiles"][sel_profile]
-                temp_conf = cfg.get_default_config()
-                temp_conf.update(prof_data)
+            # Basic Validation
+            if not os.path.isdir(config["input_path"]):
+                sg.popup_error("Invalid input directory.")
+                continue
 
-                populate_gui_from_config(window, temp_conf)
-                config.update(temp_conf)
+            _toggle_ui_state(window, True)
+            window["-STATUS-"].update("SIMULATING..." if is_sim else "PROCESSING...", visible=True,
+                                      text_color="#007ACC" if is_sim else "blue")
+            threading.Thread(target=_run_pipeline_thread, args=(window, config, True, is_sim), daemon=True).start()
 
-                # Update UI Constraints after load
-                loaded_tree_enabled = bool(temp_conf.get("generate_tree"))
-                for k in ["show_functions", "show_classes", "show_methods"]:
-                    window[k].update(disabled=not loaded_tree_enabled)
-
-                sg.popup(f"Profile '{sel_profile}' loaded!")
-            else:
-                sg.popup_error(i18n.t("gui.profiles.error_select"))
-
-        if event == "btn_save_profile":
-            name = sg.popup_get_text(i18n.t("gui.profiles.prompt_name"), title="Save Profile")
-            if name:
-                name = name.strip()
-
-                # Overwrite Protection
-                if name in app_state.get("saved_profiles", {}):
-                    confirm_msg = i18n.t("gui.profiles.confirm_overwrite_msg", name=name)
-                    confirm_title = i18n.t("gui.profiles.confirm_overwrite_title")
-                    if sg.popup_yes_no(confirm_msg, title=confirm_title, icon="warning") != "Yes":
-                        continue
-
-                # Get current UI state
-                temp_conf = config.copy()
-                update_config_from_gui(temp_conf, values)
-
-                # Explicitly convert comma-separated strings to lists for storage
-                temp_conf["extensions"] = _parse_list_from_string(values.get("extensions", ""))
-                temp_conf["include_patterns"] = _parse_list_from_string(values.get("include_patterns", ""))
-                temp_conf["exclude_patterns"] = _parse_list_from_string(values.get("exclude_patterns", ""))
-
-                # Save to state
-                if "saved_profiles" not in app_state:
-                    app_state["saved_profiles"] = {}
-                app_state["saved_profiles"][name] = temp_conf
-                cfg.save_app_state(app_state)
-
-                # Update list
-                profile_names = sorted(list(app_state["saved_profiles"].keys()))
-                window["-PROFILE_LIST-"].update(values=profile_names)
-                window["-PROFILE_LIST-"].update(value=name)
-                sg.popup(i18n.t("gui.profiles.saved", name=name))
-
-        if event == "btn_del_profile":
-            sel_profile = values.get("-PROFILE_LIST-")
-            if sel_profile and sel_profile in app_state.get("saved_profiles", {}):
-                if sg.popup_yes_no(i18n.t("gui.profiles.confirm_delete", name=sel_profile)) == "Yes":
-                    del app_state["saved_profiles"][sel_profile]
-                    cfg.save_app_state(app_state)
-
-                    profile_names = sorted(list(app_state["saved_profiles"].keys()))
-                    window["-PROFILE_LIST-"].update(values=profile_names, value="")
-                    sg.popup(i18n.t("gui.profiles.deleted"))
-
-        # --- Configuration Actions ---
-        if event == "btn_reset":
-            config = cfg.get_default_config()
-            populate_gui_from_config(window, config)
-            init_tree_enabled = bool(config["generate_tree"])
-            for k in ["show_functions", "show_classes", "show_methods"]:
-                window[k].update(disabled=not init_tree_enabled)
-
-            sg.popup(i18n.t("gui.status.reset"))
-            logger.info("Configuration reset to defaults.")
-
-        # --- EXECUTION ACTIONS (SIMULATE or PROCESS) ---
-        if event in ("btn_process", "btn_simulate"):
-            is_simulate = (event == "btn_simulate")
-
-            try:
-                update_config_from_gui(config, values)
-
-                # 1. Validation (Gatekeeper)
-                clean_conf, warnings = validate_config(config, strict=False)
-                if warnings:
-                    logger.warning(f"Config warnings: {warnings}")
-
-                # 1.1 UI specific validation
-                has_content = any(
-                    [clean_conf["process_modules"],
-                     clean_conf["process_tests"],
-                     clean_conf["process_resources"],
-                     clean_conf["generate_tree"]])
-                has_format = any([clean_conf["create_individual_files"], clean_conf["create_unified_file"]])
-
-                if not has_content:
-                    sg.popup_error("Please select at least one content type (Modules, Tests, Resources, or Tree).")
-                    continue
-                if not has_format:
-                    sg.popup_error("Please select at least one output format (Individual or Unified).")
-                    continue
-
-                # 2. Path Checks
-                input_path = paths.normalize_path(clean_conf["input_path"], os.getcwd())
-                output_base_dir = paths.normalize_path(clean_conf["output_base_dir"], input_path)
-                output_subdir_name = clean_conf["output_subdir_name"]
-                prefix = clean_conf["output_prefix"]
-
-                if not os.path.exists(input_path):
-                    sg.popup_error(i18n.t("gui.popups.error_path", path=input_path))
-                    continue
-                if not os.path.isdir(input_path):
-                    sg.popup_error(i18n.t("gui.popups.error_dir", path=input_path))
-                    continue
-
-                # 3. Overwrite Check (Only if NOT Simulating)
-                should_overwrite = False
-
-                if not is_simulate:
-                    salida_real = paths.get_real_output_path(output_base_dir, output_subdir_name)
-
-                    # Manual calculation of files to check based on new config
-                    nombres = paths.get_destination_filenames(
-                        prefix,
-                        mode="all",
-                        include_tree=clean_conf["generate_tree"],
-                        include_resources=clean_conf["process_resources"]
-                    )
-
-                    if clean_conf["create_unified_file"]:
-                        nombres.append(f"{prefix}_full_context.txt")
-
-                    if clean_conf["save_error_log"]:
-                        nombres.append(f"{prefix}_errors.txt")
-
-                    existentes = paths.check_existing_output_files(salida_real, nombres)
-
-                    if existentes:
-                        msg = i18n.t("gui.popups.overwrite_msg", files="\n".join(existentes))
-                        resp = sg.popup_yes_no(msg, title=i18n.t("gui.popups.overwrite_title"), icon="warning")
-                        if resp != "Yes":
-                            logger.info("Process cancelled by user (overwrite check).")
-                            continue
-                        should_overwrite = True
-
-                # 4. Start Thread
-                _toggle_ui_state(window, is_disabled=True)
-                window["-STATUS-"].update(visible=True)
-
-                # Visual feedback for Simulate
-                if is_simulate:
-                    window["-STATUS-"].update("SIMULATING...", text_color="#007ACC")
-                else:
-                    window["-STATUS-"].update(i18n.t("gui.status.processing"), text_color="blue")
-
-                thread_conf = clean_conf.copy()
-
-                logger.info(f"Starting pipeline thread (DryRun={is_simulate})...")
-                threading.Thread(
-                    target=_run_pipeline_thread,
-                    args=(window, thread_conf, should_overwrite, is_simulate),
-                    daemon=True
-                ).start()
-
-            except Exception as e:
-                tb = traceback.format_exc(limit=5)
-                logger.critical(f"Error starting pipeline: {e}\n{tb}")
-                sg.popup_error(i18n.t("gui.popups.error_process", error=e))
-
-        # --- THREAD COMPLETION ---
         if event == "-THREAD-DONE-":
-            # 1. Restore UI
+            _toggle_ui_state(window, False)
             window["-STATUS-"].update(visible=False)
-            _toggle_ui_state(window, is_disabled=False)
-
-            # 2. Handle Result
-            payload = values[event]
-
-            if isinstance(payload, PipelineResult):
-                if payload.ok:
-                    logger.info("Pipeline thread finished successfully.")
-                    _show_results_window(payload)
+            res = values[event]
+            if isinstance(res, PipelineResult):
+                if res.ok:
+                    _show_results_window(res)
                 else:
-                    logger.error(f"Pipeline thread finished with error: {payload.error}")
-                    sg.popup_error(i18n.t("gui.popups.error_process", error=payload.error))
-
-            elif isinstance(payload, Exception):
-                logger.critical(f"Thread crashed: {payload}")
-                sg.popup_error(i18n.t("gui.popups.error_critical", error=payload))
+                    sg.popup_error(f"Error: {res.error}")
+            else:
+                tb = traceback.format_exc()
+                show_crash_modal(str(res), tb)
 
     window.close()
-    logger.info("GUI closed.")
 
 
 if __name__ == "__main__":

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
-CURRENT_CONFIG_VERSION = "1.2.1"
+CURRENT_CONFIG_VERSION = "1.3.0"
 
 # Predefined Extension Stacks (Immutable defaults)
 DEFAULT_STACKS: Dict[str, List[str]] = {
@@ -101,11 +101,14 @@ def get_default_app_state() -> Dict[str, Any]:
         "version": CURRENT_CONFIG_VERSION,
         "app_settings": {
             "theme": "SystemDefault",
-            "locale": "en"
+            "locale": "en",
+            "allow_telemetry": True,
+            "auto_check_updates": True,
+            "last_update_check": ""
         },
         "last_session": get_default_config(),
-        "saved_profiles": {},  # Dict[str, Dict]
-        "custom_stacks": {}  # Dict[str, List[str]]
+        "saved_profiles": {},
+        "custom_stacks": {}
     }
 
 
@@ -115,7 +118,7 @@ def get_default_app_state() -> Dict[str, Any]:
 def load_app_state() -> Dict[str, Any]:
     """
     Load the complete application state from 'config.json'.
-    Handles auto-migration from V1.1 (flat) to V1.2 (hierarchical).
+    Handles auto-migration from V1.1 (flat) to V1.2+ (hierarchical).
     """
     default_state = get_default_app_state()
 
@@ -131,18 +134,18 @@ def load_app_state() -> Dict[str, Any]:
             logger.warning("Invalid config format. Resetting to defaults.")
             return default_state
 
-        # --- MIGRATION LOGIC---
+        # --- MIGRATION LOGIC (V1.1 -> V1.2+) ---
         if "input_path" in data:
-            logger.info("Detected Legacy V1.1 Config. Migrating to V1.2 structure...")
+            logger.info("Detected Legacy V1.1 Config. Migrating to V1.2+ structure...")
             new_state = get_default_app_state()
             new_state["last_session"].update(data)
             save_app_state(new_state)
             return new_state
 
-        # --- NORMAL LOAD ---
+        # --- NORMAL LOAD & KEY MERGING ---
         state = default_state.copy()
 
-        # Merge sub-dictionaries carefully
+        # Merge sub-dictionaries
         if "app_settings" in data:
             state["app_settings"].update(data["app_settings"])
         if "last_session" in data:
@@ -151,6 +154,8 @@ def load_app_state() -> Dict[str, Any]:
             state["saved_profiles"].update(data["saved_profiles"])
         if "custom_stacks" in data:
             state["custom_stacks"].update(data["custom_stacks"])
+
+        state["version"] = CURRENT_CONFIG_VERSION
 
         return state
 
@@ -163,6 +168,7 @@ def save_app_state(state: Dict[str, Any]) -> None:
     """Save the complete application state to 'config.json'."""
     try:
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+        state["version"] = CURRENT_CONFIG_VERSION
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=4)
         logger.debug(f"App state saved to {CONFIG_FILE}")
@@ -171,14 +177,14 @@ def save_app_state(state: Dict[str, Any]) -> None:
 
 
 # -----------------------------------------------------------------------------
-# Legacy/Convenience API (Maintains compatibility with Main/CLI)
+# Legacy/Convenience API (Maintains compatibility with Main/CLI/GUI)
 # -----------------------------------------------------------------------------
 def load_config() -> Dict[str, Any]:
     """
     Load the active runtime configuration (Last Session).
 
     This acts as a facade so CLI/GUI don't need to know about
-    the complex V1.2 JSON structure immediately.
+    the complex hierarchical JSON structure immediately.
     """
     state = load_app_state()
     defaults = get_default_config()

@@ -5,6 +5,7 @@ Graphical User Interface (GUI) for transcriptor4ai.
 
 Implemented using PySimpleGUI. Manages user interactions, threaded 
 pipeline execution, persistent configuration, and community feedback.
+Ensures semantic layout for AST options and update lifecycle management.
 """
 
 import logging
@@ -13,6 +14,7 @@ import platform
 import subprocess
 import threading
 import traceback
+import webbrowser
 from typing import Any, Dict, List, Optional
 
 import PySimpleGUI as sg
@@ -36,7 +38,13 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Threading Helpers
 # -----------------------------------------------------------------------------
-def _run_pipeline_thread(window: sg.Window, config: Dict[str, Any], overwrite: bool, dry_run: bool) -> None:
+def _run_pipeline_thread(
+        window: sg.Window,
+        config: Dict[str, Any],
+        overwrite: bool,
+        dry_run: bool
+) -> None:
+    """Execute the pipeline in a background thread and signal the window."""
     try:
         result = run_pipeline(config, overwrite=overwrite, dry_run=dry_run)
         window.write_event_value("-THREAD-DONE-", result)
@@ -45,11 +53,17 @@ def _run_pipeline_thread(window: sg.Window, config: Dict[str, Any], overwrite: b
         window.write_event_value("-THREAD-DONE-", e)
 
 
-def _check_updates_thread(window: sg.Window) -> None:
-    """Check for updates in a background thread."""
+def _check_updates_thread(window: sg.Window, is_manual: bool = False) -> None:
+    """
+    Check for updates in a background thread.
+
+    Args:
+        window: The GUI window instance.
+        is_manual: Whether the check was triggered by user action.
+    """
     res = network.check_for_updates(cfg.CURRENT_CONFIG_VERSION)
-    if res.get("has_update"):
-        window.write_event_value("-UPDATE-FOUND-", res)
+    # Always send event to handle manual feedback
+    window.write_event_value("-UPDATE-FINISHED-", (res, is_manual))
 
 
 def _submit_feedback_thread(window: sg.Window, payload: Dict[str, Any]) -> None:
@@ -62,7 +76,9 @@ def _submit_feedback_thread(window: sg.Window, payload: Dict[str, Any]) -> None:
 # System Helpers
 # -----------------------------------------------------------------------------
 def _open_file_explorer(path: str) -> None:
-    if not os.path.exists(path): return
+    """Open the host OS file explorer at the given path."""
+    if not os.path.exists(path):
+        return
     try:
         sys_name = platform.system()
         if sys_name == "Windows":
@@ -77,7 +93,9 @@ def _open_file_explorer(path: str) -> None:
 
 
 def _parse_list_from_string(value: str) -> List[str]:
-    if not value: return []
+    """Convert CSV string to list of stripped strings."""
+    if not value:
+        return []
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
@@ -85,7 +103,7 @@ def _parse_list_from_string(value: str) -> List[str]:
 # Community & Feedback Windows
 # -----------------------------------------------------------------------------
 def show_feedback_window() -> None:
-    """Display the Feedback Hub window."""
+    """Display the Feedback Hub modal window."""
     layout = [
         [sg.Text("Feedback Hub", font=("Any", 14, "bold"))],
         [sg.Text("Help us improve Transcriptor4AI with your suggestions or bug reports.")],
@@ -106,7 +124,8 @@ def show_feedback_window() -> None:
 
     while True:
         event, values = fb_window.read()
-        if event in (sg.WIN_CLOSED, "-CANCEL_FB-"): break
+        if event in (sg.WIN_CLOSED, "-CANCEL_FB-"):
+            break
 
         if event == "-SEND_FB-":
             if not values["-FB_SUB-"] or not values["-FB_MSG-"]:
@@ -142,7 +161,7 @@ def show_feedback_window() -> None:
 
 
 def show_crash_modal(error_msg: str, stack_trace: str) -> None:
-    """Modal for critical unhandled exceptions."""
+    """Display a technical modal for critical unhandled exceptions."""
     layout = [
         [sg.Text("⚠️ Critical Error Detected", font=("Any", 14, "bold"), text_color="red")],
         [sg.Text("The application has encountered an unexpected problem.")],
@@ -155,7 +174,8 @@ def show_crash_modal(error_msg: str, stack_trace: str) -> None:
     window = sg.Window("Crash Reporter", layout, modal=True)
     while True:
         event, _ = window.read()
-        if event in (sg.WIN_CLOSED, "-EXIT_ERR-"): break
+        if event in (sg.WIN_CLOSED, "-EXIT_ERR-"):
+            break
         if event == "-COPY_ERR-":
             sg.clipboard_set(stack_trace)
             sg.popup_quick_message("Copied!")
@@ -166,6 +186,7 @@ def show_crash_modal(error_msg: str, stack_trace: str) -> None:
 # Results Window
 # -----------------------------------------------------------------------------
 def _show_results_window(result: PipelineResult) -> None:
+    """Show detailed pipeline execution summary and metrics."""
     summary = result.summary or {}
     dry_run = summary.get("dry_run", False)
     header_text = i18n.t("gui.results_window.dry_run_header") if dry_run else i18n.t(
@@ -191,7 +212,8 @@ def _show_results_window(result: PipelineResult) -> None:
     has_unified = bool(unified_path and os.path.exists(unified_path))
 
     for key, path in gen_files.items():
-        if path: files_list.append(f"[{key.upper()}] {os.path.basename(path)}")
+        if path:
+            files_list.append(f"[{key.upper()}] {os.path.basename(path)}")
 
     tree_info = summary.get("tree", {})
     if tree_info.get("generated") and tree_info.get("path"):
@@ -216,8 +238,10 @@ def _show_results_window(result: PipelineResult) -> None:
     res_window = sg.Window(i18n.t("gui.results_window.title"), layout, modal=True, finalize=True)
     while True:
         event, _ = res_window.read()
-        if event in (sg.WIN_CLOSED, "-CLOSE-"): break
-        if event == "-OPEN-": _open_file_explorer(result.final_output_path)
+        if event in (sg.WIN_CLOSED, "-CLOSE-"):
+            break
+        if event == "-OPEN-":
+            _open_file_explorer(result.final_output_path)
         if event == "-COPY-":
             if has_unified:
                 try:
@@ -233,6 +257,7 @@ def _show_results_window(result: PipelineResult) -> None:
 # GUI Config Helpers
 # -----------------------------------------------------------------------------
 def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
+    """Synchronize UI values back to the config dictionary."""
     for k in ["input_path", "output_base_dir", "output_subdir_name", "output_prefix", "target_model"]:
         config[k] = values.get(k)
     for k in ["process_modules", "process_tests", "process_resources", "generate_tree",
@@ -246,12 +271,14 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
 
 
 def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
+    """Populate UI fields from a config dictionary."""
     keys = ["input_path", "output_base_dir", "output_subdir_name", "output_prefix",
             "process_modules", "process_tests", "generate_tree", "create_individual_files",
             "create_unified_file", "show_functions", "show_classes", "show_methods",
             "print_tree", "save_error_log", "respect_gitignore"]
     for k in keys:
-        if k in window.AllKeysDict: window[k].update(config.get(k))
+        if k in window.AllKeysDict:
+            window[k].update(config.get(k))
 
     window["process_resources"].update(config.get("process_resources", False))
     window["target_model"].update(config.get("target_model", "GPT-4o / GPT-5"))
@@ -261,16 +288,19 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
 
 
 def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
+    """Enable or disable interactive elements during long operations."""
     keys = ["btn_process", "btn_simulate", "btn_reset", "btn_browse_in", "btn_browse_out",
             "btn_load_profile", "btn_save_profile", "btn_del_profile", "btn_feedback"]
     for key in keys:
-        if key in window.AllKeysDict: window[key].update(disabled=is_disabled)
+        if key in window.AllKeysDict:
+            window[key].update(disabled=is_disabled)
 
 
 # -----------------------------------------------------------------------------
 # Main GUI Entry Point
 # -----------------------------------------------------------------------------
 def main() -> None:
+    """Main GUI Application loop."""
     log_path = get_default_gui_log_path()
     configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
     logger.info(f"GUI Starting - Version {cfg.CURRENT_CONFIG_VERSION}")
@@ -302,6 +332,27 @@ def main() -> None:
         sg.Button("Feedback Hub", key="btn_feedback", button_color=("white", "#4A90E2"), font=("Any", 8, "bold"))
     ]]
 
+    # Content selection layout with hierarchical Tree/AST grouping
+    frame_content = [
+        [
+            sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),
+            sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=config["process_tests"]),
+            sg.Checkbox("Resources (.md, .json...)", key="process_resources",
+                        default=config.get("process_resources", False)),
+        ],
+        [
+            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"],
+                        enable_events=True),
+            sg.Text(" └─ AST symbols:", font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"],
+                        font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", default=config["show_classes"],
+                        font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", default=config["show_methods"],
+                        font=("Any", 8)),
+        ]
+    ]
+
     layout = [
         [sg.Menu(menu_def)],
         [sg.Column(frame_profiles, expand_x=True)],
@@ -318,22 +369,7 @@ def main() -> None:
             sg.Text(i18n.t("gui.sections.prefix")),
             sg.Input(config["output_prefix"], size=(15, 1), key="output_prefix"),
         ],
-        [sg.Frame(i18n.t("gui.sections.content"), [[
-            sg.Checkbox(i18n.t("gui.checkboxes.modules"), key="process_modules", default=config["process_modules"]),
-            sg.Checkbox(i18n.t("gui.checkboxes.tests"), key="process_tests", default=config["process_tests"]),
-            sg.Checkbox("Resources (.md, .json...)", key="process_resources",
-                        default=config.get("process_resources", False)),
-            sg.Checkbox(i18n.t("gui.checkboxes.gen_tree"), key="generate_tree", default=config["generate_tree"],
-                        enable_events=True),
-        ], [
-            sg.Text("    └─ AST:", font=("Any", 8)),
-            sg.Checkbox(i18n.t("gui.checkboxes.func"), key="show_functions", default=config["show_functions"],
-                        font=("Any", 8)),
-            sg.Checkbox(i18n.t("gui.checkboxes.cls"), key="show_classes", default=config["show_classes"],
-                        font=("Any", 8)),
-            sg.Checkbox(i18n.t("gui.checkboxes.meth"), key="show_methods", default=config["show_methods"],
-                        font=("Any", 8)),
-        ]], expand_x=True)],
+        [sg.Frame(i18n.t("gui.sections.content"), frame_content, expand_x=True)],
         [sg.Frame(i18n.t("gui.sections.format"), [[
             sg.Checkbox(i18n.t("gui.checkboxes.individual"), key="create_individual_files",
                         default=config["create_individual_files"]),
@@ -367,7 +403,7 @@ def main() -> None:
 
     # --- Start Background Tasks ---
     if app_state["app_settings"].get("auto_check_updates"):
-        threading.Thread(target=_check_updates_thread, args=(window,), daemon=True).start()
+        threading.Thread(target=_check_updates_thread, args=(window, False), daemon=True).start()
 
     while True:
         event, values = window.read()
@@ -385,38 +421,45 @@ def main() -> None:
 
         if event == "Check for Updates":
             window["-UPDATE_BAR-"].update("Checking...")
-            threading.Thread(target=_check_updates_thread, args=(window,), daemon=True).start()
+            threading.Thread(target=_check_updates_thread, args=(window, True), daemon=True).start()
 
-        if event == "-UPDATE-FOUND-":
-            res = values[event]
-            msg = f"New version available: v{res['latest_version']}. Click to download."
-            window["-UPDATE_BAR-"].update(msg)
-            if sg.popup_yes_no(
-                    f"A new version (v{res['latest_version']}) is available!\n\n{res['changelog']}\n\nOpen download page?") == "Yes":
-                webbrowser.open(res["download_url"]) if "webbrowser" in globals() else subprocess.Popen(
-                    ["open", res["download_url"]])
+        if event == "-UPDATE-FINISHED-":
+            res, is_manual = values[event]
 
-        if event == "-UPDATE_BAR-" and "New version" in window["-UPDATE_BAR-"].get():
-            pass
+            if res.get("has_update"):
+                msg = f"New version available: v{res['latest_version']}. Click to download."
+                window["-UPDATE_BAR-"].update(msg)
+                if sg.popup_yes_no(
+                        f"A new version (v{res['latest_version']}) is available!\n\n{res['changelog']}\n\nOpen download page?") == "Yes":
+                    webbrowser.open(res["download_url"])
+            elif is_manual:
+                window["-UPDATE_BAR-"].update("Up to date.")
+                sg.popup(f"Transcriptor4AI is up to date (v{cfg.CURRENT_CONFIG_VERSION}).")
+            else:
+                window["-UPDATE_BAR-"].update("")
 
         # --- Standard Events ---
         if event == "generate_tree":
             enabled = bool(values["generate_tree"])
-            for k in ["show_functions", "show_classes", "show_methods"]: window[k].update(disabled=not enabled)
+            for k in ["show_functions", "show_classes", "show_methods"]:
+                window[k].update(disabled=not enabled)
 
         if event == "-STACK-":
             stack = values["-STACK-"]
-            if stack in cfg.DEFAULT_STACKS: window["extensions"].update(",".join(cfg.DEFAULT_STACKS[stack]))
+            if stack in cfg.DEFAULT_STACKS:
+                window["extensions"].update(",".join(cfg.DEFAULT_STACKS[stack]))
 
         if event == "btn_browse_in":
             folder = sg.popup_get_folder("Select Input", default_path=values["input_path"])
-            if folder: window["input_path"].update(folder)
+            if folder:
+                window["input_path"].update(folder)
 
         if event == "btn_browse_out":
             folder = sg.popup_get_folder("Select Output", default_path=values["output_base_dir"])
-            if folder: window["output_base_dir"].update(folder)
+            if folder:
+                window["output_base_dir"].update(folder)
 
-        if event == "btn_process" or event == "btn_simulate":
+        if event in ("btn_process", "btn_simulate"):
             is_sim = (event == "btn_simulate")
             update_config_from_gui(config, values)
 
@@ -439,7 +482,7 @@ def main() -> None:
                     _show_results_window(res)
                 else:
                     sg.popup_error(f"Error: {res.error}")
-            else:
+            elif isinstance(res, Exception):
                 tb = traceback.format_exc()
                 show_crash_modal(str(res), tb)
 

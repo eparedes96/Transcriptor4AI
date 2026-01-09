@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 """
-Core orchestration pipeline.
+Core orchestration pipeline for transcriptor4ai.
 
 Coordinates input validation, path preparation, service execution 
 (Transcription and Tree generation), output unification, and token estimation.
+Implements staging logic to support dry-runs with accurate statistics.
 """
 
 import logging
@@ -32,7 +33,12 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 @dataclass(frozen=True)
 class PipelineResult:
-    """Aggregated result of the pipeline execution."""
+    """
+    Aggregated result of the pipeline execution.
+
+    Contains execution status, paths, metrics, and a detailed summary
+    of processed items.
+    """
     ok: bool
     error: str
 
@@ -79,13 +85,16 @@ def run_pipeline(
     Execute the full transcription pipeline.
 
     Orchestrates the creation of individual parts (Tree, Modules, Tests, Resources)
-    and optionally assembles them into a unified context file. Also calculates
-    token usage estimate.
+    and optionally assembles them into a unified context file.
+
+    If dry_run is True, the pipeline performs the full scan using a temporary
+    staging directory to provide accurate token counts and file statistics
+    without modifying the final destination.
 
     Args:
         config: Configuration dictionary (will be validated).
         overwrite: If False, aborts if output files already exist.
-        dry_run: If True, calculates paths but does not write files.
+        dry_run: If True, calculates paths and stats but does not write to the user path.
         tree_output_path: Optional override for tree output file.
 
     Returns:
@@ -115,11 +124,10 @@ def run_pipeline(
     prefix = cfg["output_prefix"]
 
     # -------------------------------------------------------------------------
-    # 2) Calculate Potential Output Files (For Overwrite Check)
+    # 2) Overwrite Check
     # -------------------------------------------------------------------------
     files_to_check: List[str] = []
 
-    # Files generated if 'create_individual_files' is True
     if cfg["create_individual_files"]:
         if cfg["process_modules"]:
             files_to_check.append(f"{prefix}_modules.txt")
@@ -130,11 +138,9 @@ def run_pipeline(
         if cfg["generate_tree"]:
             files_to_check.append(f"{prefix}_tree.txt")
 
-    # Files generated if 'create_unified_file' is True
     if cfg["create_unified_file"]:
         files_to_check.append(f"{prefix}_full_context.txt")
 
-    # Errors file is always a potential output if logging is enabled
     if cfg["save_error_log"]:
         files_to_check.append(f"{prefix}_errors.txt")
 
@@ -149,51 +155,36 @@ def run_pipeline(
         )
 
     # -------------------------------------------------------------------------
-    # 3) Dry Run
+    # 3) Directory & Staging Preparation
     # -------------------------------------------------------------------------
-    if dry_run:
-        logger.info("Dry run active. No files will be written.")
-        return _build_success_result(
-            cfg, base_path, final_output_path, existing_files,
-            summary_extra={
-                "dry_run": True,
-                "existing_files": list(existing_files),
-                "will_generate": list(files_to_check),
-                "token_estimate": "N/A (Dry Run)"
-            }
-        )
+    # If it's a dry run, we NEVER create the final directory.
+    if not dry_run:
+        try:
+            os.makedirs(final_output_path, exist_ok=True)
+        except OSError as e:
+            msg = f"Failed to create output directory {final_output_path}: {e}"
+            logger.critical(msg)
+            return _build_error_result(msg, cfg, base_path, final_output_path)
 
-    # -------------------------------------------------------------------------
-    # 4) Prepare Output Directories
-    # -------------------------------------------------------------------------
-    try:
-        os.makedirs(final_output_path, exist_ok=True)
-    except OSError as e:
-        msg = f"Failed to create output directory {final_output_path}: {e}"
-        logger.critical(msg)
-        return _build_error_result(msg, cfg, base_path, final_output_path)
-
-    # Determine Staging Directory (Real or Temp)
+    # We ALWAYS use a temporary staging directory if it's a dry run or
     temp_dir_obj = None
-    staging_dir = final_output_path
-
-    if not cfg["create_individual_files"]:
+    if dry_run or not cfg["create_individual_files"]:
         temp_dir_obj = tempfile.TemporaryDirectory()
         staging_dir = temp_dir_obj.name
         logger.debug(f"Using temporary staging directory: {staging_dir}")
+    else:
+        staging_dir = final_output_path
 
     # Define Paths for Components
     path_modules = os.path.join(staging_dir, f"{prefix}_modules.txt")
     path_tests = os.path.join(staging_dir, f"{prefix}_tests.txt")
     path_resources = os.path.join(staging_dir, f"{prefix}_resources.txt")
     path_tree = tree_output_path if tree_output_path else os.path.join(staging_dir, f"{prefix}_tree.txt")
-
-    path_errors = os.path.join(final_output_path, f"{prefix}_errors.txt")
-
-    path_unified = os.path.join(final_output_path, f"{prefix}_full_context.txt")
+    path_errors = os.path.join(staging_dir, f"{prefix}_errors.txt")
+    path_unified = os.path.join(staging_dir, f"{prefix}_full_context.txt")
 
     # -------------------------------------------------------------------------
-    # 5) Execute Services (Generate Parts)
+    # 4) Execute Services
     # -------------------------------------------------------------------------
 
     # A. Generate Tree
@@ -233,12 +224,11 @@ def run_pipeline(
     if not trans_res.get("ok"):
         if temp_dir_obj:
             temp_dir_obj.cleanup()
-
         err_msg = trans_res.get('error', 'Unknown transcription error')
         return _build_error_result(f"Transcription failure: {err_msg}", cfg, base_path, final_output_path)
 
     # -------------------------------------------------------------------------
-    # 6) Assembly (Unified File)
+    # 5) Assembly & Metrics
     # -------------------------------------------------------------------------
     unified_created = False
     final_token_count = 0
@@ -249,7 +239,6 @@ def run_pipeline(
                 outfile.write(f"PROJECT CONTEXT: {os.path.basename(base_path)}\n")
                 outfile.write("=" * 80 + "\n\n")
 
-                # 1. Append Tree
                 if cfg["generate_tree"] and os.path.exists(path_tree):
                     outfile.write("PROJECT STRUCTURE:\n")
                     outfile.write("-" * 50 + "\n")
@@ -257,33 +246,16 @@ def run_pipeline(
                         shutil.copyfileobj(infile, outfile)
                     outfile.write("\n\n")
 
-                # 2. Append Modules (Scripts)
-                generated_modules = trans_res.get("generated", {}).get("modules")
-                if cfg["process_modules"] and generated_modules and os.path.exists(generated_modules):
-                    with open(generated_modules, "r", encoding="utf-8") as infile:
-                        shutil.copyfileobj(infile, outfile)
-                    outfile.write("\n\n")
-
-                # 3. Append Tests
-                generated_tests = trans_res.get("generated", {}).get("tests")
-                if cfg["process_tests"] and generated_tests and os.path.exists(generated_tests):
-                    with open(generated_tests, "r", encoding="utf-8") as infile:
-                        shutil.copyfileobj(infile, outfile)
-                    outfile.write("\n\n")
-
-                # 4. Append Resources (Docs/Config)
-                generated_resources = trans_res.get("generated", {}).get("resources")
-                if cfg["process_resources"] and generated_resources and os.path.exists(generated_resources):
-                    with open(generated_resources, "r", encoding="utf-8") as infile:
-                        shutil.copyfileobj(infile, outfile)
-                    outfile.write("\n\n")
+                for key in ["modules", "tests", "resources"]:
+                    gen_path = trans_res.get("generated", {}).get(key)
+                    if gen_path and os.path.exists(gen_path):
+                        with open(gen_path, "r", encoding="utf-8") as infile:
+                            shutil.copyfileobj(infile, outfile)
+                        outfile.write("\n\n")
 
             unified_created = True
-            logger.info(f"Unified context file created: {path_unified}")
 
-            # -----------------------------------------------------------------
-            # 6.5) Token Estimation
-            # -----------------------------------------------------------------
+            # Calculate Tokens
             try:
                 target_model = cfg.get("target_model", "GPT-4o / GPT-5")
                 with open(path_unified, "r", encoding="utf-8") as f:
@@ -294,25 +266,38 @@ def run_pipeline(
                 logger.warning(f"Failed to count tokens: {e}")
 
         except OSError as e:
-            logger.error(f"Failed to create unified file: {e}")
+            logger.error(f"Failed to process unified file in staging: {e}")
+
+    # -------------------------------------------------------------------------
+    # 6) Deployment
+    # -------------------------------------------------------------------------
+    gen_files_map = trans_res.get("generated", {}).copy()
+
+    if dry_run:
+        logger.info("Dry run: Skipping file deployment to final destination.")
+        if unified_created:
+            gen_files_map["unified"] = "(Simulated: Unified Context File)"
+    else:
+        # Move unified file if created
+        if unified_created:
+            real_path_unified = os.path.join(final_output_path, f"{prefix}_full_context.txt")
+            shutil.move(path_unified, real_path_unified)
+            gen_files_map["unified"] = real_path_unified
+
+        # Move errors if exist and in staging
+        if os.path.exists(path_errors) and staging_dir != final_output_path:
+            shutil.move(path_errors, os.path.join(final_output_path, f"{prefix}_errors.txt"))
 
     # -------------------------------------------------------------------------
     # 7) Cleanup & Finalize
     # -------------------------------------------------------------------------
     if temp_dir_obj:
         temp_dir_obj.cleanup()
-        logger.debug("Temporary staging directory cleaned up.")
+        logger.debug("Staging directory cleaned up.")
 
-    # Update summary for the unified file
-    gen_files_map = trans_res.get("generated", {}).copy()
-    if unified_created:
-        gen_files_map["unified"] = path_unified
-
-    # If individual files were NOT created, remove them from the generated list to avoid confusion
     if not cfg["create_individual_files"]:
-        gen_files_map.pop("modules", None)
-        gen_files_map.pop("tests", None)
-        gen_files_map.pop("resources", None)
+        for k in ["modules", "tests", "resources"]:
+            gen_files_map.pop(k, None)
 
     counters = trans_res.get("counters", {}) or {}
     summary = {
@@ -324,11 +309,13 @@ def run_pipeline(
         "generated_files": gen_files_map,
         "tree": {
             "generated": bool(cfg.get("generate_tree")),
-            "path": path_tree if cfg["create_individual_files"] else None,
+            "path": path_tree if (cfg["create_individual_files"] and not dry_run) else None,
             "lines": len(tree_lines),
         },
         "existing_files_before_run": list(existing_files),
-        "unified_generated": unified_created
+        "unified_generated": unified_created,
+        "dry_run": dry_run,
+        "will_generate": list(files_to_check) if dry_run else []
     }
 
     logger.info("Pipeline completed successfully.")
@@ -339,7 +326,7 @@ def run_pipeline(
 
 
 # -----------------------------------------------------------------------------
-# Internal Helpers to reduce boilerplate
+# Internal Helpers
 # -----------------------------------------------------------------------------
 def _build_error_result(
         error: str,
@@ -349,6 +336,7 @@ def _build_error_result(
         existing_files: Optional[List[str]] = None,
         summary_extra: Optional[Dict[str, Any]] = None
 ) -> PipelineResult:
+    """Build a failure PipelineResult."""
     return PipelineResult(
         ok=False,
         error=error,
@@ -382,6 +370,7 @@ def _build_success_result(
         token_count: int = 0,
         summary_extra: Optional[Dict[str, Any]] = None
 ) -> PipelineResult:
+    """Build a success PipelineResult."""
     return PipelineResult(
         ok=True,
         error="",

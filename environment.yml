@@ -8,9 +8,11 @@ dependencies:
   - pytest
   - pysimplegui
   - pyinstaller
+  - requests
   - setuptools
   - wheel
   - mypy
   - tiktoken
   - pip:
       - types-setuptools
+      - types-requests

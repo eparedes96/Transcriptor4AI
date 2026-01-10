@@ -66,7 +66,7 @@ def test_sanitize_text_redacts_network_info() -> None:
 
 def test_mask_local_paths_anonymizes_home() -> None:
     """Verify that the home directory path is replaced by <USER_HOME>."""
-    fake_home = str(Path("/Users/testuser").absolute())
+    fake_home = "/Users/testuser"
     text = f"Logs saved in {fake_home}/documents/project"
 
     with patch("transcriptor4ai.utils.sanitizer.Path.home", return_value=Path(fake_home)):
@@ -77,11 +77,17 @@ def test_mask_local_paths_anonymizes_home() -> None:
 
 
 def test_mask_local_paths_anonymizes_standalone_username() -> None:
-    """Verify that username inside paths is masked."""
+    """
+    Verify that paths matching the user home are fully masked.
+
+    The sanitizer replaces the entire home path string with <USER_HOME>
+    to prevent leaking system structure.
+    """
     text = "The file is at /home/testuser/data.txt"
 
     with patch("transcriptor4ai.utils.sanitizer.os.getlogin", return_value="testuser"):
         with patch("transcriptor4ai.utils.sanitizer.Path.home", return_value=Path("/home/testuser")):
             masked = mask_local_paths(text)
+
             assert "testuser" not in masked
-            assert "/home/<USER_HOME>" in masked or "/home/<USER>" in masked
+            assert "<USER_HOME>/data.txt" in masked

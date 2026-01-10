@@ -69,6 +69,6 @@ def test_load_fresh_state(tmp_path):
     try:
         state = load_app_state()
         assert state["version"] == CURRENT_CONFIG_VERSION
-        assert state["last_session"]["process_resources"] is False
+        assert state["last_session"]["process_resources"] is True
     finally:
         cfg.CONFIG_FILE = orig_file

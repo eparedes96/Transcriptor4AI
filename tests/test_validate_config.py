@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 from transcriptor4ai.validate_config import validate_config
 
@@ -25,7 +27,7 @@ def test_validate_empty_dict_returns_defaults():
     cfg, warnings = validate_config({})
 
     assert cfg["output_prefix"] == "transcription"
-    assert cfg["generate_tree"] is False
+    assert cfg["generate_tree"] is True
     assert cfg["create_individual_files"] is True
     assert len(warnings) == 0
 

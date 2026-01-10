@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Integration tests for the transcription pipeline.
 
-Verifies the end-to-end flow, covering dry runs, full execution with 
-modern features (Resources, Gitignore, Tokens), and configuration flexibility.
-Includes seamless validation for security sanitization and code optimization.
+Verifies the end-to-end flow, covering dry runs, parallel execution,
+streaming-based transformations, and metadata validation for high-performance 
+scenarios.
 """
 
 import os
@@ -28,7 +28,6 @@ def source_structure(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
 
-    # We include 'dirty' data by default to test sanitization naturally
     (src / "main.py").write_text(
         "# Internal developer comment\n"
         "def main():\n"
@@ -75,7 +74,7 @@ def test_pipeline_dry_run_behavior(source_structure):
     assert result.ok is True
     assert result.summary["dry_run"] is True
 
-    # Verify folder was NOT created or is empty
+    # Verify final folder was NOT created or is empty
     out_dir = source_structure / "out"
     if out_dir.exists():
         assert len(list(out_dir.iterdir())) == 0
@@ -83,11 +82,11 @@ def test_pipeline_dry_run_behavior(source_structure):
 
 def test_pipeline_comprehensive_execution(source_structure):
     """
-    End-to-end test verifying the complete feature set:
-    - Content Selection (Modules, Tests, Resources)
-    - Filtering (Gitignore, Extensions)
-    - Tree Generation & Token Counting
-    - Transformation (Sanitization, Minification, Path Masking)
+    End-to-end test verifying the V1.5.0 Parallel Engine:
+    - Parallel Service Execution (Tree + Transcription)
+    - Content Selection & Gitignore Filtering
+    - Streaming Transformations (Sanitization + Minification)
+    - Performance Metadata check
     """
     config = {
         "input_path": str(source_structure),
@@ -118,27 +117,28 @@ def test_pipeline_comprehensive_execution(source_structure):
     assert (out_dir / "all_full_context.txt").exists()
     assert (out_dir / "all_tree.txt").exists()
 
-    # 2. Content Validation (Filters)
+    # 2. Content Validation (Filters & Gitignore)
     full_text = (out_dir / "all_full_context.txt").read_text(encoding="utf-8")
     assert "secret.key" not in full_text
     assert "SECRET_API_KEY" not in full_text
     assert "readme.md" in full_text
 
-    # 3. Content Validation (Transformations)
+    # 3. Streaming Transformation Validation
     assert "sk-1234567890abcdef1234567890abcdef" not in full_text
-    assert "[[REDACTED_SECRET]]" in full_text
+    assert "[[REDACTED_SENSITIVE]]" in full_text
     assert "# Internal developer comment" not in full_text
 
-    # 4. Metrics & Summary
+    # 4. Performance Metadata
     assert result.token_count > 0
-    assert result.summary["V1.4_features"]["sanitizer"] is True
-    assert result.summary["V1.4_features"]["minifier"] is True
+    perf_metrics = result.summary["V1.5_performance"]
+    assert perf_metrics["parallel_engine"] is True
+    assert perf_metrics["minifier"] is True
 
 
 def test_pipeline_transformation_integrity(source_structure):
     """
-    Verify that transformations (Sanitization/Minification) can be
-    disabled and the output remains 'raw'.
+    Verify that transformations can be disabled and the
+    streaming output remains 'raw'.
     """
     config = {
         "input_path": str(source_structure),
@@ -156,14 +156,15 @@ def test_pipeline_transformation_integrity(source_structure):
 
     content = (source_structure / "raw_run" / "raw_full_context.txt").read_text(encoding="utf-8")
 
+    # Raw content should persist
     assert "sk-1234567890abcdef1234567890abcdef" in content
     assert "# Internal developer comment" in content
 
 
 def test_pipeline_unified_only_flow(source_structure):
     """
-    Verify the staging logic when only the unified file is requested.
-    Individual files should not leak into the final destination.
+    Verify staging logic: individual files should not be
+    deployed if not requested.
     """
     config = {
         "input_path": str(source_structure),

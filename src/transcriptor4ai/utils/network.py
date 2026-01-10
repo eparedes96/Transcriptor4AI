@@ -5,7 +5,7 @@ Network utilities for Transcriptor4AI.
 
 Handles external communications including:
 - Version synchronization via GitHub REST API.
-- Secure submission of user feedback and crash reports.
+- Secure submission of user feedback and crash reports via Formspree.
 - Semantic version comparison and network failover logic.
 """
 
@@ -22,8 +22,7 @@ GITHUB_OWNER = "eparedes96"
 GITHUB_REPO = "Transcriptor4AI"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 
-FEEDBACK_ENDPOINT = "https://api.example.com/feedback"
-REPORT_ENDPOINT = "https://api.example.com/reports"
+FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 
 TIMEOUT = 10
 USER_AGENT = "Transcriptor4AI-Client/1.3.0"
@@ -97,7 +96,7 @@ def submit_feedback(payload: Dict[str, Any]) -> Tuple[bool, str]:
     Returns:
         Tuple of (Success Status, Server Message/Error).
     """
-    return _secure_post(FEEDBACK_ENDPOINT, payload, "Feedback")
+    return _secure_post(FORMSPREE_ENDPOINT, payload, "Feedback")
 
 
 def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
@@ -110,7 +109,7 @@ def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
     Returns:
         Tuple of (Success Status, Server Message/Error).
     """
-    return _secure_post(REPORT_ENDPOINT, payload, "Error Report")
+    return _secure_post(FORMSPREE_ENDPOINT, payload, "Error Report")
 
 
 # -----------------------------------------------------------------------------
@@ -125,10 +124,8 @@ def _is_newer(current: str, latest: str) -> bool:
     """
     try:
         def parse(v: str) -> Tuple[int, ...]:
-            # Filter out non-numeric parts if any (e.g. 1.3.0-beta)
             parts = []
             for p in v.split("."):
-                # Take only the digit part
                 clean_p = "".join(filter(str.isdigit, p))
                 parts.append(int(clean_p) if clean_p else 0)
             return tuple(parts)
@@ -156,8 +153,7 @@ def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, st
     Returns:
         Tuple of (bool, str) representing success status and descriptive message.
     """
-    # Prevent execution if placeholders are still present
-    if not url or "example.com" in url:
+    if not url:
         msg = f"{context} system is not active (endpoint not configured)."
         logger.warning(msg)
         return False, msg
@@ -168,7 +164,7 @@ def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, st
         response = requests.post(url, json=data, headers=headers, timeout=TIMEOUT)
 
         if response.status_code in (200, 201):
-            logger.info(f"{context} submitted successfully.")
+            logger.info(f"{context} submitted successfully to developer.")
             return True, "Success"
 
         err_msg = f"Server rejected request with status: {response.status_code}"

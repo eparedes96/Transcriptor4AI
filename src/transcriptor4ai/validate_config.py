@@ -189,7 +189,30 @@ def validate_config(
         strict
     )
 
-    # 5. Lists Normalization: Extensions and Patterns
+    # 5. Security & Optimization Flags
+    merged["enable_sanitizer"] = _as_bool(
+        merged.get("enable_sanitizer"),
+        defaults["enable_sanitizer"],
+        "enable_sanitizer",
+        warnings,
+        strict
+    )
+    merged["mask_user_paths"] = _as_bool(
+        merged.get("mask_user_paths"),
+        defaults["mask_user_paths"],
+        "mask_user_paths",
+        warnings,
+        strict
+    )
+    merged["minify_output"] = _as_bool(
+        merged.get("minify_output"),
+        defaults["minify_output"],
+        "minify_output",
+        warnings,
+        strict
+    )
+
+    # 6. Lists Normalization: Extensions and Patterns
     merged["extensions"] = _as_list_str(
         merged.get("extensions"),
         default_extensions(),

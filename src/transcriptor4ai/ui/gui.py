@@ -7,6 +7,7 @@ Implemented using PySimpleGUI. Manages user interactions, threaded
 pipeline execution, persistent configuration, and community feedback.
 Ensures semantic layout for AST options and update lifecycle management.
 Includes a pro-active Smart Error Reporter for critical failure analysis.
+Includes integrated Security Sanitizer, Path Masking, and Minification.
 """
 
 import logging
@@ -325,9 +326,14 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
     """Synchronize UI values back to the config dictionary."""
     for k in ["input_path", "output_base_dir", "output_subdir_name", "output_prefix", "target_model"]:
         config[k] = values.get(k)
-    for k in ["process_modules", "process_tests", "process_resources", "generate_tree",
-              "create_individual_files", "create_unified_file", "show_functions",
-              "show_classes", "show_methods", "print_tree", "save_error_log", "respect_gitignore"]:
+
+    bool_keys = [
+        "process_modules", "process_tests", "process_resources", "generate_tree",
+        "create_individual_files", "create_unified_file", "show_functions",
+        "show_classes", "show_methods", "print_tree", "save_error_log",
+        "respect_gitignore", "enable_sanitizer", "mask_user_paths", "minify_output"
+    ]
+    for k in bool_keys:
         config[k] = bool(values.get(k))
 
     config["extensions"] = _parse_list_from_string(values.get("extensions", ""))
@@ -340,7 +346,9 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     keys = ["input_path", "output_base_dir", "output_subdir_name", "output_prefix",
             "process_modules", "process_tests", "generate_tree", "create_individual_files",
             "create_unified_file", "show_functions", "show_classes", "show_methods",
-            "print_tree", "save_error_log", "respect_gitignore"]
+            "print_tree", "save_error_log", "respect_gitignore",
+            "enable_sanitizer", "mask_user_paths", "minify_output"]
+
     for k in keys:
         if k in window.AllKeysDict:
             window[k].update(config.get(k))
@@ -351,7 +359,6 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     window["include_patterns"].update(",".join(config.get("include_patterns", [])))
     window["exclude_patterns"].update(",".join(config.get("exclude_patterns", [])))
 
-    # Reset Stack selection combo to default visual state
     if "-STACK-" in window.AllKeysDict:
         window["-STACK-"].update(value="-- Select --")
 
@@ -461,8 +468,16 @@ def main() -> None:
         [sg.Text("Extensions:"), sg.Input(",".join(config["extensions"]), key="extensions", expand_x=True)],
         [sg.Text("Include:"), sg.Input(",".join(config["include_patterns"]), key="include_patterns", expand_x=True)],
         [sg.Text("Exclude:"), sg.Input(",".join(config["exclude_patterns"]), key="exclude_patterns", expand_x=True)],
-        [sg.Checkbox("Respect .gitignore", key="respect_gitignore", default=config.get("respect_gitignore", True)),
-         sg.Checkbox("Save error log", key="save_error_log", default=config["save_error_log"])],
+        [
+            sg.Checkbox(i18n.t("gui.checkboxes.gitignore"), key="respect_gitignore",
+                        default=config.get("respect_gitignore", True)),
+            sg.Checkbox("Sanitize Secrets", key="enable_sanitizer", default=config.get("enable_sanitizer", True),
+                        font=("Any", 8)),
+            sg.Checkbox("Mask Paths", key="mask_user_paths", default=config.get("mask_user_paths", True),
+                        font=("Any", 8)),
+            sg.Checkbox("Minify", key="minify_output", default=config.get("minify_output", False), font=("Any", 8)),
+            sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="save_error_log", default=config["save_error_log"])
+        ],
         [sg.Text("", key="-STATUS-", visible=False, font=("Any", 10, "bold"))],
         [
             sg.Button(i18n.t("gui.buttons.simulate"), key="btn_simulate", button_color=("white", "#007ACC")),

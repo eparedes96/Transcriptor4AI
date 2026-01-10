@@ -37,16 +37,19 @@ def transcribe_code(
         input_path: str,
         modules_output_path: str,
         tests_output_path: str,
-        resources_output_path: str,  # [New V1.2]
+        resources_output_path: str,
         error_output_path: str,
         process_modules: bool = True,
         process_tests: bool = True,
-        process_resources: bool = False,  # [New V1.2]
+        process_resources: bool = False,
         extensions: Optional[List[str]] = None,
         include_patterns: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
-        respect_gitignore: bool = True,  # [New V1.2]
+        respect_gitignore: bool = True,
         save_error_log: bool = True,
+        enable_sanitizer: bool = True,
+        mask_user_paths: bool = True,
+        minify_output: bool = False,
 ) -> Dict[str, Any]:
     """
     Consolidate source code and resources into specific text files.
@@ -60,11 +63,14 @@ def transcribe_code(
         process_modules: If True, extract source code files.
         process_tests: If True, extract test files.
         process_resources: If True, extract resource files.
-        extensions: List of allowed file extensions (union of all types).
+        extensions: List of allowed file extensions.
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
-        respect_gitignore: If True, parse .gitignore and add to exclusions.
+        respect_gitignore: If True, parse .gitignore.
         save_error_log: Whether to write the error log file.
+        enable_sanitizer: If True, redact secrets from the output.
+        mask_user_paths: If True, anonymize local user paths.
+        minify_output: If True, remove redundant code comments.
 
     Returns:
         A dictionary containing counters, paths, and status.
@@ -126,22 +132,19 @@ def transcribe_code(
             _, ext = os.path.splitext(file_name)
 
             # --- 1. Basic Filtering ---
-            # Check explicit exclusions (Regex/Gitignore)
             if matches_any(file_name, exclude_rx):
                 skipped_count += 1
                 continue
 
-            # Check inclusions (whitelist)
             if not matches_include(file_name, include_rx):
                 skipped_count += 1
                 continue
 
-            # Check Extension
             if ext not in extensions and file_name not in extensions:
                 skipped_count += 1
                 continue
 
-            # --- 2. Classification & Routing (V1.2) ---
+            # --- 2. Classification & Routing ---
             file_is_test = is_test(file_name)
             file_is_resource = is_resource_file(file_name)
 
@@ -156,7 +159,6 @@ def transcribe_code(
                 elif process_modules:
                     target_mode = "module"
             else:
-                # Standard source code
                 if process_modules:
                     target_mode = "module"
 
@@ -177,26 +179,33 @@ def transcribe_code(
                 continue
 
             try:
+                fmt_args = {
+                    "extension": ext,
+                    "enable_sanitizer": enable_sanitizer,
+                    "mask_user_paths": mask_user_paths,
+                    "minify_output": minify_output
+                }
+
                 # Write to specific output
                 if target_mode == "test":
                     if not tests_file_initialized:
                         _initialize_output_file(tests_output_path, "TESTS:")
                         tests_file_initialized = True
-                    _append_entry(tests_output_path, rel_path, content)
+                    _append_entry(tests_output_path, rel_path, content, **fmt_args)
                     tests_written += 1
 
                 elif target_mode == "resource":
                     if not resources_file_initialized:
                         _initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
                         resources_file_initialized = True
-                    _append_entry(resources_output_path, rel_path, content)
+                    _append_entry(resources_output_path, rel_path, content, **fmt_args)
                     resources_written += 1
 
                 elif target_mode == "module":
                     if not modules_file_initialized:
                         _initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
                         modules_file_initialized = True
-                    _append_entry(modules_output_path, rel_path, content)
+                    _append_entry(modules_output_path, rel_path, content, **fmt_args)
                     modules_written += 1
 
                 processed_count += 1
@@ -240,6 +249,9 @@ def transcribe_code(
         "process_modules": process_modules,
         "process_tests": process_tests,
         "process_resources": process_resources,
+        "enable_sanitizer": enable_sanitizer,
+        "mask_user_paths": mask_user_paths,
+        "minify_output": minify_output,
         "generated": {
             "tests": tests_output_path if tests_file_initialized else "",
             "modules": modules_output_path if modules_file_initialized else "",

@@ -5,7 +5,7 @@ Core orchestration pipeline for transcriptor4ai.
 
 Coordinates input validation, path preparation, service execution 
 (Transcription and Tree generation), output unification, and token estimation.
-Implements staging logic to support dry-runs with accurate statistics.
+Implements staging logic to support dry-runs with accurate statistics, including security and optimization filters.
 """
 
 import logging
@@ -54,6 +54,11 @@ class PipelineResult:
     process_resources: bool
     create_individual_files: bool
     create_unified_file: bool
+
+    # Security & Optimization Flags
+    enable_sanitizer: bool
+    mask_user_paths: bool
+    minify_output: bool
 
     # Output Paths
     final_output_path: str
@@ -204,7 +209,7 @@ def run_pipeline(
             save_path=path_tree,
         )
 
-    # B. Transcribe Code & Resources
+    # B. Transcribe Code & Resources (Updated V1.4.0 with security flags)
     trans_res = transcribe_code(
         input_path=base_path,
         modules_output_path=path_modules,
@@ -219,6 +224,9 @@ def run_pipeline(
         exclude_patterns=cfg["exclude_patterns"],
         respect_gitignore=bool(cfg["respect_gitignore"]),
         save_error_log=bool(cfg["save_error_log"]),
+        enable_sanitizer=bool(cfg.get("enable_sanitizer", True)),
+        mask_user_paths=bool(cfg.get("mask_user_paths", True)),
+        minify_output=bool(cfg.get("minify_output", False)),
     )
 
     if not trans_res.get("ok"):
@@ -278,13 +286,11 @@ def run_pipeline(
         if unified_created:
             gen_files_map["unified"] = "(Simulated: Unified Context File)"
     else:
-        # Move unified file if created
         if unified_created:
             real_path_unified = os.path.join(final_output_path, f"{prefix}_full_context.txt")
             shutil.move(path_unified, real_path_unified)
             gen_files_map["unified"] = real_path_unified
 
-        # Move errors if exist and in staging
         if os.path.exists(path_errors) and staging_dir != final_output_path:
             shutil.move(path_errors, os.path.join(final_output_path, f"{prefix}_errors.txt"))
 
@@ -315,7 +321,12 @@ def run_pipeline(
         "existing_files_before_run": list(existing_files),
         "unified_generated": unified_created,
         "dry_run": dry_run,
-        "will_generate": list(files_to_check) if dry_run else []
+        "will_generate": list(files_to_check) if dry_run else [],
+        "V1.4_features": {
+            "sanitizer": bool(cfg.get("enable_sanitizer")),
+            "mask_paths": bool(cfg.get("mask_user_paths")),
+            "minifier": bool(cfg.get("minify_output")),
+        }
     }
 
     logger.info("Pipeline completed successfully.")
@@ -349,6 +360,9 @@ def _build_error_result(
         process_resources=cfg.get("process_resources", False),
         create_individual_files=cfg.get("create_individual_files", False),
         create_unified_file=cfg.get("create_unified_file", False),
+        enable_sanitizer=cfg.get("enable_sanitizer", True),
+        mask_user_paths=cfg.get("mask_user_paths", True),
+        minify_output=cfg.get("minify_output", False),
         final_output_path=final_output_path,
         existing_files=existing_files or [],
         transcription_res={},
@@ -383,6 +397,9 @@ def _build_success_result(
         process_resources=cfg.get("process_resources", True),
         create_individual_files=cfg.get("create_individual_files", True),
         create_unified_file=cfg.get("create_unified_file", True),
+        enable_sanitizer=cfg.get("enable_sanitizer", True),
+        mask_user_paths=cfg.get("mask_user_paths", True),
+        minify_output=cfg.get("minify_output", False),
         final_output_path=final_output_path,
         existing_files=existing_files,
         transcription_res=trans_res or {},

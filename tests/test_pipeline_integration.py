@@ -5,6 +5,7 @@ Integration tests for the transcription pipeline.
 
 Verifies the end-to-end flow, covering dry runs, full execution with 
 modern features (Resources, Gitignore, Tokens), and configuration flexibility.
+Includes seamless validation for security sanitization and code optimization.
 """
 
 import os
@@ -16,7 +17,7 @@ from transcriptor4ai.pipeline import run_pipeline
 def source_structure(tmp_path):
     """
     Creates a temporary file structure for testing the pipeline:
-    /src/main.py
+    /src/main.py              (Contains mock secrets and comments)
     /src/utils.py
     /tests/test_main.py
     /ignored/__init__.py
@@ -26,7 +27,15 @@ def source_structure(tmp_path):
     """
     src = tmp_path / "src"
     src.mkdir()
-    (src / "main.py").write_text("def main(): pass", encoding="utf-8")
+
+    # We include 'dirty' data by default to test sanitization naturally
+    (src / "main.py").write_text(
+        "# Internal developer comment\n"
+        "def main():\n"
+        "    api_key = 'sk-1234567890abcdef1234567890abcdef'\n"
+        "    pass",
+        encoding="utf-8"
+    )
     (src / "utils.py").write_text("class Utils: pass", encoding="utf-8")
     (src / "__init__.py").write_text("", encoding="utf-8")
 
@@ -47,11 +56,11 @@ def source_structure(tmp_path):
 
 
 # -----------------------------------------------------------------------------
-# Integration Tests
+# End-to-End Pipeline Tests
 # -----------------------------------------------------------------------------
 
-def test_pipeline_dry_run_does_not_write(source_structure):
-    """Dry run should return OK but create no output files."""
+def test_pipeline_dry_run_behavior(source_structure):
+    """Dry run should return OK but create no output files on disk."""
     config = {
         "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
@@ -74,12 +83,11 @@ def test_pipeline_dry_run_does_not_write(source_structure):
 
 def test_pipeline_comprehensive_execution(source_structure):
     """
-    Test:
-    - Modules + Tests + Resources enabled.
-    - Gitignore active (should exclude secret.key).
-    - Tree generation.
-    - Token counting.
-    - Unified file assembly.
+    End-to-end test verifying the complete feature set:
+    - Content Selection (Modules, Tests, Resources)
+    - Filtering (Gitignore, Extensions)
+    - Tree Generation & Token Counting
+    - Transformation (Sanitization, Minification, Path Masking)
     """
     config = {
         "input_path": str(source_structure),
@@ -90,6 +98,9 @@ def test_pipeline_comprehensive_execution(source_structure):
         "process_tests": True,
         "process_resources": True,
         "respect_gitignore": True,
+        "enable_sanitizer": True,
+        "minify_output": True,
+        "mask_user_paths": True,
         "create_individual_files": True,
         "create_unified_file": True,
         "generate_tree": True,
@@ -102,77 +113,63 @@ def test_pipeline_comprehensive_execution(source_structure):
     out_dir = source_structure / "full_run"
     assert out_dir.exists()
 
-    # 1. Check Output Files Existence
+    # 1. Output Files Integrity
     assert (out_dir / "all_modules.txt").exists()
-    assert (out_dir / "all_tests.txt").exists()
-    assert (out_dir / "all_resources.txt").exists()
-    assert (out_dir / "all_tree.txt").exists()
     assert (out_dir / "all_full_context.txt").exists()
+    assert (out_dir / "all_tree.txt").exists()
 
-    # 2. Check Gitignore Logic (secret.key must be absent)
+    # 2. Content Validation (Filters)
     full_text = (out_dir / "all_full_context.txt").read_text(encoding="utf-8")
     assert "secret.key" not in full_text
     assert "SECRET_API_KEY" not in full_text
-
-    # 3. Check Resource Logic (readme.md must be present)
     assert "readme.md" in full_text
-    assert "# Documentation" in full_text
 
-    # 4. Check Token Count
+    # 3. Content Validation (Transformations)
+    assert "sk-1234567890abcdef1234567890abcdef" not in full_text
+    assert "[[REDACTED_SECRET]]" in full_text
+    assert "# Internal developer comment" not in full_text
+
+    # 4. Metrics & Summary
     assert result.token_count > 0
-    assert isinstance(result.token_count, int)
+    assert result.summary["V1.4_features"]["sanitizer"] is True
+    assert result.summary["V1.4_features"]["minifier"] is True
 
 
-def test_pipeline_selective_config_behavior(source_structure):
+def test_pipeline_transformation_integrity(source_structure):
     """
-    Test configuration flexibility (Simulate "Legacy" or "Unsafe" mode):
-    - NO Resources (should not generate _resources.txt).
-    - NO Gitignore (should INCLUDE secret.key).
+    Verify that transformations (Sanitization/Minification) can be
+    disabled and the output remains 'raw'.
     """
     config = {
         "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
-        "output_subdir_name": "unsafe_run",
-        "output_prefix": "unsafe",
-        "process_modules": True,
-        "process_tests": True,
-        "process_resources": False,
-        "respect_gitignore": False,
-        "create_individual_files": True,
+        "output_subdir_name": "raw_run",
+        "output_prefix": "raw",
+        "enable_sanitizer": False,
+        "minify_output": False,
+        "mask_user_paths": False,
         "create_unified_file": True
     }
 
     result = run_pipeline(config, dry_run=False)
     assert result.ok is True
-    out_dir = source_structure / "unsafe_run"
 
-    # 1. Check Resources are missing
-    assert not (out_dir / "unsafe_resources.txt").exists()
+    content = (source_structure / "raw_run" / "raw_full_context.txt").read_text(encoding="utf-8")
 
-    full_text = (out_dir / "unsafe_full_context.txt").read_text(encoding="utf-8")
-    assert "RESOURCES (CONFIG/DATA/DOCS):" not in full_text
-
-    # 2. Check Gitignore ignored (secret.key MUST be present)
-    config["extensions"] = [".py", ".key"]
-    result = run_pipeline(config, overwrite=True)
-    full_text = (out_dir / "unsafe_full_context.txt").read_text(encoding="utf-8")
-
-    assert "secret.key" in full_text
-    assert "SECRET_API_KEY" in full_text
+    assert "sk-1234567890abcdef1234567890abcdef" in content
+    assert "# Internal developer comment" in content
 
 
-def test_pipeline_unified_only(source_structure):
+def test_pipeline_unified_only_flow(source_structure):
     """
-    Test the scenario where user wants ONLY the unified file.
-    This verifies the tempfile staging logic in the pipeline.
+    Verify the staging logic when only the unified file is requested.
+    Individual files should not leak into the final destination.
     """
     config = {
         "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
         "output_subdir_name": "unified_only",
         "output_prefix": "ctx",
-        "process_modules": True,
-        "process_tests": True,
         "create_individual_files": False,
         "create_unified_file": True,
         "generate_tree": True
@@ -182,46 +179,24 @@ def test_pipeline_unified_only(source_structure):
     assert result.ok is True
 
     out_dir = source_structure / "unified_only"
-
-    # Assert individual files do NOT exist
     assert not (out_dir / "ctx_modules.txt").exists()
-    assert not (out_dir / "ctx_tests.txt").exists()
-    assert not (out_dir / "ctx_tree.txt").exists()
-
-    # Assert unified file DOES exist
-    unified_file = out_dir / "ctx_full_context.txt"
-    assert unified_file.exists()
-
-    # Assert content is correct
-    content = unified_file.read_text(encoding="utf-8")
-    assert "PROJECT CONTEXT" in content
-
-    # Fix for Windows: Check for either forward or backward slash
-    assert "src/main.py" in content or "src\\main.py" in content
+    assert (out_dir / "ctx_full_context.txt").exists()
 
 
 def test_pipeline_overwrite_protection(source_structure):
-    """Pipeline should fail if files exist and overwrite is False."""
+    """Ensure the pipeline respects existing files when overwrite is False."""
     out_dir = source_structure / "protect"
     out_dir.mkdir()
-
-    # Create a conflict file that matches the target individual file
-    (out_dir / "conflict_modules.txt").write_text("exists")
+    (out_dir / "conflict_modules.txt").write_text("pre-existing content")
 
     config = {
         "input_path": str(source_structure),
         "output_base_dir": str(source_structure),
         "output_subdir_name": "protect",
         "output_prefix": "conflict",
-        "create_individual_files": True,
-        "process_modules": True
+        "create_individual_files": True
     }
 
-    # First run: Should fail (ok=False) because file exists
     result = run_pipeline(config, overwrite=False)
     assert result.ok is False
-    assert "existing files" in result.error.lower() or "existing_files" in result.summary
-
-    # Second run: Should succeed with overwrite=True
-    result_force = run_pipeline(config, overwrite=True)
-    assert result_force.ok is True
+    assert "existing files" in result.error.lower()

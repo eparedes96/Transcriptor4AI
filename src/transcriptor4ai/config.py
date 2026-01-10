@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
-CURRENT_CONFIG_VERSION = "1.3.0"
+CURRENT_CONFIG_VERSION = "1.4.0"
 
 # Predefined Extension Stacks (Immutable defaults)
 DEFAULT_STACKS: Dict[str, List[str]] = {
@@ -86,6 +86,11 @@ def get_default_config() -> Dict[str, Any]:
         "show_methods": False,
         "generate_tree": False,
         "print_tree": True,
+
+        # Optimization & Privacy
+        "enable_sanitizer": True,
+        "mask_user_paths": True,
+        "minify_output": False,
 
         # Logging
         "save_error_log": True

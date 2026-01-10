@@ -5,6 +5,7 @@ Network utilities for Transcriptor4AI.
 
 Handles external communications including:
 - Version synchronization via GitHub REST API.
+- SHA-256 Checksum retrieval for binary integrity.
 - Secure submission of user feedback and crash reports via Formspree.
 - Semantic version comparison and network failover logic.
 """
@@ -25,7 +26,7 @@ GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/rel
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 
 TIMEOUT = 10
-USER_AGENT = "Transcriptor4AI-Client/1.3.0"
+USER_AGENT = "Transcriptor4AI-Client/1.4.0"
 
 
 # -----------------------------------------------------------------------------
@@ -34,18 +35,21 @@ USER_AGENT = "Transcriptor4AI-Client/1.3.0"
 def check_for_updates(current_version: str) -> Dict[str, Any]:
     """
     Query GitHub API to compare the local version with the latest remote release.
+    Also attempts to retrieve SHA-256 checksums for integrity verification.
 
     Args:
         current_version: The semantic version string of the running application.
 
     Returns:
-        A dictionary containing update status, latest version and changelog.
+        A dictionary containing update status, latest version, changelog,
+        and expected checksum if available.
     """
     result: Dict[str, Any] = {
         "has_update": False,
         "latest_version": current_version,
         "download_url": "",
         "changelog": "",
+        "sha256": None,
         "error": None
     }
 
@@ -57,9 +61,7 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
         response.raise_for_status()
         data = response.json()
 
-        # Clean tag from GitHub (often starts with 'v')
         latest_tag = data.get("tag_name", "").lstrip("v")
-
         logger.info(f"Update check: Remote version found is v{latest_tag}")
 
         if _is_newer(current_version, latest_tag):
@@ -68,6 +70,22 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
             result["latest_version"] = latest_tag
             result["download_url"] = data.get("html_url", "")
             result["changelog"] = data.get("body", "No changelog provided.")
+
+            # Integrity Check
+            assets = data.get("assets", [])
+            for asset in assets:
+                name = asset.get("name", "")
+                if name.endswith(".sha256"):
+                    try:
+                        checksum_url = asset.get("browser_download_url")
+                        c_res = requests.get(checksum_url, headers=headers, timeout=5)
+                        if c_res.status_code == 200:
+                            raw_hash = c_res.text.split()[0].strip()
+                            result["sha256"] = raw_hash
+                            logger.info(f"Integrity metadata retrieved: {raw_hash}")
+                    except Exception as e:
+                        logger.warning(f"Failed to retrieve checksum asset: {e}")
+                    break
         else:
             logger.info("Status: Application is up to date.")
 
@@ -91,7 +109,7 @@ def submit_feedback(payload: Dict[str, Any]) -> Tuple[bool, str]:
     Submit user feedback or feature requests to the development team.
 
     Args:
-        payload: Dictionary containing feedback details (type, subject, message).
+        payload: Dictionary containing feedback details.
 
     Returns:
         Tuple of (Success Status, Server Message/Error).

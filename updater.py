@@ -6,8 +6,9 @@ Standalone Updater Utility for Transcriptor4AI.
 This script is independent of the transcriptor4ai package to avoid
 import shadowing conflicts. It handles the binary swap lifecycle:
 1. Process termination wait.
-2. File replacement with rollback safety.
-3. Application restart.
+2. Integrity verification (SHA-256 Checksum).
+3. File replacement with rollback safety.
+4. Application restart.
 """
 
 import os
@@ -16,6 +17,8 @@ import time
 import subprocess
 import argparse
 import logging
+import hashlib
+from typing import Optional
 
 # Configure basic logging for the standalone script
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -40,37 +43,64 @@ def wait_for_pid(pid: int, timeout: int = 30) -> bool:
             os.kill(pid, 0)
         except OSError:
             return True
+        except Exception:
+            return True
         time.sleep(0.5)
     return False
 
 
-def run_update(old_exe: str, new_exe: str, pid: int) -> None:
+def calculate_sha256(file_path: str) -> str:
     """
-    Perform the file swap and restart the application.
+    Calculate SHA-256 hash of a file using chunked reading for memory efficiency.
+    """
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        logger.error(f"Failed to calculate hash for {file_path}: {e}")
+        return ""
+
+
+def run_update(old_exe: str, new_exe: str, pid: int, expected_sha256: Optional[str] = None) -> None:
+    """
+    Perform integrity check, file swap, and restart the application.
 
     Args:
         old_exe: Path to the current executable to be replaced.
         new_exe: Path to the new version downloaded.
         pid: PID of the running application to wait for.
+        expected_sha256: Optional checksum to verify binary integrity.
     """
 
     # 1. Wait for the main app to close
     if not wait_for_pid(pid):
-        logger.error("Timeout waiting for main application to close.")
+        logger.error("Timeout waiting for main application to close. Aborting update.")
         sys.exit(1)
 
-    # 2. Perform the swap
+    # 2. Integrity Verification
+    if expected_sha256:
+        logger.info("Verifying binary integrity...")
+        actual_sha256 = calculate_sha256(new_exe)
+        if actual_sha256.lower() != expected_sha256.lower():
+            logger.error("INTEGRITY CRITICAL FAILURE: Checksum mismatch!")
+            logger.error(f"Expected: {expected_sha256}")
+            logger.error(f"Actual:   {actual_sha256}")
+            sys.exit(1)
+        logger.info("Integrity check passed.")
+
+    # 3. Perform the swap
     try:
         if not os.path.exists(new_exe):
             logger.error(f"New version not found at: {new_exe}")
             sys.exit(1)
 
-        # Buffer time for OS file locks to release
         time.sleep(1)
 
         logger.info(f"Updating {old_exe}...")
 
-        # Rename strategy for atomic-like swap and rollback support
         backup_exe = old_exe + ".old"
         if os.path.exists(backup_exe):
             try:
@@ -100,7 +130,7 @@ def run_update(old_exe: str, new_exe: str, pid: int) -> None:
         logger.error(f"Critical error during swap: {e}")
         sys.exit(1)
 
-    # 3. Restart the application
+    # 4. Restart the application
     try:
         logger.info(f"Restarting application: {old_exe}")
         if sys.platform == "win32":
@@ -118,13 +148,13 @@ def main() -> None:
     parser.add_argument("--pid", type=int, required=True, help="PID of the process to wait for")
     parser.add_argument("--old", type=str, required=True, help="Path to the current executable")
     parser.add_argument("--new", type=str, required=True, help="Path to the new executable")
+    parser.add_argument("--sha256", type=str, help="Expected SHA-256 hash for integrity verification")
 
     args = parser.parse_args()
 
-    # Safety delay
     time.sleep(0.5)
 
-    run_update(args.old, args.new, args.pid)
+    run_update(args.old, args.new, args.pid, args.sha256)
     logger.info("Updater lifecycle finished.")
 
 

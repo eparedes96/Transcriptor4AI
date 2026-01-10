@@ -1,33 +1,37 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.3.0.-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.3.0-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-**Transcriptor4AI** is an industrial-grade context extraction tool designed for the AI era. It prepares entire codebases for Large Language Models (LLMs) like **GPT-4o**, **Claude 3.5**, or **Llama 3**.
+**Transcriptor4AI** is an industrial-grade context extraction engine designed to bridge the gap between complex local codebases and Large Language Models (LLMs) such as **GPT-4o**, **Claude 3.5**, or **Llama 3**.
 
-It goes beyond simple text flattening: it provides intelligent token estimation, AST-enhanced directory trees, and resource management, creating a single, optimized context file (`_full_context.txt`) ready for your prompt window.
+It goes beyond simple text flattening: it provides staging-based simulation, AST-enhanced structural analysis, and a professional distribution lifecycle to ensure your AI assistant receives the most accurate and optimized context possible.
 
 ---
 
 ## 🚀 Key Features
 
-### 🧠 Smart Context Management
-*   **Token Estimator**: Real-time estimation of context size using `tiktoken`. Select your target model (GPT, Claude, Llama) to get precise counts before sending data.
-*   **Profile Manager**: Save, load, and delete named configurations (e.g., "Backend Only", "Full Documentation").
-*   **Session Persistence**: The application automatically saves your state on exit. Pick up exactly where you left off.
+### 🧠 Intelligent Context Orchestration
+*   **Precision Token Estimator**: Real-time context size calculation using `tiktoken`. Tailored heuristics for GPT, Claude, and Gemini to prevent "Out of Context" errors.
+*   **Staging Engine**: A specialized simulation mode (**Dry-Run**) that processes data in memory to provide exact statistics and token counts without touching your filesystem.
+*   **Profile Architecture**: Save and switch between complex configurations (e.g., "Logic Only", "Full Audit", "DevOps Focus") with a single click.
 
 ### 🔍 Advanced Filtering & Security
-*   **Native .gitignore**: Automatically respects your project's ignore rules. No more accidental `node_modules` or secrets in your context.
-*   **Resource Processing**: First-class support for non-code assets. Include `README.md`, `.json` configs, `.yaml` workflows, and `Dockerfiles`.
-*   **Extension Stacks**: One-click configuration for ecosystems like **Python**, **Web**, **C#/.NET**, **Rust**, **Go**, and **DevOps**.
+*   **Native .gitignore Integration**: Full compliance with project-specific ignore rules, ensuring sensitive data and dependencies stay local.
+*   **Ecosystem Stacks**: Instant configuration for **Python**, **Web Fullstack**, **Rust**, **Go**, **DevOps**, and more.
+*   **Resource Classification**: Intelligent separation of source code, unit tests, and project assets (Markdown, JSON, Dockerfiles).
 
-### 🛠️ Core Capabilities
-*   **Flexible Output**: Generate a **Unified Context File** for easy copy-pasting or individual components for documentation.
-*   **AST Analysis**: Visual directory tree that "sees inside" files, listing Classes, Functions, and Methods without executing code.
-*   **Dual Interface**: A modern GUI for visual workflows and a powerful CLI for CI/CD automation.
+### 🛠️ Professional Tooling
+*   **AST Symbol Mapping**: A directory tree that performs static analysis to list Classes, Functions, and Methods without execution.
+*   **Dual-Mode Interface**: High-productivity GUI for developers and a robust CLI for CI/CD pipeline automation.
+
+### 🤝 Lifecycle & Community (v1.3.0+)
+*   **Smart Error Reporter**: Automatic capture of critical exceptions with an integrated diagnostic modal and one-click submission to developers.
+*   **Feedback Hub**: Direct communication channel for feature requests and bug reports with automated log attachment.
+*   **OTA Auto-Updates**: Seamless version tracking via GitHub API with an autonomous sidecar updater for zero-friction maintenance.
 
 ---
 
@@ -35,101 +39,78 @@ It goes beyond simple text flattening: it provides intelligent token estimation,
 
 ### Prerequisites
 *   Python 3.12 or higher.
+*   Conda (Recommended).
 
-### From Source (Recommended)
-Since this project uses a modern `src` layout, install it using `pip` to ensure dependencies and entry points are correctly configured.
-
+### Setup
 ```bash
-# 1. Clone the repository
-git clone https://github.com/yourusername/transcriptor4ai.git
-cd transcriptor4ai
+# Clone the repository
+git clone https://github.com/eparedes96/Transcriptor4AI.git
+cd Transcriptor4AI
 
-# 2. Install dependencies and the package
-pip install .
+# Update your Conda environment
+conda env update --file environment.yml --prune
+conda activate transcriptor4ai
 
-# For development (editable mode)
+# Install in editable mode
 pip install -e .
 ```
-
 ---
 
 ## 🖥️ Usage
 
-Once installed, two commands become available in your terminal:
+Transcriptor4AI provides two entry points depending on your workflow:
 
 ### 1. Graphical User Interface (GUI)
-Launch the visual tool:
+Launch the visual dashboard for manual context preparation:
 
 ```bash
 transcriptor-gui
 ```
 
-*   **Profiles**: Use the top bar to Load/Save specific configurations.
-*   **Stacks**: Select "Python Data" or "Web Fullstack" to auto-fill extensions.
-*   **Target Model**: Choose your destination LLM (e.g., GPT-4o) for accurate token counts.
-*   **Simulation**: Use **"SIMULATE"** to validate paths and see the projected file list and token count without writing to disk.
+*   **Profiles**: Manage saved states using the top-level bar.
+*   **Feedback**: Use the **Feedback Hub** to send logs or suggestions directly to the developer.
+*   **Simulation**: Use **"SIMULATE"** to validate paths and see projected metrics without writing to disk.
 
 ### 2. Command Line Interface (CLI)
-Ideal for scripts, automation, or quick operations.
+Ideal for automation, remote servers, or power users.
 
 **Basic Example:**
-
 ```bash
 transcriptor-cli -i ./my_project -o ./dist --resources --tree
 ```
 
-**Advanced Example (Resources + Unified Output):**
-
+**Advanced Example (Resources + Unified Output + AST):**
 ```bash
 transcriptor-cli -i ./src \
-                 -o ./output \
+                 -o ./dist \
                  --unified-only \
-                 --resources \
-                 --tree --classes --functions \
+                 --tree --classes --functions --methods \
+                 --ext .py,.js,.sql \
                  --dry-run
 ```
-
-#### CLI Arguments Reference
-
-| Flag | Description |
-| :--- | :--- |
-| `-i`, `--input` | Path to the source directory to process. |
-| `-o`, `--output-base` | Base output directory. |
-| `--resources` | Include resource files (docs, config, data). |
-| `--no-gitignore` | Disable `.gitignore` parsing (read everything). |
-| `--unified-only` | Generate ONLY the single `_full_context.txt` file. |
-| `--tree` | Generate the directory tree structure. |
-| `--classes` | Include class definitions in the tree. |
-| `--functions` | Include function definitions in the tree. |
-| `--ext` | Comma-separated extensions (e.g., `.py,.js`). |
-| `--dry-run` | Simulate execution and show **Token Estimate**. |
-
-Use `transcriptor-cli --help` for the full list of options.
-
 ---
 
 ## ⚙️ Configuration
 
-The application uses a `config.json` file for persistent settings and profiles.
-*   **Location**: OS User Data Directory (e.g., `%LOCALAPPDATA%\Transcriptor4AI` on Windows).
-*   **Structure**: Hierarchical JSON storing `app_settings`, `last_session`, and `saved_profiles`.
+The application maintains a hierarchical state in a `config.json` file located in your user data directory (`%LOCALAPPDATA%` on Windows or `~/.transcriptor4ai` on Linux).
 
 **Example Structure:**
 
 ```json
 {
-    "version": "1.3.0.",
+    "version": "1.3.0",
+    "app_settings": {
+        "theme": "SystemDefault",
+        "auto_check_updates": true,
+        "allow_telemetry": true
+    },
     "last_session": {
-        "process_modules": true,
-        "process_resources": true,
-        "respect_gitignore": true,
         "target_model": "GPT-4o / GPT-5",
-        "extensions": [".py", ".md", ".json"],
+        "respect_gitignore": true,
         "generate_tree": true
     },
     "saved_profiles": {
-        "Backend Only": { },
-        "Full Documentation": { }
+        "Fast Scan": { "extensions": [".py"], "generate_tree": false }
     }
 }
 ```
@@ -138,37 +119,30 @@ The application uses a `config.json` file for persistent settings and profiles.
 
 ## 📂 Output Structure
 
-The output folder will contain (depending on configuration):
+The engine generates a structured output directory with the following artifacts:
 
-1.  **`{prefix}_full_context.txt`**: The master file (Tree + Scripts + Tests + Resources). **This is what you feed the AI.**
-2.  **`{prefix}_resources.txt`**: Consolidated documentation and config files.
-3.  **`{prefix}_modules.txt`**: Consolidated source code.
-4.  **`{prefix}_tests.txt`**: Consolidated test files.
-5.  **`{prefix}_tree.txt`**: Hierarchical view of the project structure.
+1.  **`{prefix}_full_context.txt`**: The "Master Context". Tree + Modules + Tests + Resources in a single AI-optimized file.
+2.  **`{prefix}_tree.txt`**: Hierarchical project map with optional AST symbol definitions.
+3.  **`{prefix}_modules.txt / tests.txt / resources.txt`**: Granular components for selective context injection.
+4.  **`{prefix}_errors.txt`**: Detailed log of files skipped due to encoding or permission issues.
 
 ---
 
-## 🛠️ Development
+## 🛠️ Development & Build
 
-### Running Tests
-The project includes a comprehensive test suite using `pytest`.
-
+### Quality Assurance
 ```bash
-# Run all tests
+# Run the full suite
 pytest
 
-# Run with verbose output
-pytest -v
+# Technical coverage
+pytest -v --strict-markers
 ```
 
-### Building Executable
-To generate a standalone `.exe` file (Windows) or binary (Linux/Mac):
-
+### Standalone Distribution
+To generate the production-ready executable:
 ```bash
-# 1. Install build tools
-pip install pyinstaller
-
-# 2. Run the build script
+# Building the standalone bundle (PyInstaller)
 python build.py
 ```
 
@@ -177,8 +151,6 @@ python build.py
 ## 📝 License
 
 Distributed under the MIT License. See `LICENSE` for more information.
-
----
 
 **Author**: Enrique Paredes
 **Contact**: eparedesbalen@gmail.com

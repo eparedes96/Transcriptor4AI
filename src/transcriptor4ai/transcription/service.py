@@ -4,11 +4,13 @@ from __future__ import annotations
 Source code transcription service.
 
 Recursively scans directories and consolidates files into text documents based on granular processing flags and filters. 
-Implements streaming I/O to handle massive projects with near-zero memory overhead.
+Implements a Parallel Processing Engine with ThreadPoolExecutor and atomic locking for high-speed, thread-safe transcription.
 """
 
 import logging
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Iterator
 
 from transcriptor4ai.filtering import (
@@ -51,7 +53,7 @@ def transcribe_code(
         minify_output: bool = False,
 ) -> Dict[str, Any]:
     """
-    Consolidate source code and resources into specific text files.
+    Consolidate source code and resources into specific text files using parallel workers.
 
     Args:
         input_path: Source directory to scan.
@@ -74,10 +76,10 @@ def transcribe_code(
     Returns:
         A dictionary containing counters, paths, and status.
     """
-    logger.info(f"Starting transcription scan (Performance Mode) in: {input_path}")
+    logger.info(f"Starting parallel transcription scan in: {input_path}")
 
     # -------------------------
-    # Input Normalization
+    # 1. Normalization & Setup
     # -------------------------
     if extensions is None:
         extensions = default_extensions()
@@ -88,12 +90,11 @@ def transcribe_code(
 
     input_path_abs = os.path.abspath(input_path)
 
-    # Ensure output directories exist
     for p in [modules_output_path, tests_output_path, resources_output_path, error_output_path]:
         _safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
     # -------------------------
-    # Pattern Compilation
+    # 2. Pattern Compilation
     # -------------------------
     final_exclusions = list(exclude_patterns)
     if respect_gitignore:
@@ -106,153 +107,131 @@ def transcribe_code(
     exclude_rx = compile_patterns(final_exclusions)
 
     # -------------------------
-    # Filesystem Traversal
+    # 3. Threading Infrastructure
     # -------------------------
-    errors: List[TranscriptionError] = []
+    # We use locks to ensure only one thread writes to a specific file at a time
+    locks = {
+        "module": threading.Lock(),
+        "test": threading.Lock(),
+        "resource": threading.Lock(),
+        "error": threading.Lock()
+    }
 
-    # Counters
-    processed_count = 0
-    skipped_count = 0
-    tests_written = 0
-    modules_written = 0
-    resources_written = 0
+    output_paths = {
+        "module": modules_output_path,
+        "test": tests_output_path,
+        "resource": resources_output_path,
+        "error": error_output_path
+    }
 
-    # Lazy initialization flags
-    tests_file_initialized = False
-    modules_file_initialized = False
-    resources_file_initialized = False
+    # Tracking shared across workers (protected by local logic/locks)
+    results = {
+        "processed": 0,
+        "skipped": 0,
+        "tests_written": 0,
+        "modules_written": 0,
+        "resources_written": 0,
+        "errors": []
+    }
 
-    for root, dirs, files in os.walk(input_path_abs):
-        dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
-        dirs.sort()
-        files.sort()
+    # Pre-initialize headers to avoid race conditions during first write
+    if process_modules:
+        _initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
+    if process_tests:
+        _initialize_output_file(tests_output_path, "TESTS:")
+    if process_resources:
+        _initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
 
-        for file_name in files:
-            _, ext = os.path.splitext(file_name)
+    # -------------------------
+    # 4. Parallel Task Dispatch
+    # -------------------------
+    tasks = []
 
-            # --- 1. Basic Filtering ---
-            if matches_any(file_name, exclude_rx):
-                skipped_count += 1
-                continue
+    with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
+        for root, dirs, files in os.walk(input_path_abs):
+            dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
+            dirs.sort()
+            files.sort()
 
-            if not matches_include(file_name, include_rx):
-                skipped_count += 1
-                continue
+            for file_name in files:
+                if matches_any(file_name, exclude_rx) or not matches_include(file_name, include_rx):
+                    results["skipped"] += 1
+                    continue
 
-            if ext not in extensions and file_name not in extensions:
-                skipped_count += 1
-                continue
+                _, ext = os.path.splitext(file_name)
+                if ext not in extensions and file_name not in extensions:
+                    results["skipped"] += 1
+                    continue
 
-            # --- 2. Classification & Routing ---
-            file_is_test = is_test(file_name)
-            file_is_resource = is_resource_file(file_name)
+                file_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(file_path, input_path_abs)
 
-            target_mode = "skip"
+                tasks.append(executor.submit(
+                    _process_single_file,
+                    file_path=file_path,
+                    rel_path=rel_path,
+                    ext=ext,
+                    file_name=file_name,
+                    process_modules=process_modules,
+                    process_tests=process_tests,
+                    process_resources=process_resources,
+                    enable_sanitizer=enable_sanitizer,
+                    mask_user_paths=mask_user_paths,
+                    minify_output=minify_output,
+                    locks=locks,
+                    output_paths=output_paths
+                ))
 
-            if file_is_test:
-                if process_tests:
-                    target_mode = "test"
-            elif file_is_resource:
-                if process_resources:
-                    target_mode = "resource"
-                elif process_modules:
-                    target_mode = "module"
+        for future in as_completed(tasks):
+            worker_res = future.result()
+            if worker_res["ok"]:
+                results["processed"] += 1
+                if worker_res["mode"] == "test":
+                    results["tests_written"] += 1
+                elif worker_res["mode"] == "module":
+                    results["modules_written"] += 1
+                elif worker_res["mode"] == "resource":
+                    results["resources_written"] += 1
             else:
-                if process_modules:
-                    target_mode = "module"
-
-            if target_mode == "skip":
-                skipped_count += 1
-                continue
-
-            # --- 3. Streaming Extraction & Writing ---
-            file_path = os.path.join(root, file_name)
-            rel_path = os.path.relpath(file_path, input_path_abs)
-
-            try:
-                line_iterator = _get_file_lines(file_path)
-
-                fmt_args = {
-                    "extension": ext,
-                    "enable_sanitizer": enable_sanitizer,
-                    "mask_user_paths": mask_user_paths,
-                    "minify_output": minify_output
-                }
-
-                if target_mode == "test":
-                    if not tests_file_initialized:
-                        _initialize_output_file(tests_output_path, "TESTS:")
-                        tests_file_initialized = True
-                    _append_entry(tests_output_path, rel_path, line_iterator, **fmt_args)
-                    tests_written += 1
-
-                elif target_mode == "resource":
-                    if not resources_file_initialized:
-                        _initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
-                        resources_file_initialized = True
-                    _append_entry(resources_output_path, rel_path, line_iterator, **fmt_args)
-                    resources_written += 1
-
-                elif target_mode == "module":
-                    if not modules_file_initialized:
-                        _initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
-                        modules_file_initialized = True
-                    _append_entry(modules_output_path, rel_path, line_iterator, **fmt_args)
-                    modules_written += 1
-
-                processed_count += 1
-                logger.debug(f"Processed ({target_mode}): {rel_path}")
-
-            except (OSError, UnicodeDecodeError) as e:
-                logger.warning(f"Error processing file {rel_path}: {e}")
-                errors.append(TranscriptionError(rel_path=rel_path, error=str(e)))
-                continue
+                results["errors"].append(TranscriptionError(
+                    rel_path=worker_res["rel_path"],
+                    error=worker_res["error"]
+                ))
 
     # -------------------------
-    # Lazy Error Logging
+    # 5. Error Log Deployment
     # -------------------------
     actual_error_path = ""
-    if save_error_log and errors:
+    if save_error_log and results["errors"]:
         try:
             with open(error_output_path, "w", encoding="utf-8") as f:
                 f.write("ERRORS:\n")
-                for err_item in errors:
+                for err_item in results["errors"]:
                     f.write("-" * 80 + "\n")
                     f.write(f"{err_item.rel_path}\n")
                     f.write(f"{err_item.error}\n")
             actual_error_path = error_output_path
-            logger.info(f"Error log saved to: {error_output_path}")
         except OSError as e:
             logger.error(f"Failed to save error log: {e}")
 
-    logger.info(
-        f"Transcription finished. Processed: {processed_count}. "
-        f"[Tests: {tests_written}, Modules: {modules_written}, Resources: {resources_written}]. "
-        f"Errors: {len(errors)}"
-    )
+    logger.info(f"Parallel Transcription finished. Processed: {results['processed']}. Errors: {len(results['errors'])}")
 
     return {
         "ok": True,
         "input_path": input_path_abs,
-        "process_modules": process_modules,
-        "process_tests": process_tests,
-        "process_resources": process_resources,
-        "enable_sanitizer": enable_sanitizer,
-        "mask_user_paths": mask_user_paths,
-        "minify_output": minify_output,
         "generated": {
-            "tests": tests_output_path if tests_file_initialized else "",
-            "modules": modules_output_path if modules_file_initialized else "",
-            "resources": resources_output_path if resources_file_initialized else "",
+            "tests": tests_output_path if results["tests_written"] > 0 else "",
+            "modules": modules_output_path if results["modules_written"] > 0 else "",
+            "resources": resources_output_path if results["resources_written"] > 0 else "",
             "errors": actual_error_path,
         },
         "counters": {
-            "processed": processed_count,
-            "skipped": skipped_count,
-            "tests_written": tests_written,
-            "modules_written": modules_written,
-            "resources_written": resources_written,
-            "errors": len(errors),
+            "processed": results["processed"],
+            "skipped": results["skipped"],
+            "tests_written": results["tests_written"],
+            "modules_written": results["modules_written"],
+            "resources_written": results["resources_written"],
+            "errors": len(results["errors"]),
         },
     }
 
@@ -260,11 +239,65 @@ def transcribe_code(
 # -----------------------------------------------------------------------------
 # Private Helpers
 # -----------------------------------------------------------------------------
+
+def _process_single_file(
+        file_path: str,
+        rel_path: str,
+        ext: str,
+        file_name: str,
+        process_modules: bool,
+        process_tests: bool,
+        process_resources: bool,
+        enable_sanitizer: bool,
+        mask_user_paths: bool,
+        minify_output: bool,
+        locks: Dict[str, threading.Lock],
+        output_paths: Dict[str, str]
+) -> Dict[str, Any]:
+    """
+    Atomic worker task: processes a single file and appends it to output.
+    """
+    # 1. Classification
+    file_is_test = is_test(file_name)
+    file_is_resource = is_resource_file(file_name)
+    target_mode = "skip"
+
+    if file_is_test:
+        if process_tests: target_mode = "test"
+    elif file_is_resource:
+        if process_resources:
+            target_mode = "resource"
+        elif process_modules:
+            target_mode = "module"
+    else:
+        if process_modules: target_mode = "module"
+
+    if target_mode == "skip":
+        return {"ok": False, "rel_path": rel_path, "error": "Filtered by mode", "mode": "skip"}
+
+    # 2. Transcription Logic
+    try:
+        line_iterator = _get_file_lines(file_path)
+
+        lock = locks[target_mode]
+        with lock:
+            _append_entry(
+                output_path=output_paths[target_mode],
+                rel_path=rel_path,
+                line_iterator=line_iterator,
+                extension=ext,
+                enable_sanitizer=enable_sanitizer,
+                mask_user_paths=mask_user_paths,
+                minify_output=minify_output
+            )
+        return {"ok": True, "mode": target_mode, "rel_path": rel_path}
+
+    except (OSError, UnicodeDecodeError) as e:
+        return {"ok": False, "rel_path": rel_path, "error": str(e), "mode": target_mode}
+
+
 def _get_file_lines(file_path: str) -> Iterator[str]:
-    """
-    Read a file line by line using a generator.
-    Handles encoding gracefully and protects against binary content.
-    """
+    """Read a file line by line using a generator."""
     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:
             yield line

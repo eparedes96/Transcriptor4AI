@@ -3,15 +3,17 @@ from __future__ import annotations
 """
 Core orchestration pipeline for transcriptor4ai.
 
-Coordinates input validation, path preparation, service execution 
-(Transcription and Tree generation), output unification, and token estimation.
-Implements staging logic to support dry-runs with accurate statistics, including security and optimization filters.
+Coordinates input validation, path preparation, service execution (Transcription and Tree generation), output unification, and token estimation.
+
+Implemented Parallel Service Orchestration. 
+The tree generation and code transcription now run concurrently to optimize I/O wait times.
 """
 
 import logging
 import os
 import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -89,21 +91,8 @@ def run_pipeline(
     """
     Execute the full transcription pipeline.
 
-    Orchestrates the creation of individual parts (Tree, Modules, Tests, Resources)
-    and optionally assembles them into a unified context file.
-
-    If dry_run is True, the pipeline performs the full scan using a temporary
-    staging directory to provide accurate token counts and file statistics
-    without modifying the final destination.
-
-    Args:
-        config: Configuration dictionary (will be validated).
-        overwrite: If False, aborts if output files already exist.
-        dry_run: If True, calculates paths and stats but does not write to the user path.
-        tree_output_path: Optional override for tree output file.
-
-    Returns:
-        PipelineResult object.
+    Orchestrates the creation of individual parts (Tree, Modules, Tests, Resources) and optionally assembles them into a unified context file.
+    Orchestrates services in parallel to reduce total execution time.
     """
     logger.info("Pipeline execution started.")
 
@@ -162,7 +151,6 @@ def run_pipeline(
     # -------------------------------------------------------------------------
     # 3) Directory & Staging Preparation
     # -------------------------------------------------------------------------
-    # If it's a dry run, we NEVER create the final directory.
     if not dry_run:
         try:
             os.makedirs(final_output_path, exist_ok=True)
@@ -171,7 +159,6 @@ def run_pipeline(
             logger.critical(msg)
             return _build_error_result(msg, cfg, base_path, final_output_path)
 
-    # We ALWAYS use a temporary staging directory if it's a dry run or
     temp_dir_obj = None
     if dry_run or not cfg["create_individual_files"]:
         temp_dir_obj = tempfile.TemporaryDirectory()
@@ -189,13 +176,15 @@ def run_pipeline(
     path_unified = os.path.join(staging_dir, f"{prefix}_full_context.txt")
 
     # -------------------------------------------------------------------------
-    # 4) Execute Services
+    # 4) Execute Services in Parallel
     # -------------------------------------------------------------------------
-
-    # A. Generate Tree
     tree_lines: List[str] = []
-    if cfg["generate_tree"]:
-        tree_lines = generate_directory_tree(
+    trans_res: Dict[str, Any] = {}
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="PipelineExecutor") as executor:
+        # Task A: Tree Generation
+        future_tree = executor.submit(
+            generate_directory_tree,
             input_path=base_path,
             mode="all",
             extensions=cfg["extensions"],
@@ -206,28 +195,35 @@ def run_pipeline(
             show_classes=bool(cfg.get("show_classes")),
             show_methods=bool(cfg.get("show_methods")),
             print_to_log=bool(cfg.get("print_tree")),
-            save_path=path_tree,
+            save_path=path_tree if cfg["generate_tree"] else "",
         )
 
-    # B. Transcribe Code & Resources (Updated V1.4.0 with security flags)
-    trans_res = transcribe_code(
-        input_path=base_path,
-        modules_output_path=path_modules,
-        tests_output_path=path_tests,
-        resources_output_path=path_resources,
-        error_output_path=path_errors,
-        process_modules=bool(cfg["process_modules"]),
-        process_tests=bool(cfg["process_tests"]),
-        process_resources=bool(cfg["process_resources"]),
-        extensions=cfg["extensions"],
-        include_patterns=cfg["include_patterns"],
-        exclude_patterns=cfg["exclude_patterns"],
-        respect_gitignore=bool(cfg["respect_gitignore"]),
-        save_error_log=bool(cfg["save_error_log"]),
-        enable_sanitizer=bool(cfg.get("enable_sanitizer", True)),
-        mask_user_paths=bool(cfg.get("mask_user_paths", True)),
-        minify_output=bool(cfg.get("minify_output", False)),
-    )
+        # Task B: Transcription
+        future_trans = executor.submit(
+            transcribe_code,
+            input_path=base_path,
+            modules_output_path=path_modules,
+            tests_output_path=path_tests,
+            resources_output_path=path_resources,
+            error_output_path=path_errors,
+            process_modules=bool(cfg["process_modules"]),
+            process_tests=bool(cfg["process_tests"]),
+            process_resources=bool(cfg["process_resources"]),
+            extensions=cfg["extensions"],
+            include_patterns=cfg["include_patterns"],
+            exclude_patterns=cfg["exclude_patterns"],
+            respect_gitignore=bool(cfg["respect_gitignore"]),
+            save_error_log=bool(cfg["save_error_log"]),
+            enable_sanitizer=bool(cfg.get("enable_sanitizer", True)),
+            mask_user_paths=bool(cfg.get("mask_user_paths", True)),
+            minify_output=bool(cfg.get("minify_output", False)),
+        )
+
+        # Collect results
+        if cfg["generate_tree"]:
+            tree_lines = future_tree.result()
+
+        trans_res = future_trans.result()
 
     if not trans_res.get("ok"):
         if temp_dir_obj:
@@ -322,10 +318,11 @@ def run_pipeline(
         "unified_generated": unified_created,
         "dry_run": dry_run,
         "will_generate": list(files_to_check) if dry_run else [],
-        "V1.4_features": {
+        "V1.5_performance": {
             "sanitizer": bool(cfg.get("enable_sanitizer")),
             "mask_paths": bool(cfg.get("mask_user_paths")),
             "minifier": bool(cfg.get("minify_output")),
+            "parallel_engine": True
         }
     }
 

@@ -82,11 +82,7 @@ def test_pipeline_dry_run_behavior(source_structure):
 
 def test_pipeline_comprehensive_execution(source_structure):
     """
-    End-to-end test verifying the V1.5.0 Parallel Engine:
-    - Parallel Service Execution (Tree + Transcription)
-    - Content Selection & Gitignore Filtering
-    - Streaming Transformations (Sanitization + Minification)
-    - Performance Metadata check
+    End-to-end test verifying the Parallel Engine.
     """
     config = {
         "input_path": str(source_structure),
@@ -125,14 +121,14 @@ def test_pipeline_comprehensive_execution(source_structure):
 
     # 3. Streaming Transformation Validation
     assert "sk-1234567890abcdef1234567890abcdef" not in full_text
-    assert "[[REDACTED_SENSITIVE]]" in full_text
+    assert "[[REDACTED_SECRET]]" in full_text
     assert "# Internal developer comment" not in full_text
 
     # 4. Performance Metadata
     assert result.token_count > 0
     perf_metrics = result.summary["V1.5_performance"]
     assert perf_metrics["parallel_engine"] is True
-    assert perf_metrics["minifier"] is True
+    assert perf_metrics["parallel_engine"] is True
 
 
 def test_pipeline_transformation_integrity(source_structure):

@@ -43,6 +43,10 @@ def minify_code(text: str, extension: str = ".py") -> str:
     return result.strip()
 
 
+# -----------------------------------------------------------------------------
+# Public API
+# -----------------------------------------------------------------------------
+
 def minify_code_stream(lines: Iterator[str], extension: str = ".py") -> Iterator[str]:
     """
     Stream-based minification. Performs line-by-line comment removal
@@ -70,10 +74,10 @@ def minify_code_stream(lines: Iterator[str], extension: str = ".py") -> Iterator
         # 2. Strip trailing whitespace
         processed = processed.rstrip()
 
-        # 3. Stateful Newline Collapsing (Max 2 consecutive empty lines)
+        # 3. Stateful Newline Collapsing (Max 1 empty line between content)
         if not processed:
             empty_line_count += 1
-            if empty_line_count <= 2:
+            if empty_line_count == 1:
                 yield "\n"
         else:
             empty_line_count = 0

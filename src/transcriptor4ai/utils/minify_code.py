@@ -4,8 +4,8 @@ from __future__ import annotations
 Code Minification Utility for Transcriptor4AI.
 
 Reduces token consumption by removing non-essential characters, 
-redundant comments, and excessive whitespace while maintaining 
-code logic integrity.
+redundant comments (including inline comments), and excessive whitespace 
+while maintaining code logic integrity.
 """
 
 import logging
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Minification Patterns
 # -----------------------------------------------------------------------------
-_PYTHON_COMMENT_PATTERN: Final[re.Pattern] = re.compile(r"(?m)^\s*#.*$")
-_C_STYLE_COMMENT_PATTERN: Final[re.Pattern] = re.compile(r"(?m)^\s*//.*$")
+_PYTHON_COMMENT_PATTERN: Final[re.Pattern] = re.compile(r"#.*")
+_C_STYLE_COMMENT_PATTERN: Final[re.Pattern] = re.compile(r"//.*")
 _MULTI_NEWLINE_PATTERN: Final[re.Pattern] = re.compile(r"\n{3,}")
 
 
@@ -42,7 +42,7 @@ def minify_code(text: str, extension: str = ".py") -> str:
 
     original_len = len(text)
 
-    # 1. Remove Single-Line Comments based on extension
+    # 1. Remove Line and Inline Comments based on extension
     ext_lower = extension.lower()
 
     if ext_lower in ('.py', '.yaml', '.yml', '.sh', '.bash'):
@@ -53,7 +53,7 @@ def minify_code(text: str, extension: str = ".py") -> str:
     # 2. Collapse excessive newlines (max 2 consecutive)
     text = _MULTI_NEWLINE_PATTERN.sub("\n\n", text)
 
-    # 3. Strip trailing whitespace from each line
+    # 3. Strip trailing whitespace from each line (essential for inline comments)
     text = "\n".join(line.rstrip() for line in text.splitlines())
 
     # 4. Final trim

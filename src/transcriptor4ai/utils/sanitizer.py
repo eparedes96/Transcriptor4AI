@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 # Redaction Constants (Regex Patterns)
 # -----------------------------------------------------------------------------
+# Generic pattern for assignments like: API_KEY = "..." or "token": "..."
 _GENERIC_SECRET_PATTERN: Final[str] = (
     r"(?i)(?:key|password|secret|token|auth|api|pwd)[-_]?(?:key|password|secret|token|auth|api|pwd)?\s*"
     r"[:=]\s*[\"']([^\"']{8,})[\"']"
 )
 
-# Provider Specific Patterns
-_OPENAI_KEY_PATTERN: Final[str] = r"sk-[a-zA-Z0-9]{32,}"
+# Provider Specific Patterns - V1.4.1: Support hyphens in OpenAI-like keys
+_OPENAI_KEY_PATTERN: Final[str] = r"sk-[a-zA-Z0-9-]{32,}"
 _AWS_KEY_PATTERN: Final[str] = r"AKIA[0-9A-Z]{16}"
 
 # Network Patterns

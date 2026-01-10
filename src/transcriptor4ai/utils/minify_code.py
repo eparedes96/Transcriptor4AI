@@ -44,17 +44,16 @@ def minify_code(text: str, extension: str = ".py") -> str:
 
     # 1. Remove Line and Inline Comments based on extension
     ext_lower = extension.lower()
-
     if ext_lower in ('.py', '.yaml', '.yml', '.sh', '.bash'):
         text = _PYTHON_COMMENT_PATTERN.sub("", text)
     elif ext_lower in ('.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go'):
         text = _C_STYLE_COMMENT_PATTERN.sub("", text)
 
-    # 2. Collapse excessive newlines (max 2 consecutive)
-    text = _MULTI_NEWLINE_PATTERN.sub("\n\n", text)
-
-    # 3. Strip trailing whitespace from each line (essential for inline comments)
+    # 2. Strip trailing whitespace from each line (CRITICAL)
     text = "\n".join(line.rstrip() for line in text.splitlines())
+
+    # 3. Collapse excessive newlines (max 2 consecutive)
+    text = _MULTI_NEWLINE_PATTERN.sub("\n\n", text)
 
     # 4. Final trim
     text = text.strip()

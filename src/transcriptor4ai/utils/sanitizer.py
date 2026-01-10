@@ -85,14 +85,14 @@ def mask_local_paths(text: str) -> str:
 
     try:
         user_name = os.getlogin()
-        home_dir = str(Path.home())
+        home_dir = str(Path.home()).replace("\\", "/")
     except Exception as e:
         logger.debug(f"Could not determine local user for path masking: {e}")
         return text
 
     # Mask full home directory path
     if home_dir:
-        escaped_home = re.escape(home_dir)
+        escaped_home = re.escape(home_dir).replace("\\/", "[\\\\/]")
         text = re.sub(escaped_home, "<USER_HOME>", text, flags=re.IGNORECASE)
 
     # Mask standalone username occurrences if they look like part of a path

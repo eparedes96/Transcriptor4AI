@@ -5,14 +5,14 @@ Network utilities for Transcriptor4AI.
 
 Handles external communications including:
 - Version synchronization via GitHub REST API.
+- Background binary streaming for Seamless OTA updates.
 - SHA-256 Checksum retrieval for binary integrity.
-- Secure submission of user feedback and crash reports via Formspree.
-- Semantic version comparison and network failover logic.
+- Secure submission of user feedback and crash reports.
 """
 
 import logging
 import requests
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -26,28 +26,30 @@ GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/rel
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 
 TIMEOUT = 10
-USER_AGENT = "Transcriptor4AI-Client/1.4.0"
+USER_AGENT = "Transcriptor4AI-Client/1.5.0"
+CHUNK_SIZE = 8192
 
 
 # -----------------------------------------------------------------------------
-# Public API: Version Checking
+# Public API: Version Checking & Updates
 # -----------------------------------------------------------------------------
 def check_for_updates(current_version: str) -> Dict[str, Any]:
     """
     Query GitHub API to compare the local version with the latest remote release.
-    Also attempts to retrieve SHA-256 checksums for integrity verification.
+    Retrieves metadata for Seamless OTA, including binary URLs and SHA-256.
 
     Args:
         current_version: The semantic version string of the running application.
 
     Returns:
         A dictionary containing update status, latest version, changelog,
-        and expected checksum if available.
+        binary URL, and expected checksum.
     """
     result: Dict[str, Any] = {
         "has_update": False,
         "latest_version": current_version,
         "download_url": "",
+        "binary_url": "",
         "changelog": "",
         "sha256": None,
         "error": None
@@ -71,11 +73,17 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
             result["download_url"] = data.get("html_url", "")
             result["changelog"] = data.get("body", "No changelog provided.")
 
-            # Integrity Check
+            # Identify Assets: Binary (.exe) and Checksum (.sha256)
             assets = data.get("assets", [])
             for asset in assets:
-                name = asset.get("name", "")
-                if name.endswith(".sha256"):
+                asset_name = asset.get("name", "")
+
+                # Direct Binary Asset
+                if asset_name.endswith(".exe"):
+                    result["binary_url"] = asset.get("browser_download_url")
+
+                # Integrity Checksum
+                elif asset_name.endswith(".sha256"):
                     try:
                         checksum_url = asset.get("browser_download_url")
                         c_res = requests.get(checksum_url, headers=headers, timeout=5)
@@ -85,7 +93,6 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
                             logger.info(f"Integrity metadata retrieved: {raw_hash}")
                     except Exception as e:
                         logger.warning(f"Failed to retrieve checksum asset: {e}")
-                    break
         else:
             logger.info("Status: Application is up to date.")
 
@@ -101,32 +108,66 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
     return result
 
 
+def download_binary_stream(
+        url: str,
+        dest_path: str,
+        progress_callback: Optional[Callable[[float], None]] = None
+) -> Tuple[bool, str]:
+    """
+    Download a remote binary file using streaming to minimize memory footprint.
+    Reports progress via callback for GUI integration.
+
+    Args:
+        url: Direct URL to the binary asset.
+        dest_path: Local filesystem path to save the binary.
+        progress_callback: Optional function receiving a float (0.0 to 100.0).
+
+    Returns:
+        Tuple of (Success Status, Message).
+    """
+    headers = {"User-Agent": USER_AGENT}
+    logger.info(f"Starting background download: {url}")
+
+    try:
+        response = requests.get(url, headers=headers, stream=True, timeout=TIMEOUT)
+        response.raise_for_status()
+
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded_size = 0
+
+        with open(dest_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                if chunk:
+                    f.write(chunk)
+                    downloaded_size += len(chunk)
+
+                    if progress_callback and total_size > 0:
+                        percent = (downloaded_size / total_size) * 100
+                        progress_callback(percent)
+
+        logger.info(f"Binary downloaded successfully to: {dest_path}")
+        return True, "Download complete"
+
+    except requests.exceptions.RequestException as e:
+        err_msg = f"Download failed: {str(e)}"
+        logger.error(err_msg)
+        return False, err_msg
+    except OSError as e:
+        err_msg = f"Filesystem error during download: {str(e)}"
+        logger.error(err_msg)
+        return False, err_msg
+
+
 # -----------------------------------------------------------------------------
 # Public API: Communication Channels
 # -----------------------------------------------------------------------------
 def submit_feedback(payload: Dict[str, Any]) -> Tuple[bool, str]:
-    """
-    Submit user feedback or feature requests to the development team.
-
-    Args:
-        payload: Dictionary containing feedback details.
-
-    Returns:
-        Tuple of (Success Status, Server Message/Error).
-    """
+    """Submit user feedback or feature requests via Formspree."""
     return _secure_post(FORMSPREE_ENDPOINT, payload, "Feedback")
 
 
 def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
-    """
-    Submit technical crash reports and stack traces for analysis.
-
-    Args:
-        payload: Dictionary containing crash details, version, and logs.
-
-    Returns:
-        Tuple of (Success Status, Server Message/Error).
-    """
+    """Submit technical crash reports and stack traces."""
     return _secure_post(FORMSPREE_ENDPOINT, payload, "Error Report")
 
 
@@ -134,12 +175,7 @@ def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
 # Private Helpers
 # -----------------------------------------------------------------------------
 def _is_newer(current: str, latest: str) -> bool:
-    """
-    Perform a semantic version comparison (Major.Minor.Patch).
-
-    Returns:
-        True if the latest version is strictly greater than the current version.
-    """
+    """Perform a semantic version comparison (Major.Minor.Patch)."""
     try:
         def parse(v: str) -> Tuple[int, ...]:
             parts = []
@@ -154,42 +190,22 @@ def _is_newer(current: str, latest: str) -> bool:
         logger.debug(f"Comparing semantic versions: Local{v_current} vs Remote{v_latest}")
         return v_latest > v_current
 
-    except (ValueError, AttributeError) as e:
-        logger.warning(f"Version comparison failed for current='{current}' latest='{latest}'. Error: {e}")
+    except (ValueError, AttributeError):
         return False
 
 
 def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, str]:
-    """
-    Generic wrapper for POST requests with security validation and logging.
-
-    Args:
-        url: Destination endpoint.
-        data: Payload to be sent as JSON.
-        context: Label for logging (e.g., 'Feedback').
-
-    Returns:
-        Tuple of (bool, str) representing success status and descriptive message.
-    """
+    """Generic wrapper for POST requests with security validation."""
     if not url:
-        msg = f"{context} system is not active (endpoint not configured)."
-        logger.warning(msg)
-        return False, msg
+        return False, "Endpoint not configured"
 
     headers = {"User-Agent": USER_AGENT}
-
     try:
         response = requests.post(url, json=data, headers=headers, timeout=TIMEOUT)
-
         if response.status_code in (200, 201):
-            logger.info(f"{context} submitted successfully to developer.")
+            logger.info(f"{context} submitted successfully.")
             return True, "Success"
 
-        err_msg = f"Server rejected request with status: {response.status_code}"
-        logger.error(f"{context} submission failed: {err_msg}")
-        return False, err_msg
-
+        return False, f"Server rejected request ({response.status_code})"
     except requests.exceptions.RequestException as e:
-        err_msg = f"Network communication error: {str(e)}"
-        logger.error(f"{context} submission failed: {err_msg}")
-        return False, err_msg
+        return False, str(e)

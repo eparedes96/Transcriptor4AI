@@ -64,8 +64,18 @@ def _check_updates_thread(window: sg.Window, is_manual: bool = False) -> None:
         is_manual: Whether the check was triggered by user action.
     """
     res = network.check_for_updates(cfg.CURRENT_CONFIG_VERSION)
-    # Always send event to handle manual feedback
     window.write_event_value("-UPDATE-FINISHED-", (res, is_manual))
+
+
+def _download_update_thread(window: sg.Window, binary_url: str, dest_path: str) -> None:
+    """
+    Download the new binary in a background thread with progress reporting.
+    """
+    def progress_cb(percent: float) -> None:
+        window.write_event_value("-DOWNLOAD-PROGRESS-", percent)
+
+    success, msg = network.download_binary_stream(binary_url, dest_path, progress_cb)
+    window.write_event_value("-DOWNLOAD-DONE-", (success, msg))
 
 
 def _submit_feedback_thread(window: sg.Window, payload: Dict[str, Any]) -> None:
@@ -398,6 +408,8 @@ def main() -> None:
         config = cfg.get_default_config()
         profile_names = []
 
+    update_metadata: Dict[str, Any] = {"ready": False, "path": "", "sha256": None}
+
     # --- Layout Definitions ---
     menu_def = [['&File', ['&Reset Config', '---', 'E&xit']],
                 ['&Community', ['&Send Feedback', '&Check for Updates']],
@@ -504,12 +516,34 @@ def main() -> None:
                 update_config_from_gui(config, values)
                 app_state["last_session"] = config
                 cfg.save_app_state(app_state)
+
+            # --- OTA Update Execution ---
+            if update_metadata["ready"]:
+                try:
+                    import sys
+                    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+                    updater_script = os.path.join(base_path, "updater.py")
+
+                    if os.path.exists(updater_script):
+                        cmd = [
+                            sys.executable, updater_script,
+                            "--pid", str(os.getpid()),
+                            "--old", sys.executable,
+                            "--new", update_metadata["path"]
+                        ]
+                        if update_metadata["sha256"]:
+                            cmd += ["--sha256", update_metadata["sha256"]]
+
+                        subprocess.Popen(
+                            cmd,
+                            creationflags=subprocess.CREATE_NEW_CONSOLE if platform.system() == "Windows" else 0,
+                            start_new_session=True
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to launch OTA updater: {e}")
             break
 
-        # --- Community Events ---
-        if event in ("btn_feedback", "Send Feedback"):
-            show_feedback_window()
-
+        # --- Update Lifecycle Events ---
         if event == "Check for Updates":
             logger.info("Manual update check triggered.")
             window["-UPDATE_BAR-"].update("Checking...")
@@ -517,24 +551,42 @@ def main() -> None:
 
         if event == "-UPDATE-FINISHED-":
             res, is_manual = values[event]
-
             if res.get("has_update"):
                 latest = res.get('latest_version')
-                logger.info(f"Update found: v{latest}")
-                msg = f"New version available: v{latest}. Click to download."
-                window["-UPDATE_BAR-"].update(msg)
-                if sg.popup_yes_no(
-                        f"A new version (v{latest}) is available!\n\n{res['changelog']}\n\nOpen download page?") == "Yes":
-                    webbrowser.open(res["download_url"])
+                msg = f"New version available: v{latest}. Download now?"
+                if sg.popup_yes_no(f"{msg}\n\nChangelog:\n{res['changelog']}") == "Yes":
+                    temp_dir = paths.get_user_data_dir()
+                    dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+
+                    update_metadata.update({"path": dest, "sha256": res.get("sha256"), "ready": False})
+                    window["-UPDATE_BAR-"].update(f"Downloading v{latest}...")
+                    threading.Thread(target=_download_update_thread, args=(window, res["binary_url"], dest),
+                                     daemon=True).start()
             else:
                 if is_manual:
                     logger.info("Update check: Already up to date.")
                     window["-UPDATE_BAR-"].update("Up to date.")
                     sg.popup(f"Transcriptor4AI is up to date (v{cfg.CURRENT_CONFIG_VERSION}).")
-                else:
-                    window["-UPDATE_BAR-"].update("")
 
-        # --- Configuration Events ---
+        if event == "-DOWNLOAD-PROGRESS-":
+            percent = values[event]
+            window["-UPDATE_BAR-"].update(f"Downloading: {percent:.1f}%")
+
+        if event == "-DOWNLOAD-DONE-":
+            success, msg = values[event]
+            if success:
+                update_metadata["ready"] = True
+                window["-UPDATE_BAR-"].update("Update ready. Restart to apply.", text_color="green")
+                sg.popup("Download complete! The update will be applied automatically when you close the application.")
+            else:
+                window["-UPDATE_BAR-"].update("Download failed.", text_color="red")
+                sg.popup_error(f"Update download failed:\n{msg}")
+
+        # --- Other Events ---
+        if event in ("btn_feedback", "Send Feedback"):
+            show_feedback_window()
+
         if event in ("btn_reset", "Reset Config"):
             logger.info("Configuration reset triggered.")
             config = cfg.get_default_config()
@@ -548,8 +600,6 @@ def main() -> None:
                 prof_data = app_state["saved_profiles"][sel_profile]
                 temp_conf = cfg.get_default_config()
                 temp_conf.update(prof_data)
-
-                # Apply data and refresh UI
                 populate_gui_from_config(window, temp_conf)
                 config.update(temp_conf)
                 sg.popup(f"Profile '{sel_profile}' loaded!")
@@ -563,11 +613,9 @@ def main() -> None:
                 if name in app_state["saved_profiles"]:
                     if sg.popup_yes_no(i18n.t("gui.profiles.confirm_overwrite_msg", name=name)) != "Yes":
                         continue
-
                 update_config_from_gui(config, values)
                 app_state["saved_profiles"][name] = config.copy()
                 cfg.save_app_state(app_state)
-                # Refresh list and set selection
                 profile_names = sorted(list(app_state["saved_profiles"].keys()))
                 window["-PROFILE_LIST-"].update(values=profile_names, value=name)
                 sg.popup(i18n.t("gui.profiles.saved", name=name))
@@ -598,23 +646,18 @@ def main() -> None:
 
         if event == "btn_browse_in":
             folder = sg.popup_get_folder("Select Input", default_path=values["input_path"])
-            if folder:
-                window["input_path"].update(folder)
+            if folder: window["input_path"].update(folder)
 
         if event == "btn_browse_out":
             folder = sg.popup_get_folder("Select Output", default_path=values["output_base_dir"])
-            if folder:
-                window["output_base_dir"].update(folder)
+            if folder: window["output_base_dir"].update(folder)
 
         if event in ("btn_process", "btn_simulate"):
             is_sim = (event == "btn_simulate")
             update_config_from_gui(config, values)
-
-            # Basic Validation
             if not os.path.isdir(config["input_path"]):
                 sg.popup_error("Invalid input directory.")
                 continue
-
             _toggle_ui_state(window, True)
             window["-STATUS-"].update("SIMULATING..." if is_sim else "PROCESSING...", visible=True,
                                       text_color="#007ACC" if is_sim else "blue")

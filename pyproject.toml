@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "1.4.0"
-description = "Industrial-grade context extraction engine featuring security sanitization, path masking, code minification, and OTA auto-updates."
+version = "1.5.0"
+description = "High-performance context extraction engine featuring parallel streaming, security sanitization, and seamless background OTA updates."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
   { name = "Enrique Paredes", email = "eparedesbalen@gmail.com" },
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",

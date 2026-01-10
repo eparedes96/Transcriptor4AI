@@ -1,40 +1,47 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.4.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.5.0-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-**Transcriptor4AI** is an industrial-grade context extraction engine designed to bridge the gap between complex local codebases and Large Language Models (LLMs) such as **GPT-4o**, **Claude 3.5**, or **Gemini Pro**.
+**Transcriptor4AI** is a professional engine designed to transform complex local codebases into optimized, secure, and structured context for Large Language Models (LLMs) like **GPT-4o**, **Claude 3.5**, or **Gemini**.
 
-It goes beyond simple text flattening: it provides a multi-stage transformation pipeline featuring security sanitization, code optimization, and AST-enhanced structural analysis to ensure your AI assistant receives the most accurate, secure, and token-efficient context possible.
+Stop wasting time copying and pasting files or exposing sensitive data. Transcriptor4AI automates the creation of a "Master Context" that allows AI to understand your entire project architecture at once.
+
+---
+
+## 🌟 Why Transcriptor4AI?
+
+When working with AI and large projects, you face three main challenges: **Context Limits**, **Security Risks**, and **Manual Toil**. Transcriptor4AI solves them all:
+
+*   **Privacy First**: Never send an API key or a local path to the cloud by mistake.
+*   **Token Efficiency**: Reduce the cost of your prompts by stripping away redundant code and comments.
+*   **Structural Clarity**: Provide the AI with a map of your project (AST Tree) so it understands how classes and functions relate.
+*   **Industrial Performance**: Built to handle everything from small scripts to massive monorepos without slowing down your machine.
 
 ---
 
 ## 🚀 Key Features
 
-### 🧠 Intelligent Context Orchestration
-*   **Precision Token Estimator**: Real-time context size calculation using `tiktoken`. Tailored heuristics for GPT, Claude, and Gemini to prevent context overflow errors.
-*   **Staging Engine**: A specialized simulation mode (**Dry-Run**) that processes data in memory to provide exact statistics and token counts without modifying your filesystem.
-*   **Profile Architecture**: Save and switch between complex configurations (e.g., "Logic Only", "Full Audit", "Clean Context") with a single click.
+### 🛡️ Security & Privacy
+*   **Secret Redaction**: Automatically identifies and masks API keys, passwords, and tokens.
+*   **Path Anonymization**: Replaces local system paths with generic tags to protect your identity and system structure.
+*   **Gitignore Compliance**: Respects your `.gitignore` rules out of the box.
 
-### 🛡️ Privacy & Security Shield
-*   **Secrets Sanitizer**: Automatic detection and redaction of API Keys (OpenAI, AWS, GitHub), passwords, emails, and IP addresses using high-performance Regex patterns.
-*   **Path Anonymization**: Dynamically identifies local user home directories and usernames, replacing them with `<USER_HOME>` or `<USER>` tags to protect developer identity.
-*   **Native .gitignore Integration**: Full compliance with project-specific ignore rules, ensuring sensitive data and heavy dependencies (like `node_modules`) stay local.
+### 📉 Smart Optimization
+*   **Code Compression**: Strips comments and excessive whitespace, reducing token count by up to 25% while preserving logic.
+*   **Token Estimation**: Get accurate token counts for different models (GPT, Claude, Gemini) before you even open the AI chat.
 
-### ⚡ Context Optimization
-*   **Code Minification**: Advanced filter to strip single-line and inline comments, and collapse redundant whitespace. Reduces token consumption by up to 25% without breaking code logic.
-*   **Resource Classification**: Intelligent separation of source code, unit tests, and project documentation (Markdown, JSON, Config files).
+### 🌳 Structural Intelligence
+*   **Static Analysis**: Generates a project tree that doesn't just show files, but also the **Classes, Functions, and Methods** inside them using Python's AST.
+*   **Contextual Separation**: Automatically categorizes files into Modules, Tests, and Resources.
 
-### 🛠️ Professional Tooling
-*   **AST Symbol Mapping**: A directory tree generator that performs static analysis to list Classes, Functions, and Methods (with parameters) directly in the project structure.
-*   **Dual-Mode Interface**: High-productivity GUI for manual workflow and a robust CLI for automation and CI/CD pipelines.
-
-### 🤝 Maintenance & Reliability
-*   **Smart Error Reporter**: Automatic capture of critical exceptions with an integrated diagnostic modal and one-click submission to developers.
-*   **OTA Auto-Updates**: Seamless version tracking via GitHub API with an autonomous sidecar updater featuring SHA-256 integrity verification.
+### ⚙️ Professional Workflow
+*   **Dual Interface**: Use the intuitive **GUI** for daily development or the **CLI** for automation and pipelines.
+*   **Profiles**: Save different configurations (e.g., "Full Audit" vs "Minimal Logic") and switch between them instantly.
+*   **Seamless Updates**: The app stays up to date automatically via background downloads and an integrated integrity checker.
 
 ---
 
@@ -42,19 +49,19 @@ It goes beyond simple text flattening: it provides a multi-stage transformation 
 
 ### Prerequisites
 *   Python 3.12 or higher.
-*   Conda (Recommended for dependency management).
+*   Conda (Recommended).
 
 ### Setup
 ```bash
-# Clone the repository
+# Clone and enter the repo
 git clone https://github.com/eparedes96/Transcriptor4AI.git
 cd Transcriptor4AI
 
-# Create and activate the environment
+# Install dependencies via Conda
 conda env update --file environment.yml --prune
 conda activate transcriptor4ai
 
-# Install the package in editable mode
+# Install in development mode
 pip install -e .
 ```
 
@@ -63,76 +70,59 @@ pip install -e .
 ## 🖥️ Usage
 
 ### 1. Graphical User Interface (GUI)
-The primary dashboard for preparing AI context visually:
+The most common way to use Transcriptor4AI. Launch it, select your folder, and get your context.
 
 ```bash
 transcriptor-gui
 ```
 
-*   **Profiles**: Use the top-level bar to manage saved configurations.
-*   **Stack Selection**: Instant extension presets for Python, Web Fullstack, Rust, Go, and more.
-*   **Simulation**: Use **"SIMULATE"** to validate filters and see projected token metrics before writing files.
+*   **Simulation Mode**: Use **"SIMULATE"** to see exactly what will be sent and how many tokens it will cost without creating any files.
 
 ### 2. Command Line Interface (CLI)
-Designed for power users and automation scripts.
+For power users who need speed or want to integrate transcription into their build scripts.
 
-**Basic Example:**
+**Basic Context Extraction:**
 ```bash
-transcriptor-cli -i ./my_project -o ./output --resources --tree
+transcriptor-cli -i ./my_app -o ./out --tree
 ```
 
-**Advanced Security & Optimization Example:**
+**High-Security & Optimized Context:**
 ```bash
-transcriptor-cli -i ./src \
-                 -o ./output \
-                 --unified-only \
-                 --tree --classes --functions \
-                 --minify --sanitize \
-                 --ext .py,.js \
-                 --dry-run
-```
----
-
-## ⚙️ Configuration
-
-The application maintains a hierarchical state in a `config.json` file located in your user data directory (`%LOCALAPPDATA%` on Windows or `~/.transcriptor4ai` on Linux).
-
-**Example Structure:**
-
-```json
-{
-    "version": "1.4.0",
-    "app_settings": {
-        "theme": "SystemDefault",
-        "auto_check_updates": true,
-        "allow_telemetry": true
-    },
-    "last_session": {
-        "target_model": "GPT-4o / GPT-5",
-        "enable_sanitizer": true,
-        "minify_output": false,
-        "respect_gitignore": true
-    },
-    "saved_profiles": {
-        "Production Audit": {
-            "minify_output": true,
-            "enable_sanitizer": true,
-            "process_resources": true
-        }
-    }
-}
+transcriptor-cli -i ./src -o ./out --unified-only --minify --sanitize --tree --classes --functions
 ```
 
 ---
 
 ## 📂 Output Artifacts
 
-The engine generates a structured output directory containing:
+Every run generates a structured directory (default: `transcript/`) with:
 
-1.  **`{prefix}_full_context.txt`**: The "Master Context". Tree + Modules + Tests + Resources in a single AI-optimized file.
-2.  **`{prefix}_tree.txt`**: Hierarchical project map with optional AST symbol definitions.
-3.  **`{prefix}_modules.txt / tests.txt / resources.txt`**: Granular components for selective context injection.
-4.  **`{prefix}_errors.txt`**: Detailed log of files skipped due to encoding or permission issues.
+1.  **`full_context.txt`**: The ultimate file. It contains the Tree, Modules, Tests, and Resources in one single AI-ready document.
+2.  **`tree.txt`**: A clean map of your project structure.
+3.  **`modules.txt / tests.txt`**: Separated logic for fine-grained control.
+4.  **`errors.txt`**: A transparent log of any files that couldn't be read (e.g., permission issues).
+
+---
+
+## ⚙️ Configuration
+
+Transcriptor4AI stores your preferences and profiles in a local `config.json`.
+
+```json
+{
+    "version": "1.5.0",
+    "app_settings": {
+        "theme": "SystemDefault",
+        "auto_check_updates": true
+    },
+    "last_session": {
+        "target_model": "GPT-4o / GPT-5",
+        "enable_sanitizer": true,
+        "minify_output": true,
+        "respect_gitignore": true
+    }
+}
+```
 
 ---
 
@@ -140,17 +130,17 @@ The engine generates a structured output directory containing:
 
 ### Quality Assurance
 ```bash
-# Run the complete test suite
+# Run the complete industrial test suite
 pytest -v
 
-# Run with type checking
+# Static type analysis
 mypy src/transcriptor4ai
 ```
 
-### Standalone Distribution
-To generate the production-ready executable for Windows/Linux:
+### Standalone Build
+To create a standalone executable (`.exe`):
 ```bash
-# Compile to a standalone one-file executable
+# Generate a standalone executable using the build script
 python build.py
 ```
 

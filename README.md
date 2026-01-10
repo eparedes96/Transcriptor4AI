@@ -1,37 +1,40 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.3.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.4.0-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-**Transcriptor4AI** is an industrial-grade context extraction engine designed to bridge the gap between complex local codebases and Large Language Models (LLMs) such as **GPT-4o**, **Claude 3.5**, or **Llama 3**.
+**Transcriptor4AI** is an industrial-grade context extraction engine designed to bridge the gap between complex local codebases and Large Language Models (LLMs) such as **GPT-4o**, **Claude 3.5**, or **Gemini Pro**.
 
-It goes beyond simple text flattening: it provides staging-based simulation, AST-enhanced structural analysis, and a professional distribution lifecycle to ensure your AI assistant receives the most accurate and optimized context possible.
+It goes beyond simple text flattening: it provides a multi-stage transformation pipeline featuring security sanitization, code optimization, and AST-enhanced structural analysis to ensure your AI assistant receives the most accurate, secure, and token-efficient context possible.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🧠 Intelligent Context Orchestration
-*   **Precision Token Estimator**: Real-time context size calculation using `tiktoken`. Tailored heuristics for GPT, Claude, and Gemini to prevent "Out of Context" errors.
-*   **Staging Engine**: A specialized simulation mode (**Dry-Run**) that processes data in memory to provide exact statistics and token counts without touching your filesystem.
-*   **Profile Architecture**: Save and switch between complex configurations (e.g., "Logic Only", "Full Audit", "DevOps Focus") with a single click.
+*   **Precision Token Estimator**: Real-time context size calculation using `tiktoken`. Tailored heuristics for GPT, Claude, and Gemini to prevent context overflow errors.
+*   **Staging Engine**: A specialized simulation mode (**Dry-Run**) that processes data in memory to provide exact statistics and token counts without modifying your filesystem.
+*   **Profile Architecture**: Save and switch between complex configurations (e.g., "Logic Only", "Full Audit", "Clean Context") with a single click.
 
-### 🔍 Advanced Filtering & Security
-*   **Native .gitignore Integration**: Full compliance with project-specific ignore rules, ensuring sensitive data and dependencies stay local.
-*   **Ecosystem Stacks**: Instant configuration for **Python**, **Web Fullstack**, **Rust**, **Go**, **DevOps**, and more.
-*   **Resource Classification**: Intelligent separation of source code, unit tests, and project assets (Markdown, JSON, Dockerfiles).
+### 🛡️ Privacy & Security Shield
+*   **Secrets Sanitizer**: Automatic detection and redaction of API Keys (OpenAI, AWS, GitHub), passwords, emails, and IP addresses using high-performance Regex patterns.
+*   **Path Anonymization**: Dynamically identifies local user home directories and usernames, replacing them with `<USER_HOME>` or `<USER>` tags to protect developer identity.
+*   **Native .gitignore Integration**: Full compliance with project-specific ignore rules, ensuring sensitive data and heavy dependencies (like `node_modules`) stay local.
+
+### ⚡ Context Optimization
+*   **Code Minification**: Advanced filter to strip single-line and inline comments, and collapse redundant whitespace. Reduces token consumption by up to 25% without breaking code logic.
+*   **Resource Classification**: Intelligent separation of source code, unit tests, and project documentation (Markdown, JSON, Config files).
 
 ### 🛠️ Professional Tooling
-*   **AST Symbol Mapping**: A directory tree that performs static analysis to list Classes, Functions, and Methods without execution.
-*   **Dual-Mode Interface**: High-productivity GUI for developers and a robust CLI for CI/CD pipeline automation.
+*   **AST Symbol Mapping**: A directory tree generator that performs static analysis to list Classes, Functions, and Methods (with parameters) directly in the project structure.
+*   **Dual-Mode Interface**: High-productivity GUI for manual workflow and a robust CLI for automation and CI/CD pipelines.
 
-### 🤝 Lifecycle & Community (v1.3.0+)
+### 🤝 Maintenance & Reliability
 *   **Smart Error Reporter**: Automatic capture of critical exceptions with an integrated diagnostic modal and one-click submission to developers.
-*   **Feedback Hub**: Direct communication channel for feature requests and bug reports with automated log attachment.
-*   **OTA Auto-Updates**: Seamless version tracking via GitHub API with an autonomous sidecar updater for zero-friction maintenance.
+*   **OTA Auto-Updates**: Seamless version tracking via GitHub API with an autonomous sidecar updater featuring SHA-256 integrity verification.
 
 ---
 
@@ -39,7 +42,7 @@ It goes beyond simple text flattening: it provides staging-based simulation, AST
 
 ### Prerequisites
 *   Python 3.12 or higher.
-*   Conda (Recommended).
+*   Conda (Recommended for dependency management).
 
 ### Setup
 ```bash
@@ -47,45 +50,45 @@ It goes beyond simple text flattening: it provides staging-based simulation, AST
 git clone https://github.com/eparedes96/Transcriptor4AI.git
 cd Transcriptor4AI
 
-# Update your Conda environment
+# Create and activate the environment
 conda env update --file environment.yml --prune
 conda activate transcriptor4ai
 
-# Install in editable mode
+# Install the package in editable mode
 pip install -e .
 ```
+
 ---
 
 ## 🖥️ Usage
 
-Transcriptor4AI provides two entry points depending on your workflow:
-
 ### 1. Graphical User Interface (GUI)
-Launch the visual dashboard for manual context preparation:
+The primary dashboard for preparing AI context visually:
 
 ```bash
 transcriptor-gui
 ```
 
-*   **Profiles**: Manage saved states using the top-level bar.
-*   **Feedback**: Use the **Feedback Hub** to send logs or suggestions directly to the developer.
-*   **Simulation**: Use **"SIMULATE"** to validate paths and see projected metrics without writing to disk.
+*   **Profiles**: Use the top-level bar to manage saved configurations.
+*   **Stack Selection**: Instant extension presets for Python, Web Fullstack, Rust, Go, and more.
+*   **Simulation**: Use **"SIMULATE"** to validate filters and see projected token metrics before writing files.
 
 ### 2. Command Line Interface (CLI)
-Ideal for automation, remote servers, or power users.
+Designed for power users and automation scripts.
 
 **Basic Example:**
 ```bash
-transcriptor-cli -i ./my_project -o ./dist --resources --tree
+transcriptor-cli -i ./my_project -o ./output --resources --tree
 ```
 
-**Advanced Example (Resources + Unified Output + AST):**
+**Advanced Security & Optimization Example:**
 ```bash
 transcriptor-cli -i ./src \
-                 -o ./dist \
+                 -o ./output \
                  --unified-only \
-                 --tree --classes --functions --methods \
-                 --ext .py,.js,.sql \
+                 --tree --classes --functions \
+                 --minify --sanitize \
+                 --ext .py,.js \
                  --dry-run
 ```
 ---
@@ -98,7 +101,7 @@ The application maintains a hierarchical state in a `config.json` file located i
 
 ```json
 {
-    "version": "1.3.0",
+    "version": "1.4.0",
     "app_settings": {
         "theme": "SystemDefault",
         "auto_check_updates": true,
@@ -106,20 +109,25 @@ The application maintains a hierarchical state in a `config.json` file located i
     },
     "last_session": {
         "target_model": "GPT-4o / GPT-5",
-        "respect_gitignore": true,
-        "generate_tree": true
+        "enable_sanitizer": true,
+        "minify_output": false,
+        "respect_gitignore": true
     },
     "saved_profiles": {
-        "Fast Scan": { "extensions": [".py"], "generate_tree": false }
+        "Production Audit": {
+            "minify_output": true,
+            "enable_sanitizer": true,
+            "process_resources": true
+        }
     }
 }
 ```
 
 ---
 
-## 📂 Output Structure
+## 📂 Output Artifacts
 
-The engine generates a structured output directory with the following artifacts:
+The engine generates a structured output directory containing:
 
 1.  **`{prefix}_full_context.txt`**: The "Master Context". Tree + Modules + Tests + Resources in a single AI-optimized file.
 2.  **`{prefix}_tree.txt`**: Hierarchical project map with optional AST symbol definitions.
@@ -132,17 +140,17 @@ The engine generates a structured output directory with the following artifacts:
 
 ### Quality Assurance
 ```bash
-# Run the full suite
-pytest
+# Run the complete test suite
+pytest -v
 
-# Technical coverage
-pytest -v --strict-markers
+# Run with type checking
+mypy src/transcriptor4ai
 ```
 
 ### Standalone Distribution
-To generate the production-ready executable:
+To generate the production-ready executable for Windows/Linux:
 ```bash
-# Building the standalone bundle (PyInstaller)
+# Compile to a standalone one-file executable
 python build.py
 ```
 

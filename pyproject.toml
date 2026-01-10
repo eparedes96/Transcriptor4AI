@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "1.3.0"
-description = "Industrial-grade tool for consolidating codebases, featuring community feedback channels and OTA auto-updates."
+version = "1.4.0"
+description = "Industrial-grade context extraction engine featuring security sanitization, path masking, code minification, and OTA auto-updates."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -18,6 +18,8 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
 ]
 dependencies = [
     "PySimpleGUI",

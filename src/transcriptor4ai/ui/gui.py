@@ -492,6 +492,8 @@ def main() -> None:
 
     window = sg.Window(f"Transcriptor4AI - v{cfg.CURRENT_CONFIG_VERSION}", layout, finalize=True, resizable=True)
 
+    populate_gui_from_config(window, config)
+
     # --- Start Background Tasks ---
     if app_state["app_settings"].get("auto_check_updates"):
         threading.Thread(target=_check_updates_thread, args=(window, False), daemon=True).start()
@@ -553,6 +555,34 @@ def main() -> None:
                 populate_gui_from_config(window, temp_conf)
                 config.update(temp_conf)
                 sg.popup(f"Profile '{sel_profile}' loaded!")
+            else:
+                sg.popup_error(i18n.t("gui.profiles.error_select"))
+
+        if event == "btn_save_profile":
+            name = sg.popup_get_text(i18n.t("gui.profiles.prompt_name"), title=i18n.t("gui.profiles.save"))
+            if name:
+                name = name.strip()
+                if name in app_state["saved_profiles"]:
+                    if sg.popup_yes_no(i18n.t("gui.profiles.confirm_overwrite_msg", name=name)) != "Yes":
+                        continue
+
+                update_config_from_gui(config, values)
+                app_state["saved_profiles"][name] = config.copy()
+                cfg.save_app_state(app_state)
+                # Refresh list and set selection
+                profile_names = sorted(list(app_state["saved_profiles"].keys()))
+                window["-PROFILE_LIST-"].update(values=profile_names, value=name)
+                sg.popup(i18n.t("gui.profiles.saved", name=name))
+
+        if event == "btn_del_profile":
+            sel_profile = values.get("-PROFILE_LIST-")
+            if sel_profile and sel_profile in app_state["saved_profiles"]:
+                if sg.popup_yes_no(i18n.t("gui.profiles.confirm_delete", name=sel_profile)) == "Yes":
+                    del app_state["saved_profiles"][sel_profile]
+                    cfg.save_app_state(app_state)
+                    profile_names = sorted(list(app_state["saved_profiles"].keys()))
+                    window["-PROFILE_LIST-"].update(values=profile_names, value="")
+                    sg.popup(i18n.t("gui.profiles.deleted"))
             else:
                 sg.popup_error(i18n.t("gui.profiles.error_select"))
 

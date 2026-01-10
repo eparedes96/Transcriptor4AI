@@ -50,6 +50,10 @@ def get_default_config() -> Dict[str, Any]:
     """
     Return the default runtime configuration dictionary (Session State).
     Used by CLI and Pipeline logic.
+
+    V1.4.0 Defaults:
+    - Enabled: Modules, Tests, Resources, Tree, Individual, Unified.
+    - Disabled: AST Sub-functions, Sanitizer, Masking, Minify, Gitignore, Error log.
     """
     base = os.getcwd()
     return {
@@ -61,7 +65,7 @@ def get_default_config() -> Dict[str, Any]:
         # Content Selection (Granular)
         "process_modules": True,
         "process_tests": True,
-        "process_resources": False,
+        "process_resources": True,
 
         # Output Format Selection
         "create_individual_files": True,
@@ -76,24 +80,23 @@ def get_default_config() -> Dict[str, Any]:
             r"^(__pycache__|\.git|\.idea|\.vscode|node_modules)$",
             r"^\."
         ],
-        "respect_gitignore": True,
-
+        "respect_gitignore": False,
         "target_model": "GPT-4o / GPT-5",
 
         # Tree & AST Options
+        "generate_tree": True,
         "show_functions": False,
         "show_classes": False,
         "show_methods": False,
-        "generate_tree": False,
         "print_tree": True,
 
         # Optimization & Privacy
-        "enable_sanitizer": True,
-        "mask_user_paths": True,
+        "enable_sanitizer": False,
+        "mask_user_paths": False,
         "minify_output": False,
 
         # Logging
-        "save_error_log": True
+        "save_error_log": False
     }
 
 

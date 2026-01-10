@@ -471,11 +471,9 @@ def main() -> None:
         [
             sg.Checkbox(i18n.t("gui.checkboxes.gitignore"), key="respect_gitignore",
                         default=config.get("respect_gitignore", True)),
-            sg.Checkbox("Sanitize Secrets", key="enable_sanitizer", default=config.get("enable_sanitizer", True),
-                        font=("Any", 8)),
-            sg.Checkbox("Mask Paths", key="mask_user_paths", default=config.get("mask_user_paths", True),
-                        font=("Any", 8)),
-            sg.Checkbox("Minify", key="minify_output", default=config.get("minify_output", False), font=("Any", 8)),
+            sg.Checkbox("Sanitize Secrets", key="enable_sanitizer", default=config.get("enable_sanitizer", True)),
+            sg.Checkbox("Mask Paths", key="mask_user_paths", default=config.get("mask_user_paths", True)),
+            sg.Checkbox("Minify", key="minify_output", default=config.get("minify_output", False)),
             sg.Checkbox(i18n.t("gui.checkboxes.log_err"), key="save_error_log", default=config["save_error_log"])
         ],
         [sg.Text("", key="-STATUS-", visible=False, font=("Any", 10, "bold"))],
@@ -590,7 +588,8 @@ def main() -> None:
         if event == "generate_tree":
             enabled = bool(values["generate_tree"])
             for k in ["show_functions", "show_classes", "show_methods"]:
-                window[k].update(disabled=not enabled)
+                val = values[k] if enabled else False
+                window[k].update(value=val, disabled=not enabled)
 
         if event == "-STACK-":
             stack = values["-STACK-"]

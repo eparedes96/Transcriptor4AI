@@ -3,14 +3,13 @@ from __future__ import annotations
 """
 Source code transcription service.
 
-Recursively scans directories and consolidates files into text documents 
-based on granular processing flags and filters. Implements lazy writing 
-to prevent the creation of empty files.
+Recursively scans directories and consolidates files into text documents based on granular processing flags and filters. 
+Implements streaming I/O to handle massive projects with near-zero memory overhead.
 """
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Iterator
 
 from transcriptor4ai.filtering import (
     compile_patterns,
@@ -75,7 +74,7 @@ def transcribe_code(
     Returns:
         A dictionary containing counters, paths, and status.
     """
-    logger.info(f"Starting transcription scan in: {input_path}")
+    logger.info(f"Starting transcription scan (Performance Mode) in: {input_path}")
 
     # -------------------------
     # Input Normalization
@@ -166,19 +165,13 @@ def transcribe_code(
                 skipped_count += 1
                 continue
 
-            # --- 3. Extraction & Writing ---
+            # --- 3. Streaming Extraction & Writing ---
             file_path = os.path.join(root, file_name)
             rel_path = os.path.relpath(file_path, input_path_abs)
 
             try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except (OSError, UnicodeDecodeError) as e:
-                logger.warning(f"Error reading file {rel_path}: {e}")
-                errors.append(TranscriptionError(rel_path=rel_path, error=str(e)))
-                continue
+                line_iterator = _get_file_lines(file_path)
 
-            try:
                 fmt_args = {
                     "extension": ext,
                     "enable_sanitizer": enable_sanitizer,
@@ -186,35 +179,33 @@ def transcribe_code(
                     "minify_output": minify_output
                 }
 
-                # Write to specific output
                 if target_mode == "test":
                     if not tests_file_initialized:
                         _initialize_output_file(tests_output_path, "TESTS:")
                         tests_file_initialized = True
-                    _append_entry(tests_output_path, rel_path, content, **fmt_args)
+                    _append_entry(tests_output_path, rel_path, line_iterator, **fmt_args)
                     tests_written += 1
 
                 elif target_mode == "resource":
                     if not resources_file_initialized:
                         _initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
                         resources_file_initialized = True
-                    _append_entry(resources_output_path, rel_path, content, **fmt_args)
+                    _append_entry(resources_output_path, rel_path, line_iterator, **fmt_args)
                     resources_written += 1
 
                 elif target_mode == "module":
                     if not modules_file_initialized:
                         _initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
                         modules_file_initialized = True
-                    _append_entry(modules_output_path, rel_path, content, **fmt_args)
+                    _append_entry(modules_output_path, rel_path, line_iterator, **fmt_args)
                     modules_written += 1
 
                 processed_count += 1
                 logger.debug(f"Processed ({target_mode}): {rel_path}")
 
-            except OSError as e:
-                msg = f"Error writing to output: {e}"
-                logger.error(msg)
-                errors.append(TranscriptionError(rel_path=rel_path, error=msg))
+            except (OSError, UnicodeDecodeError) as e:
+                logger.warning(f"Error processing file {rel_path}: {e}")
+                errors.append(TranscriptionError(rel_path=rel_path, error=str(e)))
                 continue
 
     # -------------------------
@@ -240,9 +231,6 @@ def transcribe_code(
         f"Errors: {len(errors)}"
     )
 
-    # -------------------------
-    # Result Construction
-    # -------------------------
     return {
         "ok": True,
         "input_path": input_path_abs,
@@ -272,6 +260,16 @@ def transcribe_code(
 # -----------------------------------------------------------------------------
 # Private Helpers
 # -----------------------------------------------------------------------------
+def _get_file_lines(file_path: str) -> Iterator[str]:
+    """
+    Read a file line by line using a generator.
+    Handles encoding gracefully and protects against binary content.
+    """
+    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            yield line
+
+
 def _initialize_output_file(file_path: str, header: str) -> None:
     """Create a file and write the initial header."""
     with open(file_path, "w", encoding="utf-8") as f:

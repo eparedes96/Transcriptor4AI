@@ -79,11 +79,12 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
                 asset_name = asset.get("name", "")
 
                 # Direct Binary Asset
-                if asset_name.endswith(".exe"):
+                if asset_name.lower().endswith(".exe"):
                     result["binary_url"] = asset.get("browser_download_url")
+                    logger.info(f"Direct binary asset detected: {asset_name}")
 
                 # Integrity Checksum
-                elif asset_name.endswith(".sha256"):
+                elif asset_name.lower().endswith(".sha256"):
                     try:
                         checksum_url = asset.get("browser_download_url")
                         c_res = requests.get(checksum_url, headers=headers, timeout=5)
@@ -93,8 +94,10 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
                             logger.info(f"Integrity metadata retrieved: {raw_hash}")
                     except Exception as e:
                         logger.warning(f"Failed to retrieve checksum asset: {e}")
-        else:
-            logger.info("Status: Application is up to date.")
+                if result["has_update"] and not result["binary_url"]:
+                    logger.warning("No direct .exe asset found in the latest release. Background OTA will be disabled.")
+            else:
+                logger.info("Status: Application is up to date.")
 
     except requests.exceptions.RequestException as e:
         msg = f"GitHub API update check failed: {e}"

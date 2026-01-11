@@ -589,14 +589,20 @@ def main() -> None:
                 latest = res.get('latest_version')
 
                 if _show_update_prompt(latest, res.get('changelog', "No changelog provided.")):
-                    temp_dir = paths.get_user_data_dir()
-                    dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
-                    os.makedirs(os.path.dirname(dest), exist_ok=True)
+                    if res.get("binary_url"):
+                        temp_dir = paths.get_user_data_dir()
+                        dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
+                        os.makedirs(os.path.dirname(dest), exist_ok=True)
 
-                    update_metadata.update({"path": dest, "sha256": res.get("sha256"), "ready": False})
-                    window["-UPDATE_BAR-"].update(f"Downloading v{latest}...")
-                    threading.Thread(target=_download_update_thread, args=(window, res["binary_url"], dest),
-                                     daemon=True).start()
+                        update_metadata.update({"path": dest, "sha256": res.get("sha256"), "ready": False})
+                        window["-UPDATE_BAR-"].update(f"Downloading v{latest}...")
+                        threading.Thread(target=_download_update_thread, args=(window, res["binary_url"], dest),
+                                         daemon=True).start()
+                    else:
+                        logger.info("Background update unavailable. Redirecting user to GitHub browser page.")
+                        sg.popup("Background update is not available for this release.\n"
+                                 "Redirecting to the official download page.")
+                        webbrowser.open(res.get("download_url"))
             else:
                 if is_manual:
                     logger.info("Update check: Already up to date.")

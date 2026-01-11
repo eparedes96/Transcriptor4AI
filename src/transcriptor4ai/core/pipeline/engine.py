@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from transcriptor4ai.domain.pipeline_models import PipelineResult, _build_error_result, _build_success_result
+
 """
 Core orchestration pipeline for transcriptor4ai.
 
@@ -14,7 +16,6 @@ import os
 import shutil
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.core.pipeline.validator import validate_config
@@ -28,54 +29,6 @@ from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree
 from transcriptor4ai.core.processing.tokenizer import count_tokens
 
 logger = logging.getLogger(__name__)
-
-
-# -----------------------------------------------------------------------------
-# Results Models
-# -----------------------------------------------------------------------------
-@dataclass(frozen=True)
-class PipelineResult:
-    """
-    Aggregated result of the pipeline execution.
-
-    Contains execution status, paths, metrics, and a detailed summary
-    of processed items.
-    """
-    ok: bool
-    error: str
-
-    # Normalized Inputs
-    base_path: str
-    output_base_dir: str
-    output_subdir_name: str
-    output_prefix: str
-
-    # Flags
-    process_modules: bool
-    process_tests: bool
-    process_resources: bool
-    create_individual_files: bool
-    create_unified_file: bool
-
-    # Security & Optimization Flags
-    enable_sanitizer: bool
-    mask_user_paths: bool
-    minify_output: bool
-
-    # Output Paths
-    final_output_path: str
-    existing_files: List[str]
-
-    # Partial Results
-    transcription_res: Dict[str, Any]
-    tree_lines: List[str]
-    tree_path: str
-
-    # Metrics
-    token_count: int
-
-    # Summary
-    summary: Dict[str, Any]
 
 
 # -----------------------------------------------------------------------------
@@ -330,78 +283,4 @@ def run_pipeline(
     return _build_success_result(
         cfg, base_path, final_output_path, existing_files,
         trans_res, tree_lines, path_tree, final_token_count, summary
-    )
-
-
-# -----------------------------------------------------------------------------
-# Internal Helpers
-# -----------------------------------------------------------------------------
-def _build_error_result(
-        error: str,
-        cfg: Dict[str, Any],
-        base_path: str,
-        final_output_path: str = "",
-        existing_files: Optional[List[str]] = None,
-        summary_extra: Optional[Dict[str, Any]] = None
-) -> PipelineResult:
-    """Build a failure PipelineResult."""
-    return PipelineResult(
-        ok=False,
-        error=error,
-        base_path=base_path,
-        output_base_dir=cfg.get("output_base_dir", ""),
-        output_subdir_name=cfg.get("output_subdir_name", ""),
-        output_prefix=cfg.get("output_prefix", ""),
-        process_modules=cfg.get("process_modules", False),
-        process_tests=cfg.get("process_tests", False),
-        process_resources=cfg.get("process_resources", False),
-        create_individual_files=cfg.get("create_individual_files", False),
-        create_unified_file=cfg.get("create_unified_file", False),
-        enable_sanitizer=cfg.get("enable_sanitizer", True),
-        mask_user_paths=cfg.get("mask_user_paths", True),
-        minify_output=cfg.get("minify_output", False),
-        final_output_path=final_output_path,
-        existing_files=existing_files or [],
-        transcription_res={},
-        tree_lines=[],
-        tree_path="",
-        token_count=0,
-        summary=summary_extra or {},
-    )
-
-
-def _build_success_result(
-        cfg: Dict[str, Any],
-        base_path: str,
-        final_output_path: str,
-        existing_files: List[str],
-        trans_res: Optional[Dict[str, Any]] = None,
-        tree_lines: Optional[List[str]] = None,
-        tree_path: str = "",
-        token_count: int = 0,
-        summary_extra: Optional[Dict[str, Any]] = None
-) -> PipelineResult:
-    """Build a success PipelineResult."""
-    return PipelineResult(
-        ok=True,
-        error="",
-        base_path=base_path,
-        output_base_dir=cfg.get("output_base_dir", ""),
-        output_subdir_name=cfg.get("output_subdir_name", ""),
-        output_prefix=cfg.get("output_prefix", ""),
-        process_modules=cfg.get("process_modules", True),
-        process_tests=cfg.get("process_tests", True),
-        process_resources=cfg.get("process_resources", True),
-        create_individual_files=cfg.get("create_individual_files", True),
-        create_unified_file=cfg.get("create_unified_file", True),
-        enable_sanitizer=cfg.get("enable_sanitizer", True),
-        mask_user_paths=cfg.get("mask_user_paths", True),
-        minify_output=cfg.get("minify_output", False),
-        final_output_path=final_output_path,
-        existing_files=existing_files,
-        transcription_res=trans_res or {},
-        tree_lines=tree_lines or [],
-        tree_path=tree_path,
-        token_count=token_count,
-        summary=summary_extra or {},
     )

@@ -22,7 +22,7 @@ from typing import Any, Dict
 
 import PySimpleGUI as sg
 
-from transcriptor4ai.core.pipeline.engine import PipelineResult
+from transcriptor4ai.domain.pipeline_models import PipelineResult
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.infra import paths
 from transcriptor4ai.infra.logging import (

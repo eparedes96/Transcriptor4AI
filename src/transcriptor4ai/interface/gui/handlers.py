@@ -17,7 +17,7 @@ from typing import List, Dict, Any, Optional
 
 import PySimpleGUI as sg
 
-from transcriptor4ai.core.pipeline.engine import PipelineResult
+from transcriptor4ai.domain.pipeline_models import PipelineResult
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.infra.logging import get_recent_logs
 from transcriptor4ai.interface.gui.threads import (

@@ -17,7 +17,8 @@ import sys
 from dataclasses import asdict
 from typing import Any, Dict, Optional, List
 
-from transcriptor4ai.core.pipeline.engine import run_pipeline, PipelineResult
+from transcriptor4ai.core.pipeline.engine import run_pipeline
+from transcriptor4ai.domain.pipeline_models import PipelineResult
 from transcriptor4ai.core.pipeline.validator import validate_config
 from transcriptor4ai.domain.config import load_config, get_default_config
 from transcriptor4ai.infra.logging import configure_logging, LoggingConfig, get_logger

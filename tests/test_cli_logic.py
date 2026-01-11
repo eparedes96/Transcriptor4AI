@@ -4,7 +4,7 @@ from __future__ import annotations
 Unit tests for CLI argument parsing and mapping logic.
 """
 
-from transcriptor4ai.interface.cli.app import _build_parser, _args_to_overrides
+from transcriptor4ai.interface.cli.args import _build_parser, _args_to_overrides
 
 
 def parse_args(arg_list):

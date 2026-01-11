@@ -1,36 +1,117 @@
 from __future__ import annotations
 
-from transcriptor4ai.interface.cli.args import _build_parser, _args_to_overrides
-
 """
-Command Line Interface (CLI) for transcriptor4ai.
+Command Line Interface (CLI) Controller.
 
-Handles argument parsing, configuration merging, and terminal-based 
-execution of the transcription pipeline. Synchronized with the English 
-core API and PipelineResult dataclass.
+This module orchestrates the CLI workflow:
+1. Initialize logging.
+2. Load and merge configuration (Defaults + File + CLI Args).
+3. Validate final configuration.
+4. Execute the pipeline.
+5. Render output (Human-readable or JSON).
 """
 
 import json
 import os
 import sys
 from dataclasses import asdict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
-from transcriptor4ai.domain.config import load_config, get_default_config
-from transcriptor4ai.core.pipeline.validator import validate_config
 from transcriptor4ai.core.pipeline.engine import run_pipeline, PipelineResult
+from transcriptor4ai.core.pipeline.validator import validate_config
+from transcriptor4ai.domain.config import load_config, get_default_config
 from transcriptor4ai.infra.logging import configure_logging, LoggingConfig, get_logger
+from transcriptor4ai.interface.cli import args as cli_args
 from transcriptor4ai.utils.i18n import i18n
 
 logger = get_logger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# CLI: Helpers
-# -----------------------------------------------------------------------------
+def main(argv: Optional[List[str]] = None) -> int:
+    """
+    CLI Main Entry Point.
+
+    Args:
+        argv: Optional list of command line arguments (defaults to sys.argv).
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure).
+    """
+    # 1. Parse Arguments
+    parser = cli_args.build_parser()
+    args = parser.parse_args(argv)
+
+    # 2. Setup Logging (Console stderr only for CLI)
+    log_level = "DEBUG" if args.debug else "INFO"
+    logging_conf = LoggingConfig(level=log_level, console=True, log_file=None)
+    configure_logging(logging_conf)
+
+    logger.debug("CLI started. Parsing arguments...")
+
+    # 3. Load Base Config
+    if args.use_defaults:
+        base_conf = get_default_config()
+    else:
+        base_conf = load_config()
+
+    # 4. Apply Overrides
+    overrides = cli_args.args_to_overrides(args)
+    raw_conf = _merge_config(base_conf, overrides)
+
+    # 5. Validate Configuration (Gatekeeper)
+    clean_conf, warnings = validate_config(raw_conf, strict=False)
+
+    if warnings:
+        for w in warnings:
+            logger.warning(f"Config Warning: {w}")
+
+    # Special Flag: Dump Config
+    if args.dump_config:
+        print(json.dumps(clean_conf, ensure_ascii=False, indent=2))
+        return 0
+
+    # 6. Basic Path Check (Pre-Pipeline)
+    input_path = clean_conf.get("input_path", "")
+    if not os.path.exists(input_path):
+        msg = i18n.t("cli.errors.path_not_exist", path=input_path)
+        logger.error(msg)
+        print(f"ERROR: {msg}", file=sys.stderr)
+        return 2
+
+    # 7. Run Pipeline
+    logger.info(f"Starting pipeline for input: {input_path}")
+    try:
+        result = run_pipeline(
+            clean_conf,
+            overwrite=bool(args.overwrite),
+            dry_run=bool(args.dry_run),
+            tree_output_path=args.tree_file
+        )
+    except KeyboardInterrupt:
+        msg = i18n.t("cli.status.interrupted")
+        logger.warning(msg)
+        print(msg, file=sys.stderr)
+        return 130
+    except Exception as e:
+        msg = i18n.t("cli.errors.pipeline_fail", error=str(e))
+        logger.critical(msg, exc_info=True)
+        print(f"ERROR: {msg}", file=sys.stderr)
+        return 1
+
+    # 8. Render Output
+    if args.json_output:
+        print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
+    else:
+        _print_human_summary(result)
+
+    return 0 if result.ok else 1
+
 
 def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge overrides into base config dictionary."""
+    """
+    Merge override values into the base config dictionary.
+    Only merges known keys to prevent pollution.
+    """
     out = dict(base)
     keys_to_merge = [
         "input_path", "output_base_dir", "output_subdir_name", "output_prefix",
@@ -47,7 +128,10 @@ def _merge_config(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, 
 
 
 def _print_human_summary(result: PipelineResult) -> None:
-    """Print a human-readable summary of the pipeline execution to stdout/stderr."""
+    """
+    Print a formatted, human-readable summary of the execution to stdout.
+    This acts as the 'View' component for the CLI.
+    """
     if not result.ok:
         print(f"ERROR: {result.error}", file=sys.stderr)
         return
@@ -97,79 +181,6 @@ def _print_human_summary(result: PipelineResult) -> None:
 
         lines = tree_info.get('lines', 0)
         print(f"  - tree: {tree_path} ({lines} lines)")
-
-
-# -----------------------------------------------------------------------------
-# Main Entry Point
-# -----------------------------------------------------------------------------
-def main(argv: Optional[list[str]] = None) -> int:
-    """CLI Main Entry Point."""
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
-    # 1. Setup Logging (Console stderr only for CLI)
-    log_level = "DEBUG" if args.debug else "INFO"
-    logging_conf = LoggingConfig(level=log_level, console=True, log_file=None)
-    configure_logging(logging_conf)
-
-    logger.debug("CLI started. Parsing arguments...")
-
-    # 2. Load Base Config
-    if args.use_defaults:
-        base_conf = get_default_config()
-    else:
-        base_conf = load_config()
-
-    # 3. Apply Overrides
-    overrides = _args_to_overrides(args)
-    raw_conf = _merge_config(base_conf, overrides)
-
-    # 4. Validate Configuration (Gatekeeper)
-    clean_conf, warnings = validate_config(raw_conf, strict=False)
-
-    if warnings:
-        for w in warnings:
-            logger.warning(f"Config Warning: {w}")
-
-    if args.dump_config:
-        print(json.dumps(clean_conf, ensure_ascii=False, indent=2))
-        return 0
-
-    # 5. Basic Path Check (Pre-Pipeline)
-    input_path = clean_conf.get("input_path", "")
-    if not os.path.exists(input_path):
-        msg = i18n.t("cli.errors.path_not_exist", path=input_path)
-        logger.error(msg)
-        print(f"ERROR: {msg}", file=sys.stderr)
-        return 2
-
-    # 6. Run Pipeline
-    logger.info(f"Starting pipeline for input: {input_path}")
-    try:
-        result = run_pipeline(
-            clean_conf,
-            overwrite=bool(args.overwrite),
-            dry_run=bool(args.dry_run),
-            tree_output_path=args.tree_file
-        )
-    except KeyboardInterrupt:
-        msg = i18n.t("cli.status.interrupted")
-        logger.warning(msg)
-        print(msg, file=sys.stderr)
-        return 130
-    except Exception as e:
-        msg = i18n.t("cli.errors.pipeline_fail", error=str(e))
-        logger.critical(msg, exc_info=True)
-        print(f"ERROR: {msg}", file=sys.stderr)
-        return 1
-
-    # 7. Render Output
-    if args.json_output:
-        print(json.dumps(asdict(result), ensure_ascii=False, indent=2))
-    else:
-        _print_human_summary(result)
-
-    return 0 if result.ok else 1
 
 
 if __name__ == "__main__":

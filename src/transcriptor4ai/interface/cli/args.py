@@ -1,13 +1,26 @@
 from __future__ import annotations
 
+"""
+CLI Argument Definition and Parsing.
+
+This module defines the command-line arguments, flags, and help messages.
+It also handles the translation of argparse Namespaces into dictionary
+overrides compatible with the core configuration.
+"""
+
 import argparse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from transcriptor4ai.utils.i18n import i18n
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """Build and return the argument parser for the CLI."""
+def build_parser() -> argparse.ArgumentParser:
+    """
+    Construct the argument parser for the CLI.
+
+    Returns:
+        argparse.ArgumentParser: The configured parser instance.
+    """
     p = argparse.ArgumentParser(
         prog="transcriptor4ai",
         description=i18n.t("app.description"),
@@ -159,16 +172,17 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _split_csv(value: Optional[str]) -> Optional[list[str]]:
-    """Split a comma-separated string into a list of strings."""
-    if value is None:
-        return None
-    parts = [x.strip() for x in value.split(",")]
-    return [x for x in parts if x]
+def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
+    """
+    Transform parsed CLI arguments into a configuration override dictionary.
 
+    Args:
+        args: The Namespace object returned by argparse.
 
-def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
-    """Map argparse Namespace to config dictionary keys."""
+    Returns:
+        Dict[str, Any]: A dictionary containing only the values that should
+        override the default configuration.
+    """
     overrides: Dict[str, Any] = {}
 
     overrides["input_path"] = args.input_path
@@ -219,3 +233,14 @@ def _args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["save_error_log"] = False
 
     return overrides
+
+
+def _split_csv(value: Optional[str]) -> Optional[List[str]]:
+    """
+    Helper to split a comma-separated string into a list of strings.
+    Strips whitespace from each item.
+    """
+    if value is None:
+        return None
+    parts = [x.strip() for x in value.split(",")]
+    return [x for x in parts if x]

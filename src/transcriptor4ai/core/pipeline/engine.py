@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from transcriptor4ai.domain.pipeline_models import PipelineResult, _build_error_result, _build_success_result
-
 """
-Core orchestration pipeline for transcriptor4ai.
+Core orchestration pipeline.
 
-Coordinates input validation, path preparation, service execution (Transcription and Tree generation), output unification, and token estimation.
-
-Implemented Parallel Service Orchestration. 
-The tree generation and code transcription now run concurrently to optimize I/O wait times.
+This module coordinates the entire transcription workflow:
+1. Validates configuration and paths.
+2. Checks for overwrite conflicts.
+3. Prepares output directories (or staging areas).
+4. Executes Transcription and Tree Generation in parallel threads.
+5. Assembles unified context files.
+6. Computes token metrics.
+7. Deploys final files to the destination.
 """
 
 import logging
@@ -18,22 +20,24 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
+from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree
+from transcriptor4ai.core.pipeline.transcriber import transcribe_code
 from transcriptor4ai.core.pipeline.validator import validate_config
+from transcriptor4ai.core.processing.tokenizer import count_tokens
+from transcriptor4ai.domain.pipeline_models import (
+    PipelineResult,
+    create_error_result,
+    create_success_result
+)
 from transcriptor4ai.infra.fs import (
     check_existing_output_files,
     normalize_path,
     get_real_output_path,
 )
-from transcriptor4ai.core.pipeline.transcriber import transcribe_code
-from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree
-from transcriptor4ai.core.processing.tokenizer import count_tokens
 
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# Public API
-# -----------------------------------------------------------------------------
 def run_pipeline(
         config: Optional[Dict[str, Any]],
         *,
@@ -44,8 +48,17 @@ def run_pipeline(
     """
     Execute the full transcription pipeline.
 
-    Orchestrates the creation of individual parts (Tree, Modules, Tests, Resources) and optionally assembles them into a unified context file.
-    Orchestrates services in parallel to reduce total execution time.
+    Orchestrates services in parallel to reduce I/O wait times and
+    aggregates results into a unified structure.
+
+    Args:
+        config: The configuration dictionary (raw or partial).
+        overwrite: If True, overwrite existing output files.
+        dry_run: If True, simulate execution without writing to disk.
+        tree_output_path: Optional override path for the tree file.
+
+    Returns:
+        PipelineResult: Object containing status, metrics, and summary.
     """
     logger.info("Pipeline execution started.")
 
@@ -64,7 +77,7 @@ def run_pipeline(
     if not os.path.exists(base_path) or not os.path.isdir(base_path):
         msg = f"Invalid input directory: {base_path}"
         logger.error(msg)
-        return _build_error_result(msg, cfg, base_path)
+        return create_error_result(msg, cfg, base_path)
 
     output_base_dir = normalize_path(cfg.get("output_base_dir", ""), base_path)
     final_output_path = get_real_output_path(output_base_dir, cfg["output_subdir_name"])
@@ -96,7 +109,7 @@ def run_pipeline(
     if existing_files and not overwrite and not dry_run:
         msg = "Existing files detected and overwrite=False. Aborting."
         logger.warning(f"{msg} Files: {existing_files}")
-        return _build_error_result(
+        return create_error_result(
             msg, cfg, base_path, final_output_path, existing_files,
             summary_extra={"existing_files": list(existing_files)}
         )
@@ -110,7 +123,7 @@ def run_pipeline(
         except OSError as e:
             msg = f"Failed to create output directory {final_output_path}: {e}"
             logger.critical(msg)
-            return _build_error_result(msg, cfg, base_path, final_output_path)
+            return create_error_result(msg, cfg, base_path, final_output_path)
 
     temp_dir_obj = None
     if dry_run or not cfg["create_individual_files"]:
@@ -182,7 +195,7 @@ def run_pipeline(
         if temp_dir_obj:
             temp_dir_obj.cleanup()
         err_msg = trans_res.get('error', 'Unknown transcription error')
-        return _build_error_result(f"Transcription failure: {err_msg}", cfg, base_path, final_output_path)
+        return create_error_result(f"Transcription failure: {err_msg}", cfg, base_path, final_output_path)
 
     # -------------------------------------------------------------------------
     # 5) Assembly & Metrics
@@ -280,7 +293,7 @@ def run_pipeline(
     }
 
     logger.info("Pipeline completed successfully.")
-    return _build_success_result(
+    return create_success_result(
         cfg, base_path, final_output_path, existing_files,
         trans_res, tree_lines, path_tree, final_token_count, summary
     )

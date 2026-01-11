@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from transcriptor4ai.core.pipeline.worker import process_file_task
-from transcriptor4ai.core.pipeline.writer import initialize_output_file
-
 """
-Source code transcription service.
+Parallel Transcription Manager.
 
-Recursively scans directories and consolidates files into text documents based on granular processing flags and filters. 
-Implements a Parallel Processing Engine with ThreadPoolExecutor and atomic locking for high-speed, thread-safe transcription.
+This module orchestrates the multi-threaded scanning and transcription process.
+It initializes worker threads, manages file locks, and aggregates the results
+into a structured report.
 """
 
 import logging
@@ -25,15 +23,14 @@ from transcriptor4ai.core.pipeline.filters import (
     matches_any,
     matches_include,
 )
-from transcriptor4ai.infra.fs import _safe_mkdir
+from transcriptor4ai.core.pipeline.worker import process_file_task
+from transcriptor4ai.core.pipeline.writer import initialize_output_file
 from transcriptor4ai.domain.transcription_models import TranscriptionError
+from transcriptor4ai.infra.fs import _safe_mkdir
 
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# Public API
-# -----------------------------------------------------------------------------
 def transcribe_code(
         input_path: str,
         modules_output_path: str,
@@ -74,13 +71,11 @@ def transcribe_code(
         minify_output: If True, remove redundant code comments.
 
     Returns:
-        A dictionary containing counters, paths, and status.
+        Dict[str, Any]: A dictionary containing counters, paths, and execution status.
     """
     logger.info(f"Starting parallel transcription scan in: {input_path}")
 
-    # -------------------------
     # 1. Normalization & Setup
-    # -------------------------
     if extensions is None:
         extensions = default_extensions()
     if include_patterns is None:
@@ -93,9 +88,7 @@ def transcribe_code(
     for p in [modules_output_path, tests_output_path, resources_output_path, error_output_path]:
         _safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
-    # -------------------------
     # 2. Pattern Compilation
-    # -------------------------
     final_exclusions = list(exclude_patterns)
     if respect_gitignore:
         git_patterns = load_gitignore_patterns(input_path_abs)
@@ -106,9 +99,7 @@ def transcribe_code(
     include_rx = compile_patterns(include_patterns)
     exclude_rx = compile_patterns(final_exclusions)
 
-    # -------------------------
     # 3. Threading Infrastructure
-    # -------------------------
     # We use locks to ensure only one thread writes to a specific file at a time
     locks = {
         "module": threading.Lock(),
@@ -134,7 +125,7 @@ def transcribe_code(
         "errors": []
     }
 
-    # Pre-initialize headers to avoid race conditions during first write
+    # Pre-initialize headers
     if process_modules:
         initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
     if process_tests:
@@ -142,9 +133,7 @@ def transcribe_code(
     if process_resources:
         initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
 
-    # -------------------------
     # 4. Parallel Task Dispatch
-    # -------------------------
     tasks = []
 
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
@@ -186,11 +175,12 @@ def transcribe_code(
             worker_res = future.result()
             if worker_res["ok"]:
                 results["processed"] += 1
-                if worker_res["mode"] == "test":
+                mode = worker_res.get("mode")
+                if mode == "test":
                     results["tests_written"] += 1
-                elif worker_res["mode"] == "module":
+                elif mode == "module":
                     results["modules_written"] += 1
-                elif worker_res["mode"] == "resource":
+                elif mode == "resource":
                     results["resources_written"] += 1
             else:
                 results["errors"].append(TranscriptionError(
@@ -198,9 +188,7 @@ def transcribe_code(
                     error=worker_res["error"]
                 ))
 
-    # -------------------------
     # 5. Error Log Deployment
-    # -------------------------
     actual_error_path = ""
     if save_error_log and results["errors"]:
         try:

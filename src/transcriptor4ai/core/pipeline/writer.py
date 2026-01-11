@@ -1,23 +1,20 @@
 from __future__ import annotations
 
 """
-Output formatting and transformation logic for Transcriptor4AI.
+Output Writer and Formatter.
 
-Handles the physical writing of file entries into consolidated documents,
-applying a streaming transformation pipeline (Minify -> Sanitize -> Mask).
-Refactored for high memory efficiency using line iterators.
+This module handles the physical writing of consolidated files using a
+streaming approach. It applies transformation pipelines (minification,
+sanitization) on-the-fly to ensure memory efficiency.
 """
 
 from typing import Iterator
 
-from transcriptor4ai.core.processing.sanitizer import sanitize_text_stream, mask_local_paths_stream
 from transcriptor4ai.core.processing.minifier import minify_code_stream
+from transcriptor4ai.core.processing.sanitizer import sanitize_text_stream, mask_local_paths_stream
 
 
-# -----------------------------------------------------------------------------
-# Output Formatting
-# -----------------------------------------------------------------------------
-def _append_entry(
+def append_entry(
         output_path: str,
         rel_path: str,
         line_iterator: Iterator[str],
@@ -45,6 +42,9 @@ def _append_entry(
         enable_sanitizer: If True, redact secrets and keys.
         mask_user_paths: If True, replace local home paths with placeholders.
         minify_output: If True, remove comments and excessive whitespace.
+
+    Raises:
+        OSError: If writing to the file fails.
     """
     # 1. Chain Transformation Pipeline (Lazy Evaluation)
     processed_stream = line_iterator
@@ -76,6 +76,12 @@ def _append_entry(
 
 
 def initialize_output_file(file_path: str, header: str) -> None:
-    """Create a file and write the initial header."""
+    """
+    Create a new file (or overwrite) and write the initial header.
+
+    Args:
+        file_path: Absolute path to the file.
+        header: The header text line.
+    """
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(f"{header}\n")

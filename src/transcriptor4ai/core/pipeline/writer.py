@@ -5,7 +5,7 @@ Output formatting and transformation logic for Transcriptor4AI.
 
 Handles the physical writing of file entries into consolidated documents,
 applying a streaming transformation pipeline (Minify -> Sanitize -> Mask).
-Refactored in V1.5.0 for high memory efficiency using line iterators.
+Refactored for high memory efficiency using line iterators.
 """
 
 from typing import Iterator
@@ -73,3 +73,9 @@ def _append_entry(
 
     except OSError as e:
         raise e
+
+
+def initialize_output_file(file_path: str, header: str) -> None:
+    """Create a file and write the initial header."""
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(f"{header}\n")

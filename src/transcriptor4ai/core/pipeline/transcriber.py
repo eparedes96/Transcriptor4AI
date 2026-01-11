@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from transcriptor4ai.core.pipeline.worker import process_file_task
+from transcriptor4ai.core.pipeline.writer import initialize_output_file
+
 """
 Source code transcription service.
 
@@ -11,7 +14,7 @@ import logging
 import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Iterator
+from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.core.pipeline.filters import (
     compile_patterns,
@@ -19,13 +22,10 @@ from transcriptor4ai.core.pipeline.filters import (
     default_exclude_patterns,
     default_include_patterns,
     load_gitignore_patterns,
-    is_test,
-    is_resource_file,
     matches_any,
     matches_include,
 )
 from transcriptor4ai.infra.fs import _safe_mkdir
-from transcriptor4ai.core.pipeline.writer import _append_entry
 from transcriptor4ai.domain.transcription_models import TranscriptionError
 
 logger = logging.getLogger(__name__)
@@ -136,11 +136,11 @@ def transcribe_code(
 
     # Pre-initialize headers to avoid race conditions during first write
     if process_modules:
-        _initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
+        initialize_output_file(modules_output_path, "SCRIPTS/MODULES:")
     if process_tests:
-        _initialize_output_file(tests_output_path, "TESTS:")
+        initialize_output_file(tests_output_path, "TESTS:")
     if process_resources:
-        _initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
+        initialize_output_file(resources_output_path, "RESOURCES (CONFIG/DATA/DOCS):")
 
     # -------------------------
     # 4. Parallel Task Dispatch
@@ -167,7 +167,7 @@ def transcribe_code(
                 rel_path = os.path.relpath(file_path, input_path_abs)
 
                 tasks.append(executor.submit(
-                    _process_single_file,
+                    process_file_task,
                     file_path=file_path,
                     rel_path=rel_path,
                     ext=ext,
@@ -234,76 +234,3 @@ def transcribe_code(
             "errors": len(results["errors"]),
         },
     }
-
-
-# -----------------------------------------------------------------------------
-# Private Helpers
-# -----------------------------------------------------------------------------
-
-def _process_single_file(
-        file_path: str,
-        rel_path: str,
-        ext: str,
-        file_name: str,
-        process_modules: bool,
-        process_tests: bool,
-        process_resources: bool,
-        enable_sanitizer: bool,
-        mask_user_paths: bool,
-        minify_output: bool,
-        locks: Dict[str, threading.Lock],
-        output_paths: Dict[str, str]
-) -> Dict[str, Any]:
-    """
-    Atomic worker task: processes a single file and appends it to output.
-    """
-    # 1. Classification
-    file_is_test = is_test(file_name)
-    file_is_resource = is_resource_file(file_name)
-    target_mode = "skip"
-
-    if file_is_test:
-        if process_tests: target_mode = "test"
-    elif file_is_resource:
-        if process_resources:
-            target_mode = "resource"
-        elif process_modules:
-            target_mode = "module"
-    else:
-        if process_modules: target_mode = "module"
-
-    if target_mode == "skip":
-        return {"ok": False, "rel_path": rel_path, "error": "Filtered by mode", "mode": "skip"}
-
-    # 2. Transcription Logic
-    try:
-        line_iterator = _get_file_lines(file_path)
-
-        lock = locks[target_mode]
-        with lock:
-            _append_entry(
-                output_path=output_paths[target_mode],
-                rel_path=rel_path,
-                line_iterator=line_iterator,
-                extension=ext,
-                enable_sanitizer=enable_sanitizer,
-                mask_user_paths=mask_user_paths,
-                minify_output=minify_output
-            )
-        return {"ok": True, "mode": target_mode, "rel_path": rel_path}
-
-    except (OSError, UnicodeDecodeError) as e:
-        return {"ok": False, "rel_path": rel_path, "error": str(e), "mode": target_mode}
-
-
-def _get_file_lines(file_path: str) -> Iterator[str]:
-    """Read a file line by line using a generator."""
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-        for line in f:
-            yield line
-
-
-def _initialize_output_file(file_path: str, header: str) -> None:
-    """Create a file and write the initial header."""
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(f"{header}\n")

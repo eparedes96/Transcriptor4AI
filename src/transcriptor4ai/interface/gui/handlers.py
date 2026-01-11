@@ -1,27 +1,48 @@
 from __future__ import annotations
 
+"""
+Event handlers and logic controllers for the GUI.
+
+This module implements the 'Controller' part of the MVC pattern.
+It handles user interactions, dialogs, modals, and configuration management.
+"""
+
 import logging
 import os
 import platform
 import subprocess
 import threading
 import webbrowser
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import PySimpleGUI as sg
+
 from transcriptor4ai.core.pipeline.engine import PipelineResult
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.infra.logging import get_recent_logs
-from transcriptor4ai.interface.gui.threads import _download_update_thread, _submit_feedback_thread, \
-    _submit_error_report_thread
+from transcriptor4ai.interface.gui.threads import (
+    download_update_task,
+    submit_feedback_task,
+    submit_error_report_task
+)
 from transcriptor4ai.utils.i18n import i18n
 
 logger = logging.getLogger(__name__)
 
 
-def _open_file_explorer(path: str) -> None:
-    """Open the host OS file explorer at the given path."""
+# -----------------------------------------------------------------------------
+# OS System Helpers
+# -----------------------------------------------------------------------------
+def open_file_explorer(path: str) -> None:
+    """
+    Open the host OS file explorer at the given path.
+    Supports Windows, macOS, and Linux (xdg-open).
+
+    Args:
+        path: Directory path to open.
+    """
     if not os.path.exists(path):
+        logger.warning(f"Attempted to open non-existent path: {path}")
         return
     try:
         sys_name = platform.system()
@@ -36,14 +57,25 @@ def _open_file_explorer(path: str) -> None:
         sg.popup_error(f"Could not open folder:\n{e}")
 
 
-def _parse_list_from_string(value: str) -> List[str]:
-    """Convert CSV string to list of stripped strings."""
+def parse_list_from_string(value: Optional[str]) -> List[str]:
+    """
+    Convert a comma-separated string to a list of stripped strings.
+
+    Args:
+        value: Input CSV string (e.g., ".py, .js").
+
+    Returns:
+        List of strings (e.g., [".py", ".js"]). Returns empty list on None.
+    """
     if not value:
         return []
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
-def _show_update_prompt(
+# -----------------------------------------------------------------------------
+# Modal Dialogs (Interaction Logic)
+# -----------------------------------------------------------------------------
+def show_update_prompt_modal(
         parent_window: sg.Window,
         latest_version: str,
         changelog: str,
@@ -52,14 +84,26 @@ def _show_update_prompt(
         browser_url: str = ""
 ) -> bool:
     """
-    Display a scrollable modal asking the user to confirm the update.
-    If binary_url is provided, it initiates a background download.
-    Otherwise, it provides a direct link to the browser download page.
+    Display a modal asking the user to confirm an update.
+
+    Args:
+        parent_window: The main application window (for progress updates).
+        latest_version: Version string of the new release.
+        changelog: Text description of changes.
+        binary_url: Direct download URL (OTA).
+        dest_path: Local path target for download.
+        browser_url: Fallback URL for manual download.
+
+    Returns:
+        bool: True if OTA download started, False otherwise.
     """
     is_ota_viable = bool(binary_url and dest_path)
 
-    instruction = "A new update is ready. Would you like to download it now?" if is_ota_viable else \
+    instruction = (
+        "A new update is ready. Would you like to download it now?"
+        if is_ota_viable else
         "A new version is available. Background download is not available for this release."
+    )
 
     btn_text = "Yes, Download" if is_ota_viable else "Go to GitHub"
     btn_color = "green" if is_ota_viable else "#007ACC"
@@ -67,12 +111,14 @@ def _show_update_prompt(
     layout = [
         [sg.Text(f"New version available: v{latest_version}", font=("Any", 11, "bold"))],
         [sg.Text(instruction)],
-        [sg.Multiline(changelog,
-                      size=(70, 15),
-                      font=("Courier", 9),
-                      disabled=True,
-                      background_color="#F0F0F0",
-                      no_scrollbar=False)],
+        [sg.Multiline(
+            changelog,
+            size=(70, 15),
+            font=("Courier", 9),
+            disabled=True,
+            background_color="#F0F0F0",
+            no_scrollbar=False
+        )],
         [sg.Push(),
          sg.Button(btn_text, key="-YES-", button_color=btn_color, size=(15, 1)),
          sg.Button("Not now", key="-NO-", size=(12, 1))]
@@ -90,13 +136,12 @@ def _show_update_prompt(
             if is_ota_viable:
                 parent_window["-UPDATE_BAR-"].update(f"Downloading v{latest_version}...")
                 threading.Thread(
-                    target=_download_update_thread,
+                    target=download_update_task,
                     args=(parent_window, binary_url, dest_path),
                     daemon=True
                 ).start()
                 result = True
             else:
-                # Redirect to GitHub browser page
                 webbrowser.open(browser_url)
                 result = False
             break
@@ -106,7 +151,7 @@ def _show_update_prompt(
 
 
 def show_feedback_window() -> None:
-    """Display the Feedback Hub modal window."""
+    """Display the Feedback Hub modal window and handle submission."""
     layout = [
         [sg.Text("Feedback Hub", font=("Any", 14, "bold"))],
         [sg.Text("Help us improve Transcriptor4AI with your suggestions or bug reports.")],
@@ -148,7 +193,11 @@ def show_feedback_window() -> None:
             if values["-FB_LOGS-"]:
                 payload["logs"] = get_recent_logs(100)
 
-            threading.Thread(target=_submit_feedback_thread, args=(fb_window, payload), daemon=True).start()
+            threading.Thread(
+                target=submit_feedback_task,
+                args=(fb_window, payload),
+                daemon=True
+            ).start()
 
         if event == "-FEEDBACK-SUBMITTED-":
             success, msg = values[event]
@@ -166,7 +215,10 @@ def show_feedback_window() -> None:
 def show_crash_modal(error_msg: str, stack_trace: str) -> None:
     """
     Display a technical modal for critical unhandled exceptions.
-    Allows users to provide context and send a report to developers.
+
+    Args:
+        error_msg: The exception message.
+        stack_trace: Full traceback string.
     """
     layout = [
         [sg.Text("⚠️ Critical Error Detected", font=("Any", 14, "bold"), text_color="red")],
@@ -224,7 +276,7 @@ def show_crash_modal(error_msg: str, stack_trace: str) -> None:
             }
 
             threading.Thread(
-                target=_submit_error_report_thread,
+                target=submit_error_report_task,
                 args=(window, payload),
                 daemon=True
             ).start()
@@ -243,8 +295,13 @@ def show_crash_modal(error_msg: str, stack_trace: str) -> None:
     window.close()
 
 
-def _show_results_window(result: PipelineResult) -> None:
-    """Show detailed pipeline execution summary and metrics."""
+def show_results_window(result: PipelineResult) -> None:
+    """
+    Show detailed pipeline execution summary and metrics.
+
+    Args:
+        result: The PipelineResult object from the core engine.
+    """
     summary = result.summary or {}
     dry_run = summary.get("dry_run", False)
     header_text = i18n.t("gui.results_window.dry_run_header") if dry_run else i18n.t(
@@ -299,7 +356,7 @@ def _show_results_window(result: PipelineResult) -> None:
         if event in (sg.WIN_CLOSED, "-CLOSE-"):
             break
         if event == "-OPEN-":
-            _open_file_explorer(result.final_output_path)
+            open_file_explorer(result.final_output_path)
         if event == "-COPY-":
             if has_unified:
                 try:
@@ -311,8 +368,14 @@ def _show_results_window(result: PipelineResult) -> None:
     res_window.close()
 
 
+# -----------------------------------------------------------------------------
+# Configuration Sync Helpers
+# -----------------------------------------------------------------------------
 def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> None:
-    """Synchronize UI values back to the config dictionary."""
+    """
+    Synchronize UI values back to the config dictionary.
+    Reads values from PySimpleGUI input dict and updates the config object reference.
+    """
     for k in ["input_path", "output_base_dir", "output_subdir_name", "output_prefix", "target_model"]:
         config[k] = values.get(k)
 
@@ -325,13 +388,19 @@ def update_config_from_gui(config: Dict[str, Any], values: Dict[str, Any]) -> No
     for k in bool_keys:
         config[k] = bool(values.get(k))
 
-    config["extensions"] = _parse_list_from_string(values.get("extensions", ""))
-    config["include_patterns"] = _parse_list_from_string(values.get("include_patterns", ""))
-    config["exclude_patterns"] = _parse_list_from_string(values.get("exclude_patterns", ""))
+    config["extensions"] = parse_list_from_string(values.get("extensions", ""))
+    config["include_patterns"] = parse_list_from_string(values.get("include_patterns", ""))
+    config["exclude_patterns"] = parse_list_from_string(values.get("exclude_patterns", ""))
 
 
 def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
-    """Populate UI fields from a config dictionary and refresh states."""
+    """
+    Populate UI fields from a config dictionary.
+
+    Args:
+        window: The main window to update.
+        config: The configuration dictionary to read from.
+    """
     keys = ["input_path", "output_base_dir", "output_subdir_name", "output_prefix",
             "process_modules", "process_tests", "generate_tree", "create_individual_files",
             "create_unified_file", "show_functions", "show_classes", "show_methods",
@@ -351,14 +420,19 @@ def populate_gui_from_config(window: sg.Window, config: Dict[str, Any]) -> None:
     if "-STACK-" in window.AllKeysDict:
         window["-STACK-"].update(value="-- Select --")
 
-    # Refresh disabled states based on the loaded Tree setting
     tree_enabled = bool(config.get("generate_tree", False))
     for k in ["show_functions", "show_classes", "show_methods"]:
         window[k].update(disabled=not tree_enabled)
 
 
-def _toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
-    """Enable or disable interactive elements during long operations."""
+def toggle_ui_state(window: sg.Window, is_disabled: bool) -> None:
+    """
+    Enable or disable interactive elements during long operations.
+
+    Args:
+        window: The GUI window.
+        is_disabled: True to disable buttons, False to enable.
+    """
     keys = ["btn_process", "btn_simulate", "btn_reset", "btn_browse_in", "btn_browse_out",
             "btn_load_profile", "btn_save_profile", "btn_del_profile", "btn_feedback"]
     for key in keys:

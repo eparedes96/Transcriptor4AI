@@ -120,14 +120,30 @@ def _parse_list_from_string(value: str) -> List[str]:
 # -----------------------------------------------------------------------------
 # Community & Feedback Windows
 # -----------------------------------------------------------------------------
-def _show_update_prompt(latest_version: str, changelog: str) -> bool:
+def _show_update_prompt(
+        parent_window: sg.Window,
+        latest_version: str,
+        changelog: str,
+        binary_url: str,
+        dest_path: str,
+        browser_url: str = ""
+) -> bool:
     """
     Display a scrollable modal asking the user to confirm the update.
-    Prevents UI overflow when the changelog is very long.
+    If binary_url is provided, it initiates a background download.
+    Otherwise, it provides a direct link to the browser download page.
     """
+    is_ota_viable = bool(binary_url and dest_path)
+
+    instruction = "A new update is ready. Would you like to download it now?" if is_ota_viable else \
+        "A new version is available. Background download is not available for this release."
+
+    btn_text = "Yes, Download" if is_ota_viable else "Go to GitHub"
+    btn_color = "green" if is_ota_viable else "#007ACC"
+
     layout = [
         [sg.Text(f"New version available: v{latest_version}", font=("Any", 11, "bold"))],
-        [sg.Text("A new update is ready. Would you like to download it now?")],
+        [sg.Text(instruction)],
         [sg.Multiline(changelog,
                       size=(70, 15),
                       font=("Courier", 9),
@@ -135,7 +151,7 @@ def _show_update_prompt(latest_version: str, changelog: str) -> bool:
                       background_color="#F0F0F0",
                       no_scrollbar=False)],
         [sg.Push(),
-         sg.Button("Yes, Download", key="-YES-", button_color="green", size=(15, 1)),
+         sg.Button(btn_text, key="-YES-", button_color=btn_color, size=(15, 1)),
          sg.Button("Not now", key="-NO-", size=(12, 1))]
     ]
 
@@ -148,7 +164,18 @@ def _show_update_prompt(latest_version: str, changelog: str) -> bool:
             result = False
             break
         if event == "-YES-":
-            result = True
+            if is_ota_viable:
+                parent_window["-UPDATE_BAR-"].update(f"Downloading v{latest_version}...")
+                threading.Thread(
+                    target=_download_update_thread,
+                    args=(parent_window, binary_url, dest_path),
+                    daemon=True
+                ).start()
+                result = True
+            else:
+                # Redirect to GitHub browser page
+                webbrowser.open(browser_url)
+                result = False
             break
 
     window.close()
@@ -587,22 +614,17 @@ def main() -> None:
             res, is_manual = values[event]
             if res.get("has_update"):
                 latest = res.get('latest_version')
+                binary_url = res.get("binary_url")
+                browser_url = res.get("download_url")
 
-                if _show_update_prompt(latest, res.get('changelog', "No changelog provided.")):
-                    if res.get("binary_url"):
-                        temp_dir = paths.get_user_data_dir()
-                        dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
-                        os.makedirs(os.path.dirname(dest), exist_ok=True)
+                dest = ""
+                if binary_url:
+                    temp_dir = paths.get_user_data_dir()
+                    dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
+                    os.makedirs(os.path.dirname(dest), exist_ok=True)
 
-                        update_metadata.update({"path": dest, "sha256": res.get("sha256"), "ready": False})
-                        window["-UPDATE_BAR-"].update(f"Downloading v{latest}...")
-                        threading.Thread(target=_download_update_thread, args=(window, res["binary_url"], dest),
-                                         daemon=True).start()
-                    else:
-                        logger.info("Background update unavailable. Redirecting user to GitHub browser page.")
-                        sg.popup("Background update is not available for this release.\n"
-                                 "Redirecting to the official download page.")
-                        webbrowser.open(res.get("download_url"))
+                if _show_update_prompt(window, latest, res.get('changelog', ""), binary_url, dest, browser_url):
+                    update_metadata.update({"path": dest, "sha256": res.get("sha256"), "ready": False})
             else:
                 if is_manual:
                     logger.info("Update check: Already up to date.")
@@ -621,7 +643,8 @@ def main() -> None:
                 sg.popup("Download complete! The update will be applied automatically when you close the application.")
             else:
                 window["-UPDATE_BAR-"].update("Download failed.", text_color="red")
-                sg.popup_error(f"Update download failed:\n{msg}")
+                if sg.popup_yes_no(f"Update download failed: {msg}\n\nWould you like to open the browser instead?") == "Yes":
+                    webbrowser.open(browser_url or "https://github.com/eparedes96/Transcriptor4AI/releases")
 
         # --- Other Events ---
         if event in ("btn_feedback", "Send Feedback"):

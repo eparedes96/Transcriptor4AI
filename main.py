@@ -60,7 +60,7 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
         # 3. Standard Error (Console)
         try:
             # Try our custom themed modal first
-            from transcriptor4ai.ui.gui import show_crash_modal
+            from transcriptor4ai.interface.gui.app import show_crash_modal
             show_crash_modal(error_msg, stack_trace)
         except Exception as e:
             logger.error(f"Custom crash modal failed: {e}. Falling back to system native alert.")
@@ -98,12 +98,12 @@ def main() -> None:
     try:
         # CLI Mode
         if len(sys.argv) > 1:
-            from transcriptor4ai.cli import main as cli_main
+            from transcriptor4ai.interface.cli.app import main as cli_main
             sys.exit(cli_main())
 
         # GUI Mode
         else:
-            from transcriptor4ai.ui.gui import main as gui_main
+            from transcriptor4ai.interface.gui.app import main as gui_main
             sys.exit(gui_main())
 
     except Exception as e:

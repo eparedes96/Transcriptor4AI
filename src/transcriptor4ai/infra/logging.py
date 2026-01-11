@@ -13,9 +13,9 @@ import os
 import sys
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict
 
-from transcriptor4ai.paths import get_user_data_dir
+from transcriptor4ai.infra.fs import get_user_data_dir
 
 # -----------------------------------------------------------------------------
 # Constants

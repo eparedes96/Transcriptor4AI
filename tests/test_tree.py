@@ -1,8 +1,6 @@
-import pytest
-import os
-from transcriptor4ai.tree.ast_symbols import extract_definitions
-from transcriptor4ai.tree.models import FileNode, Tree
-from transcriptor4ai.tree.render import render_tree_structure
+from transcriptor4ai.core.analysis.ast_parser import extract_definitions
+from transcriptor4ai.domain.tree_models import FileNode
+from transcriptor4ai.core.analysis.tree_renderer import render_tree_structure
 
 
 # -----------------------------------------------------------------------------

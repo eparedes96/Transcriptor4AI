@@ -16,7 +16,7 @@ import logging
 import os
 from typing import Any, Dict, List
 
-from transcriptor4ai.paths import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
+from transcriptor4ai.infra.fs import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 
 logger = logging.getLogger(__name__)
 

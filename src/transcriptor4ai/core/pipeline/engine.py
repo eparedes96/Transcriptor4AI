@@ -17,15 +17,15 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from transcriptor4ai.validate_config import validate_config
-from transcriptor4ai.paths import (
+from transcriptor4ai.core.pipeline.validator import validate_config
+from transcriptor4ai.infra.fs import (
     check_existing_output_files,
     normalize_path,
     get_real_output_path,
 )
-from transcriptor4ai.transcription.service import transcribe_code
-from transcriptor4ai.tree.service import generate_directory_tree
-from transcriptor4ai.utils.token_counter import count_tokens
+from transcriptor4ai.core.pipeline.transcriber import transcribe_code
+from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree
+from transcriptor4ai.core.processing.tokenizer import count_tokens
 
 logger = logging.getLogger(__name__)
 

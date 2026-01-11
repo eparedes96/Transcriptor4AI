@@ -17,22 +17,20 @@ import subprocess
 import threading
 import traceback
 import webbrowser
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import PySimpleGUI as sg
 
-from transcriptor4ai import config as cfg
-from transcriptor4ai import paths
-from transcriptor4ai.logging import (
+from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.infra.logging import (
     configure_logging,
     LoggingConfig,
     get_default_gui_log_path,
     get_recent_logs
 )
-from transcriptor4ai.validate_config import validate_config
-from transcriptor4ai.pipeline import run_pipeline, PipelineResult
+from transcriptor4ai.core.pipeline.engine import run_pipeline, PipelineResult
 from transcriptor4ai.utils.i18n import i18n
-from transcriptor4ai.utils import network
+from transcriptor4ai.infra import network
 
 logger = logging.getLogger(__name__)
 

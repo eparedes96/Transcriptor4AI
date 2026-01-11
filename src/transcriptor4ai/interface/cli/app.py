@@ -10,16 +10,15 @@ core API and PipelineResult dataclass.
 
 import argparse
 import json
-import logging
 import os
 import sys
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
-from transcriptor4ai.config import load_config, get_default_config
-from transcriptor4ai.validate_config import validate_config
-from transcriptor4ai.pipeline import run_pipeline, PipelineResult
-from transcriptor4ai.logging import configure_logging, LoggingConfig, get_logger
+from transcriptor4ai.domain.config import load_config, get_default_config
+from transcriptor4ai.core.pipeline.validator import validate_config
+from transcriptor4ai.core.pipeline.engine import run_pipeline, PipelineResult
+from transcriptor4ai.infra.logging import configure_logging, LoggingConfig, get_logger
 from transcriptor4ai.utils.i18n import i18n
 
 logger = get_logger(__name__)

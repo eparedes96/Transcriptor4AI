@@ -10,8 +10,8 @@ Refactored in V1.5.0 for high memory efficiency using line iterators.
 
 from typing import Iterator
 
-from transcriptor4ai.utils.sanitizer import sanitize_text_stream, mask_local_paths_stream
-from transcriptor4ai.utils.minify_code import minify_code_stream
+from transcriptor4ai.core.processing.sanitizer import sanitize_text_stream, mask_local_paths_stream
+from transcriptor4ai.core.processing.minifier import minify_code_stream
 
 
 # -----------------------------------------------------------------------------

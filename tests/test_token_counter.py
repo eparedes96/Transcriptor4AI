@@ -6,7 +6,7 @@ Unit tests for the Token Counter utility.
 
 from unittest.mock import patch
 import pytest
-from transcriptor4ai.utils.token_counter import count_tokens, _count_heuristic
+from transcriptor4ai.core.processing.tokenizer import count_tokens, _count_heuristic
 
 def test_token_counter_empty():
     assert count_tokens("") == 0

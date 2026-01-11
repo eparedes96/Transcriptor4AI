@@ -13,7 +13,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Iterator
 
-from transcriptor4ai.filtering import (
+from transcriptor4ai.core.pipeline.filters import (
     compile_patterns,
     default_extensions,
     default_exclude_patterns,
@@ -24,9 +24,9 @@ from transcriptor4ai.filtering import (
     matches_any,
     matches_include,
 )
-from transcriptor4ai.paths import _safe_mkdir
-from transcriptor4ai.transcription.format import _append_entry
-from transcriptor4ai.transcription.models import TranscriptionError
+from transcriptor4ai.infra.fs import _safe_mkdir
+from transcriptor4ai.core.pipeline.writer import _append_entry
+from transcriptor4ai.domain.transcription_models import TranscriptionError
 
 logger = logging.getLogger(__name__)
 

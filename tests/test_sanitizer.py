@@ -7,12 +7,10 @@ Verifies the correct redaction of API keys, passwords, IPs, and emails,
 as well as the anonymization of local system paths.
 """
 
-import os
 from pathlib import Path
 from unittest.mock import patch
-import pytest
 
-from transcriptor4ai.utils.sanitizer import sanitize_text, mask_local_paths
+from transcriptor4ai.core.processing.sanitizer import sanitize_text, mask_local_paths
 
 
 # -----------------------------------------------------------------------------

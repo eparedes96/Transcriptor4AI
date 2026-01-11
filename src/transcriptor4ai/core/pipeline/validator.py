@@ -11,8 +11,8 @@ the pipeline.
 import logging
 from typing import Any, Dict, List, Tuple
 
-from transcriptor4ai.config import get_default_config
-from transcriptor4ai.filtering import (
+from transcriptor4ai.domain.config import get_default_config
+from transcriptor4ai.core.pipeline.filters import (
     default_extensions,
     default_include_patterns,
     default_exclude_patterns,

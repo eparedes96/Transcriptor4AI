@@ -7,8 +7,7 @@ Ensures that comments and excessive whitespace are removed across
 different programming languages while preserving logical code structure.
 """
 
-import pytest
-from transcriptor4ai.utils.minify_code import minify_code
+from transcriptor4ai.core.processing.minifier import minify_code
 
 
 def test_minify_code_python_comments() -> None:

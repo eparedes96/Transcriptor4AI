@@ -1,5 +1,5 @@
 import os
-from transcriptor4ai.paths import normalize_path, get_real_output_path, DEFAULT_OUTPUT_SUBDIR
+from transcriptor4ai.infra.fs import normalize_path, get_real_output_path, DEFAULT_OUTPUT_SUBDIR
 
 
 # -----------------------------------------------------------------------------

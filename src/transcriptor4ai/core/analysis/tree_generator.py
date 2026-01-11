@@ -12,7 +12,7 @@ import os
 import re
 from typing import Callable, List, Optional
 
-from transcriptor4ai.filtering import (
+from transcriptor4ai.core.pipeline.filters import (
     compile_patterns,
     default_extensions,
     default_exclude_patterns,
@@ -22,8 +22,8 @@ from transcriptor4ai.filtering import (
     matches_any,
     matches_include,
 )
-from transcriptor4ai.tree.models import FileNode, Tree
-from transcriptor4ai.tree.render import render_tree_structure
+from transcriptor4ai.domain.tree_models import FileNode, Tree
+from transcriptor4ai.core.analysis.tree_renderer import render_tree_structure
 
 logger = logging.getLogger(__name__)
 

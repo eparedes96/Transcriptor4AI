@@ -120,6 +120,40 @@ def _parse_list_from_string(value: str) -> List[str]:
 # -----------------------------------------------------------------------------
 # Community & Feedback Windows
 # -----------------------------------------------------------------------------
+def _show_update_prompt(latest_version: str, changelog: str) -> bool:
+    """
+    Display a scrollable modal asking the user to confirm the update.
+    Prevents UI overflow when the changelog is very long.
+    """
+    layout = [
+        [sg.Text(f"New version available: v{latest_version}", font=("Any", 11, "bold"))],
+        [sg.Text("A new update is ready. Would you like to download it now?")],
+        [sg.Multiline(changelog,
+                      size=(70, 15),
+                      font=("Courier", 9),
+                      disabled=True,
+                      background_color="#F0F0F0",
+                      no_scrollbar=False)],
+        [sg.Push(),
+         sg.Button("Yes, Download", key="-YES-", button_color="green", size=(15, 1)),
+         sg.Button("Not now", key="-NO-", size=(12, 1))]
+    ]
+
+    window = sg.Window("Software Update", layout, modal=True, finalize=True, element_justification='left')
+
+    result = False
+    while True:
+        event, _ = window.read()
+        if event in (sg.WIN_CLOSED, "-NO-"):
+            result = False
+            break
+        if event == "-YES-":
+            result = True
+            break
+
+    window.close()
+    return result
+
 def show_feedback_window() -> None:
     """Display the Feedback Hub modal window."""
     layout = [
@@ -553,8 +587,8 @@ def main() -> None:
             res, is_manual = values[event]
             if res.get("has_update"):
                 latest = res.get('latest_version')
-                msg = f"New version available: v{latest}. Download now?"
-                if sg.popup_yes_no(f"{msg}\n\nChangelog:\n{res['changelog']}") == "Yes":
+
+                if _show_update_prompt(latest, res.get('changelog', "No changelog provided.")):
                     temp_dir = paths.get_user_data_dir()
                     dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
                     os.makedirs(os.path.dirname(dest), exist_ok=True)

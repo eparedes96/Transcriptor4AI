@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 """
-Idempotent logging configuration system for Transcriptor4AI.
+Logging Infrastructure.
 
-Manages console and rotating file handlers for entry points (CLI/GUI).
-Ensures that logging is configured only once and provides utilities
-for log retrieval.
+Implements an idempotent, fail-safe logging configuration system.
+It supports:
+- Console output (stderr) for CLI feedback.
+- Rotating file logging for persistent diagnostics.
+- Thread-safe handler management to avoid duplication.
 """
 
 import logging
@@ -40,17 +42,17 @@ _LEVEL_MAP: Dict[str, int] = {
 @dataclass(frozen=True)
 class LoggingConfig:
     """
-    Immutable logging configuration.
+    Immutable logging configuration parameters.
 
     Attributes:
-        level: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL"
-        console: Enable stderr console output.
-        log_file: Path to the log file (optional). Triggers RotatingFileHandler.
-        max_bytes: Max size per log file before rotation (default 2MB).
-        backup_count: Number of backup files to keep.
-        console_fmt: Log format for console output.
-        file_fmt: Log format for file output.
-        datefmt: Date format for file logs.
+        level: Logging level string ("DEBUG", "INFO", etc.).
+        console: Whether to enable console (stderr) logging.
+        log_file: Optional path to a log file. Enables rotation if set.
+        max_bytes: Max size in bytes before log rotation (default 2MB).
+        backup_count: Number of backup log files to keep.
+        console_fmt: Format string for console output.
+        file_fmt: Format string for file output.
+        datefmt: Date format string.
     """
     level: str = "INFO"
     console: bool = True
@@ -73,14 +75,14 @@ def get_default_gui_log_path(
         file_name: str = "transcriptor4ai.log",
 ) -> str:
     """
-    Calculate the standard OS-specific log path using user data directory.
+    Calculate the standard OS-specific log path using the user data directory.
 
     Args:
-        app_name: Application name for directory structure.
-        file_name: Name of the log file.
+        app_name: Name of the application (used for folder structure).
+        file_name: Name of the log file itself.
 
     Returns:
-        Absolute path to the log file.
+        str: Absolute path to the log file.
     """
     base_dir = get_user_data_dir()
     return os.path.join(base_dir, "logs", file_name)
@@ -88,28 +90,29 @@ def get_default_gui_log_path(
 
 def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Logger:
     """
-    Configure the root logger. Idempotent unless force=True.
+    Configure the root logger with the provided settings.
 
-    This function is intended for Entrypoints (CLI/GUI) ONLY.
+    This function is idempotent: it checks if logging has already been configured
+    by this module to prevent duplicate handlers, unless `force=True`.
 
     Args:
-        cfg: LoggingConfig instance.
-        force: If True, re-configures even if already initialized.
+        cfg: Configuration object.
+        force: If True, re-configure even if already setup.
 
     Returns:
-        The configured root logger.
+        logging.Logger: The configured root logger instance.
     """
     root = logging.getLogger()
 
     try:
-        already = bool(getattr(root, _CONFIGURED_FLAG_ATTR, False))
-        if already and not force:
+        already_configured = bool(getattr(root, _CONFIGURED_FLAG_ATTR, False))
+        if already_configured and not force:
             return root
 
         level_int = _parse_level(cfg.level)
         root.setLevel(level_int)
 
-        # Cleanup previous Transcriptor handlers
+        # Cleanup only our own previous handlers to respect other libraries
         _remove_our_handlers(root)
 
         # Formatters
@@ -131,7 +134,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
                 backup_count=cfg.backup_count,
             )
 
-        # Mark as configured
+        # Mark as successfully configured
         try:
             setattr(root, _CONFIGURED_FLAG_ATTR, True)
         except Exception:
@@ -140,7 +143,6 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         return root
 
     except Exception:
-        # Emergency Fallback
         try:
             fallback = logging.getLogger()
             fallback.setLevel(logging.INFO)
@@ -157,17 +159,28 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Convenience accessor for named loggers."""
+    """
+    Get a named logger instance.
+
+    Args:
+        name: The name of the logger (typically __name__).
+
+    Returns:
+        logging.Logger: The logger instance.
+    """
     return logging.getLogger(name)
 
 
 def get_recent_logs(n_lines: int = 100) -> str:
     """
-    Retrieve the last N lines from the active application log file.
-    Useful for crash reporting and feedback attachments.
+    Retrieve the tail of the active application log file.
+    Used for creating crash reports and feedback attachments.
+
+    Args:
+        n_lines: Number of lines to retrieve from the end.
 
     Returns:
-        String containing the concatenated log lines.
+        str: The last N lines of the log as a single string.
     """
     log_path = get_default_gui_log_path()
     if not os.path.exists(log_path):
@@ -186,21 +199,21 @@ def get_recent_logs(n_lines: int = 100) -> str:
 # =============================================================================
 
 def _parse_level(level: str) -> int:
-    """Convert string level to logging integer constant."""
+    """Convert a string level name to its logging integer constant."""
     if not level:
         return logging.INFO
     return _LEVEL_MAP.get(str(level).strip().upper(), logging.INFO)
 
 
 def _ensure_parent_dir(path: str) -> None:
-    """Create directory structure for the given file path."""
+    """Recursively create the directory structure for a file path."""
     parent = os.path.dirname(os.path.abspath(path))
     if parent and not os.path.exists(parent):
         os.makedirs(parent, exist_ok=True)
 
 
 def _tag_handler(handler: logging.Handler) -> None:
-    """Mark a handler as owned by Transcriptor4AI to avoid removing external handlers."""
+    """Tag a handler instance as 'owned' by Transcriptor4AI."""
     try:
         setattr(handler, _HANDLER_TAG_ATTR, True)
     except Exception:
@@ -208,12 +221,12 @@ def _tag_handler(handler: logging.Handler) -> None:
 
 
 def _is_our_handler(handler: logging.Handler) -> bool:
-    """Check if the handler was created by this module."""
+    """Check if a handler instance was created by this module."""
     return bool(getattr(handler, _HANDLER_TAG_ATTR, False))
 
 
 def _remove_our_handlers(root: logging.Logger) -> None:
-    """Remove only the handlers created by this module from the logger."""
+    """Remove only the handlers tagged as ours from the logger."""
     for h in list(root.handlers):
         if _is_our_handler(h):
             root.removeHandler(h)
@@ -228,7 +241,7 @@ def _add_console_handler(
         level_int: int,
         formatter: logging.Formatter,
 ) -> None:
-    """Initialize and attach a stream handler to stderr."""
+    """Initialize and attach a standard stream handler (stderr)."""
     sh = logging.StreamHandler(sys.stderr)
     sh.setLevel(level_int)
     sh.setFormatter(formatter)
@@ -245,8 +258,8 @@ def _safe_add_rotating_file_handler(
         backup_count: int,
 ) -> None:
     """
-    Attempt to add a RotatingFileHandler. Falls back to console warning on failure.
-    Must never raise an exception to ensure application stability.
+    Attempt to initialize a RotatingFileHandler safely.
+    Logs a warning to the console if file access fails, instead of crashing.
     """
     try:
         _ensure_parent_dir(log_file)

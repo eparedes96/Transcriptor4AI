@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 """
-Path manipulation and filesystem utilities.
+FileSystem Infrastructure Layer.
 
-Ensures cross-platform compatibility and path normalization.
+Provides cross-platform path manipulation, directory creation, and file checking utilities.
+Acts as an abstraction layer over the 'os' module to ensure consistent behavior across OSs.
 """
 
 import os
+import platform
 from typing import List, Optional, Tuple
 
 # -----------------------------------------------------------------------------
@@ -23,29 +25,33 @@ UNIX_APP_DIR_NAME = ".transcriptor4ai"
 def get_user_data_dir() -> str:
     """
     Get the standard OS-specific user data directory for the application.
-    Ensures the directory exists.
+    Automatically creates the directory if it does not exist.
 
-    Windows: %LOCALAPPDATA%/Transcriptor4AI
-    Linux/Mac: ~/.transcriptor4ai
+    Path Standards:
+    - Windows: %LOCALAPPDATA%/Transcriptor4AI
+    - Linux/Mac: ~/.transcriptor4ai
 
     Returns:
-        Absolute path to the user data directory.
+        str: Absolute path to the user data directory.
     """
     path: str = ""
 
     # Windows Logic
-    try:
-        if os.name == "nt":
+    if os.name == "nt":
+        try:
             base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
             if base:
                 path = os.path.join(base, APP_DIR_NAME)
-    except Exception:
-        pass
+        except Exception:
+            pass
 
     # Fallback or Non-Windows (Linux/Mac)
     if not path:
-        home = os.path.expanduser("~")
-        path = os.path.join(home, UNIX_APP_DIR_NAME)
+        try:
+            home = os.path.expanduser("~")
+            path = os.path.join(home, UNIX_APP_DIR_NAME)
+        except Exception:
+            path = os.path.abspath(UNIX_APP_DIR_NAME)
 
     # Ensure directory exists
     try:
@@ -58,10 +64,18 @@ def get_user_data_dir() -> str:
 
 def normalize_path(path: Optional[str], fallback: str) -> str:
     """
-    Normalize a directory path.
-    - Handles None/Empty by using fallback.
-    - Expands user (~/) and environment variables.
+    Normalize a directory path string.
+
+    - Handles None/Empty inputs by returning the fallback.
+    - Expands user (~/) and environment variables ($VAR/%VAR%).
     - Returns an absolute path.
+
+    Args:
+        path: The input path string (can be None).
+        fallback: The default path to use if input is invalid.
+
+    Returns:
+        str: The normalized, absolute path.
     """
     p = (path or "").strip()
     if not p:
@@ -75,7 +89,15 @@ def normalize_path(path: Optional[str], fallback: str) -> str:
 
 def get_real_output_path(output_base_dir: str, output_subdir_name: str) -> str:
     """
-    Construct the final output path: output_base_dir / output_subdir_name
+    Construct the final output path combining base and subdirectory.
+    Defaults to 'transcript' if subdir is missing.
+
+    Args:
+        output_base_dir: The parent directory.
+        output_subdir_name: The name of the subdirectory.
+
+    Returns:
+        str: The joined path.
     """
     sub = (output_subdir_name or "").strip() or DEFAULT_OUTPUT_SUBDIR
     return os.path.join(output_base_dir, sub)
@@ -88,13 +110,17 @@ def get_destination_filenames(
         include_resources: bool = False
 ) -> List[str]:
     """
-    Return a list of potential output filenames based on configuration.
+    Generate a list of potential output filenames based on configuration flags.
+    Used for checking overwrite conflicts.
 
     Args:
-        prefix: The filename prefix (e.g., 'transcription').
-        mode: 'all', 'modules_only', or 'tests_only'.
-        include_tree: Whether tree generation is active.
-        include_resources: Whether resource processing is active.
+        prefix: The filename prefix (e.g., 'project_v1').
+        mode: Processing mode ('all', 'modules_only', 'tests_only').
+        include_tree: Whether tree file is expected.
+        include_resources: Whether resource file is expected.
+
+    Returns:
+        List[str]: List of expected filenames.
     """
     files: List[str] = []
 
@@ -115,8 +141,14 @@ def get_destination_filenames(
 
 def check_existing_output_files(output_dir: str, names: List[str]) -> List[str]:
     """
-    Check which files from the list already exist in the output directory.
-    Returns a list of full paths of existing files.
+    Check which files from a list already exist in the target directory.
+
+    Args:
+        output_dir: The directory to check within.
+        names: List of filenames to check.
+
+    Returns:
+        List[str]: A list of full paths for files that already exist.
     """
     existing: List[str] = []
     for n in names:
@@ -126,10 +158,15 @@ def check_existing_output_files(output_dir: str, names: List[str]) -> List[str]:
     return existing
 
 
-def _safe_mkdir(path: str) -> Tuple[bool, Optional[str]]:
+def safe_mkdir(path: str) -> Tuple[bool, Optional[str]]:
     """
-    Attempt to create a directory (idempotent).
-    Returns (Success, ErrorMessage).
+    Attempt to create a directory structure recursively (idempotent).
+
+    Args:
+        path: The directory path to create.
+
+    Returns:
+        Tuple[bool, Optional[str]]: (Success, Error Message).
     """
     try:
         os.makedirs(path, exist_ok=True)

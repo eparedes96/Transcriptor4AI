@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 """
-Internationalization (i18n) utility for transcriptor4ai.
+Internationalization (i18n) Utility.
 
-Provides a singleton manager to handle JSON-based translations with 
-support for dot-notation keys and string interpolation.
+Singleton manager for loading and accessing translation strings.
+Supports dot-notation keys (e.g., 'gui.menu.file') and argument interpolation.
 """
 
 import json
@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 # Constants
 # -----------------------------------------------------------------------------
 DEFAULT_LOCALE = "en"
-LOCALES_DIR_NAME = "locales"
+LOCALES_REL_PATH = os.path.join("..", "interface", "locales")
 
 
 class I18n:
     """
     Internationalization Manager.
 
-    Handles loading JSON translation files and retrieving strings
-    based on dot-notation keys (e.g., 'gui.buttons.process').
+    Loads JSON files from the 'interface/locales' directory and provides
+    safe access to translation strings.
     """
 
     def __init__(self, locale: str = DEFAULT_LOCALE):
@@ -34,23 +34,23 @@ class I18n:
         self._translations: Dict[str, Any] = {}
         self.is_loaded = False
 
-        # Determine absolute path to 'locales' folder
-        # src/transcriptor4ai/utils/i18n.py -> src/transcriptor4ai/locales
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self._locales_path = os.path.join(base_dir, LOCALES_DIR_NAME)
+        # Calculate absolute path relative to this file
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self._locales_path = os.path.abspath(os.path.join(base_dir, LOCALES_REL_PATH))
 
         self.load_locale(locale)
 
     def load_locale(self, locale: str) -> None:
         """
-        Load the translation file for the specified locale code.
+        Load a translation file by locale code.
 
-        Falls back to an empty dictionary if the file is not found or invalid.
+        Args:
+            locale: The locale code (e.g., 'en', 'es').
         """
         file_path = os.path.join(self._locales_path, f"{locale}.json")
 
         if not os.path.exists(file_path):
-            logger.warning(f"Locale file not found: {file_path}. Falling back to raw keys.")
+            logger.warning(f"Locale file not found: {file_path}. Using fallback keys.")
             self._translations = {}
             self.is_loaded = False
             return
@@ -68,15 +68,14 @@ class I18n:
 
     def t(self, key: str, **kwargs: Any) -> str:
         """
-        Translate a key string using dot-notation.
+        Retrieve and format a translation string.
 
         Args:
-            key: Dot-separated path to the string (e.g. 'gui.buttons.process').
-            **kwargs: Variables to interpolate into the string (e.g. path=p).
+            key: Dot-separated key path (e.g. 'gui.title').
+            **kwargs: Replacement variables for the string format.
 
         Returns:
-            The translated string with placeholders filled.
-            Returns the 'key' itself if the translation is missing or not a string.
+            str: The translated and formatted string, or the key itself if missing.
         """
         keys = key.split(".")
         current_val: Any = self._translations
@@ -94,20 +93,14 @@ class I18n:
             if not isinstance(current_val, str):
                 return key
 
-            # Safe cast for Mypy: current_val is now guaranteed to be str
-            translated_str: str = current_val
-
-            if kwargs:
-                return translated_str.format(**kwargs)
-
-            return translated_str
+            return current_val.format(**kwargs) if kwargs else current_val
 
         except Exception as e:
-            logger.debug(f"Translation interpolation error for key '{key}': {e}")
+            logger.debug(f"Translation error for '{key}': {e}")
             return key
 
 
 # -----------------------------------------------------------------------------
-# Global Singleton Instance
+# Global Singleton
 # -----------------------------------------------------------------------------
 i18n = I18n(DEFAULT_LOCALE)

@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 """
-Network utilities for Transcriptor4AI.
+Network Communication Infrastructure.
 
-Handles external communications including:
-- Version synchronization via GitHub REST API.
-- Background binary streaming for Seamless OTA updates.
-- SHA-256 Checksum retrieval for binary integrity.
-- Secure submission of user feedback and crash reports.
+Handles external HTTP interactions including:
+- Version checking via GitHub API.
+- Seamless OTA binary downloading.
+- Secure transmission of telemetry and error reports.
 """
 
 import logging
-import requests
 from typing import Any, Dict, Optional, Tuple, Callable
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/rel
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 
 TIMEOUT = 10
-USER_AGENT = "Transcriptor4AI-Client/1.5.0"
+USER_AGENT = "Transcriptor4AI-Client/1.6.0"
 CHUNK_SIZE = 8192
 
 
@@ -35,15 +35,13 @@ CHUNK_SIZE = 8192
 # -----------------------------------------------------------------------------
 def check_for_updates(current_version: str) -> Dict[str, Any]:
     """
-    Query GitHub API to compare the local version with the latest remote release.
-    Retrieves metadata for Seamless OTA, including binary URLs and SHA-256.
+    Check GitHub for a newer release compared to the current version.
 
     Args:
-        current_version: The semantic version string of the running application.
+        current_version: The semantic version string of the running app.
 
     Returns:
-        A dictionary containing update status, latest version, changelog,
-        binary URL, and expected checksum.
+        Dict containing update metadata (has_update, binary_url, etc.).
     """
     result: Dict[str, Any] = {
         "has_update": False,
@@ -68,36 +66,29 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
 
         if _is_newer(current_version, latest_tag):
             logger.info(f"Status: New version available! (v{current_version} -> v{latest_tag})")
-            result["has_update"] = True
-            result["latest_version"] = latest_tag
-            result["download_url"] = data.get("html_url", "")
-            result["changelog"] = data.get("body", "No changelog provided.")
+            result.update({
+                "has_update": True,
+                "latest_version": latest_tag,
+                "download_url": data.get("html_url", ""),
+                "changelog": data.get("body", "No changelog provided.")
+            })
 
-            # Identify Assets: Binary (.exe) and Checksum (.sha256)
+            # Identify Assets
             assets = data.get("assets", [])
             for asset in assets:
-                asset_name = asset.get("name", "")
+                asset_name = asset.get("name", "").lower()
+                download_url = asset.get("browser_download_url")
 
-                # Direct Binary Asset (Strictly look for .exe)
-                if asset_name.lower().endswith(".exe"):
-                    result["binary_url"] = asset.get("browser_download_url")
+                if asset_name.endswith(".exe"):
+                    result["binary_url"] = download_url
                     logger.info(f"Direct binary asset detected: {asset_name}")
 
-                # Integrity Checksum
-                elif asset_name.lower().endswith(".sha256"):
-                    try:
-                        checksum_url = asset.get("browser_download_url")
-                        c_res = requests.get(checksum_url, headers=headers, timeout=5)
-                        if c_res.status_code == 200:
-                            raw_hash = c_res.text.split()[0].strip()
-                            result["sha256"] = raw_hash
-                            logger.info(f"Integrity metadata retrieved: {raw_hash}")
-                    except Exception as e:
-                        logger.warning(f"Failed to retrieve checksum asset: {e}")
+                elif asset_name.endswith(".sha256"):
+                    _fetch_checksum(download_url, headers, result)
 
             # Safety Check
             if result["has_update"] and not result["binary_url"]:
-                logger.warning("No direct .exe asset found in the latest release. Background OTA will be disabled.")
+                logger.warning("No direct .exe asset found. Background OTA disabled.")
         else:
             logger.info("Status: Application is up to date.")
 
@@ -119,36 +110,32 @@ def download_binary_stream(
         progress_callback: Optional[Callable[[float], None]] = None
 ) -> Tuple[bool, str]:
     """
-    Download a remote binary file using streaming to minimize memory footprint.
-    Reports progress via callback for GUI integration.
+    Stream a file download to disk with progress reporting.
 
     Args:
-        url: Direct URL to the binary asset.
-        dest_path: Local filesystem path to save the binary.
-        progress_callback: Optional function receiving a float (0.0 to 100.0).
+        url: The URL to download.
+        dest_path: Local path to save the file.
+        progress_callback: Function accepting a float (0-100) for progress.
 
     Returns:
-        Tuple of (Success Status, Message).
+        Tuple (Success, Message).
     """
     headers = {"User-Agent": USER_AGENT}
     logger.info(f"Starting background download: {url}")
 
     try:
-        response = requests.get(url, headers=headers, stream=True, timeout=TIMEOUT)
-        response.raise_for_status()
+        with requests.get(url, headers=headers, stream=True, timeout=TIMEOUT) as response:
+            response.raise_for_status()
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded_size = 0
 
-        total_size = int(response.headers.get('content-length', 0))
-        downloaded_size = 0
-
-        with open(dest_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
-                if chunk:
-                    f.write(chunk)
-                    downloaded_size += len(chunk)
-
-                    if progress_callback and total_size > 0:
-                        percent = (downloaded_size / total_size) * 100
-                        progress_callback(percent)
+            with open(dest_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_size += len(chunk)
+                        if progress_callback and total_size > 0:
+                            progress_callback((downloaded_size / total_size) * 100)
 
         logger.info(f"Binary downloaded successfully to: {dest_path}")
         return True, "Download complete"
@@ -164,15 +151,15 @@ def download_binary_stream(
 
 
 # -----------------------------------------------------------------------------
-# Public API: Communication Channels
+# Public API: Telemetry
 # -----------------------------------------------------------------------------
 def submit_feedback(payload: Dict[str, Any]) -> Tuple[bool, str]:
-    """Submit user feedback or feature requests via Formspree."""
+    """Submit user feedback via secure POST."""
     return _secure_post(FORMSPREE_ENDPOINT, payload, "Feedback")
 
 
 def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
-    """Submit technical crash reports and stack traces."""
+    """Submit crash report via secure POST."""
     return _secure_post(FORMSPREE_ENDPOINT, payload, "Error Report")
 
 
@@ -180,27 +167,29 @@ def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
 # Private Helpers
 # -----------------------------------------------------------------------------
 def _is_newer(current: str, latest: str) -> bool:
-    """Perform a semantic version comparison (Major.Minor.Patch)."""
+    """Compare two semantic version strings."""
     try:
         def parse(v: str) -> Tuple[int, ...]:
-            parts = []
-            for p in v.split("."):
-                clean_p = "".join(filter(str.isdigit, p))
-                parts.append(int(clean_p) if clean_p else 0)
-            return tuple(parts)
+            return tuple(int("".join(filter(str.isdigit, p)) or 0) for p in v.split("."))
 
-        v_current = parse(current)
-        v_latest = parse(latest)
-
-        logger.debug(f"Comparing semantic versions: Local{v_current} vs Remote{v_latest}")
-        return v_latest > v_current
-
+        return parse(latest) > parse(current)
     except (ValueError, AttributeError):
         return False
 
 
+def _fetch_checksum(url: str, headers: Dict[str, str], result_dict: Dict[str, Any]) -> None:
+    """Helper to fetch and store SHA256 checksum."""
+    try:
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code == 200:
+            result_dict["sha256"] = resp.text.split()[0].strip()
+            logger.info(f"Integrity metadata retrieved: {result_dict['sha256']}")
+    except Exception as e:
+        logger.warning(f"Failed to retrieve checksum asset: {e}")
+
+
 def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, str]:
-    """Generic wrapper for POST requests with security validation."""
+    """Execute a POST request with error handling."""
     if not url:
         return False, "Endpoint not configured"
 
@@ -210,7 +199,6 @@ def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, st
         if response.status_code in (200, 201):
             logger.info(f"{context} submitted successfully.")
             return True, "Success"
-
         return False, f"Server rejected request ({response.status_code})"
     except requests.exceptions.RequestException as e:
         return False, str(e)

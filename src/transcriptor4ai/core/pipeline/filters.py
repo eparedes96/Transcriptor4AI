@@ -18,11 +18,12 @@ from typing import List, Set
 _RESOURCE_EXTENSIONS: Set[str] = {
     ".md", ".markdown", ".rst", ".txt",
     ".json", ".yaml", ".yml", ".toml", ".xml", ".csv", ".ini", ".cfg", ".conf", ".properties",
-    ".dockerignore", ".editorconfig", ".css"
+    ".dockerignore", ".editorconfig", ".css", ".env"
 }
 
 _RESOURCE_FILENAMES: Set[str] = {
-    "Dockerfile", "Makefile", "LICENSE", "CHANGELOG", "README", "Gemfile", "Procfile"
+    "Dockerfile", "Makefile", "LICENSE", "CHANGELOG", "README", "Gemfile", "Procfile",
+    ".dockerignore", ".editorconfig", ".env", ".gitignore"
 }
 
 
@@ -139,7 +140,7 @@ def is_test(file_name: str) -> bool:
 
 def is_resource_file(file_name: str) -> bool:
     """
-    Detect if a file is a resource (config, doc, data) based on extension.
+    Detect if a file is a resource (config, doc, data) based on extension or explicit name.
 
     Args:
         file_name: The name of the file.
@@ -147,9 +148,11 @@ def is_resource_file(file_name: str) -> bool:
     Returns:
         bool: True if it is a resource.
     """
+    # Check exact filenames first (e.g. Dockerfile)
     if file_name in _RESOURCE_FILENAMES:
         return True
 
+    # Check extension
     _, ext = os.path.splitext(file_name)
     return ext.lower() in _RESOURCE_EXTENSIONS
 

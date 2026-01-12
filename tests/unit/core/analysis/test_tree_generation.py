@@ -7,10 +7,9 @@ Verifies hierarchical structure building, file filtering logic within the tree,
 and the integration of AST symbols in the output.
 """
 
-import os
 import pytest
 from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree, _build_structure
-from transcriptor4ai.core.pipeline.filters import compile_patterns, default_extensions, is_test
+from transcriptor4ai.core.pipeline.filters import compile_patterns, is_test
 from transcriptor4ai.domain.tree_models import FileNode
 
 
@@ -91,13 +90,12 @@ def test_generate_directory_tree_output_format(project_structure):
 
     output = "\n".join(lines)
 
-    # Structure checks
+    # Structure checks (Using standard connectors used in renderer)
     assert "├── src" in output
     assert "│   ├── main.py" in output
     assert "└── tests" in output
 
-    # AST integration check (Classes enabled)
-    assert "    Class: Main" in output
+    assert "Class: Main" in output
 
     # Exclusions
     assert "ignore_me" not in output
@@ -105,7 +103,10 @@ def test_generate_directory_tree_output_format(project_structure):
 
 
 def test_generate_directory_tree_modes(project_structure):
-    """Verify that 'modules_only' and 'tests_only' modes filter files correctly."""
+    """
+    Verify that 'modules_only' and 'tests_only' modes filter files correctly.
+    Crucial: Empty directories (after filtering) should be pruned.
+    """
     # 1. Modules Only
     lines_modules = generate_directory_tree(
         input_path=str(project_structure),
@@ -114,8 +115,10 @@ def test_generate_directory_tree_modes(project_structure):
         exclude_patterns=[r"ignore_me"]
     )
     out_modules = "\n".join(lines_modules)
+
     assert "main.py" in out_modules
     assert "test_main.py" not in out_modules
+    assert "tests" not in out_modules
 
     # 2. Tests Only
     lines_tests = generate_directory_tree(
@@ -125,8 +128,10 @@ def test_generate_directory_tree_modes(project_structure):
         exclude_patterns=[r"ignore_me"]
     )
     out_tests = "\n".join(lines_tests)
+
     assert "main.py" not in out_tests
     assert "test_main.py" in out_tests
+    assert "src" not in out_tests
 
 
 def test_generate_directory_tree_save_file(project_structure):

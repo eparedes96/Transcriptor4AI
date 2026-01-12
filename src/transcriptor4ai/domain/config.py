@@ -1,14 +1,10 @@
 from __future__ import annotations
 
 """
-Configuration management for transcriptor4ai.
+Configuration Domain Management.
 
-Handles persistent storage in JSON with support for:
-- Application Settings (Global)
-- Session Persistence (Last state)
-- User Profiles
-- Extension Stacks
-- Legacy Migration
+Handles persistent storage of application state, user preferences,
+and profiles using JSON. Supports schema migration and default fallback.
 """
 
 import json
@@ -21,13 +17,13 @@ from transcriptor4ai.infra.fs import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
-# Constants
+# Constants & Defaults
 # -----------------------------------------------------------------------------
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
-CURRENT_CONFIG_VERSION = "1.5.1"
+CURRENT_CONFIG_VERSION = "1.6.0"
 
-# Predefined Extension Stacks (Immutable defaults)
+# Immutable default extension stacks for quick selection
 DEFAULT_STACKS: Dict[str, List[str]] = {
     "Python Data": [".py", ".ipynb", ".json", ".csv", ".yaml"],
     "Web Fullstack": [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json"],
@@ -38,40 +34,43 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
     "Rust": [".rs", ".toml"],
     "Go": [".go", ".mod", ".sum"],
     "PHP Legacy": [".php", ".phtml", "composer.json", ".ini"],
-    "Shell / Ops": [".sh", ".bash", ".zsh", ".ps1", ".bat", "Dockerfile", ".dockerignore", ".yaml", ".yml"],
+    "Shell / Ops": [
+        ".sh", ".bash", ".zsh", ".ps1", ".bat",
+        "Dockerfile", ".dockerignore", ".yaml", ".yml"
+    ],
     "Documentation": [".md", ".rst", ".txt", ".pdf"],
 }
 
 
 # -----------------------------------------------------------------------------
-# Configuration: Defaults (Runtime Flat Config)
+# Configuration Models (Dict-based)
 # -----------------------------------------------------------------------------
 def get_default_config() -> Dict[str, Any]:
     """
-    Return the default runtime configuration dictionary (Session State).
-    Used by CLI and Pipeline logic.
+    Generate the default runtime configuration (Session State).
+    This dictionary drives the behavior of the Pipeline.
 
-    V1.4.0 Defaults:
-    - Enabled: Modules, Tests, Resources, Tree, Individual, Unified.
-    - Disabled: AST Sub-functions, Sanitizer, Masking, Minify, Gitignore, Error log.
+    Returns:
+        Dict[str, Any]: Default configuration values.
     """
     base = os.getcwd()
     return {
+        # IO Paths
         "input_path": base,
         "output_base_dir": base,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": DEFAULT_OUTPUT_PREFIX,
 
-        # Content Selection (Granular)
+        # Content Selection
         "process_modules": True,
         "process_tests": True,
         "process_resources": True,
 
-        # Output Format Selection
+        # Output Format
         "create_individual_files": True,
         "create_unified_file": True,
 
-        # Filters
+        # Filtering
         "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [
@@ -83,27 +82,30 @@ def get_default_config() -> Dict[str, Any]:
         "respect_gitignore": False,
         "target_model": "GPT-4o / GPT-5",
 
-        # Tree & AST Options
+        # Analysis (Tree/AST)
         "generate_tree": True,
         "show_functions": False,
         "show_classes": False,
         "show_methods": False,
         "print_tree": True,
 
-        # Optimization & Privacy
+        # Optimization & Security
         "enable_sanitizer": False,
         "mask_user_paths": False,
         "minify_output": False,
 
-        # Logging
+        # Diagnostics
         "save_error_log": False
     }
 
 
 def get_default_app_state() -> Dict[str, Any]:
     """
-    Return the full default JSON structure.
-    Includes settings, last session, profiles, and custom stacks.
+    Generate the complete default application state structure.
+    Includes global settings, profiles, and the last active session.
+
+    Returns:
+        Dict[str, Any]: The full JSON structure for config.json.
     """
     return {
         "version": CURRENT_CONFIG_VERSION,
@@ -121,17 +123,20 @@ def get_default_app_state() -> Dict[str, Any]:
 
 
 # -----------------------------------------------------------------------------
-# I/O Operations: Full State Management
+# Persistence Logic
 # -----------------------------------------------------------------------------
 def load_app_state() -> Dict[str, Any]:
     """
-    Load the complete application state from 'config.json'.
-    Handles auto-migration from V1.1 (flat) to V1.2+ (hierarchical).
+    Load application state from disk.
+    Handles legacy schema migration automatically.
+
+    Returns:
+        Dict[str, Any]: The loaded state or a default structure on failure.
     """
     default_state = get_default_app_state()
 
     if not os.path.exists(CONFIG_FILE):
-        logger.debug("No config file found. Using default state.")
+        logger.debug("Config file not found. Returning defaults.")
         return default_state
 
     try:
@@ -139,21 +144,19 @@ def load_app_state() -> Dict[str, Any]:
             data = json.load(f)
 
         if not isinstance(data, dict):
-            logger.warning("Invalid config format. Resetting to defaults.")
+            logger.warning("Corrupted config file. Resetting to defaults.")
             return default_state
 
-        # --- MIGRATION LOGIC (V1.1 -> V1.2+) ---
+        # V1.1 -> V1.2+ Migration Check
         if "input_path" in data:
-            logger.info("Detected Legacy V1.1 Config. Migrating to V1.2+ structure...")
+            logger.info("Migrating legacy config schema...")
             new_state = get_default_app_state()
             new_state["last_session"].update(data)
             save_app_state(new_state)
             return new_state
 
-        # --- NORMAL LOAD & KEY MERGING ---
+        # Merge with defaults to ensure new keys exist
         state = default_state.copy()
-
-        # Merge sub-dictionaries
         if "app_settings" in data:
             state["app_settings"].update(data["app_settings"])
         if "last_session" in data:
@@ -163,36 +166,38 @@ def load_app_state() -> Dict[str, Any]:
         if "custom_stacks" in data:
             state["custom_stacks"].update(data["custom_stacks"])
 
+        # Update version stamp
         state["version"] = CURRENT_CONFIG_VERSION
-
         return state
 
     except Exception as e:
-        logger.error(f"Failed to load app state: {e}. Returning defaults.")
+        logger.error(f"Failed to load config: {e}. Using defaults.")
         return default_state
 
 
 def save_app_state(state: Dict[str, Any]) -> None:
-    """Save the complete application state to 'config.json'."""
+    """
+    Persist application state to disk.
+
+    Args:
+        state: The state dictionary to save.
+    """
     try:
         os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
         state["version"] = CURRENT_CONFIG_VERSION
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=4)
-        logger.debug(f"App state saved to {CONFIG_FILE}")
+        logger.debug(f"Configuration saved to {CONFIG_FILE}")
     except OSError as e:
-        logger.error(f"Failed to save app state: {e}")
+        logger.error(f"Failed to save configuration: {e}")
 
 
 # -----------------------------------------------------------------------------
-# Legacy/Convenience API (Maintains compatibility with Main/CLI/GUI)
+# Facade API
 # -----------------------------------------------------------------------------
 def load_config() -> Dict[str, Any]:
     """
-    Load the active runtime configuration (Last Session).
-
-    This acts as a facade so CLI/GUI don't need to know about
-    the complex hierarchical JSON structure immediately.
+    Retrieve the active configuration (Last Session) directly.
     """
     state = load_app_state()
     defaults = get_default_config()
@@ -202,7 +207,7 @@ def load_config() -> Dict[str, Any]:
 
 def save_config(config: Dict[str, Any]) -> None:
     """
-    Save the given config dict as the 'last_session' in the full state file.
+    Save the provided config as the 'last_session'.
     """
     state = load_app_state()
     state["last_session"] = config

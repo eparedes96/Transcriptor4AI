@@ -1,0 +1,80 @@
+================================================================================
+  GUÍA DE ESTILO COMÚN Y HOMOGENEIZACIÓN (CODE STANDARDS)
+================================================================================
+
+1. ESTRUCTURA UNIFORME DE MÓDULOS
+--------------------------------------------------------------------------------
+all fichero en 'src/' debe seguir estrictamente este orden:
+1. Imports de compatibilidad (`from __future__ import annotations`).
+2. Docstring del módulo (Resumen en INGLÉS).
+3. Imports organizados:
+   - Standard Library (`os`, `sys`, `typing`, `json`...)
+   - Third-party (`PySimpleGUI`, etc.)
+   - Local (`transcriptor4ai.*`)
+4. Constantes y Variables Globales (UPPER_CASE).
+5. API Pública (Funciones y Clases principales).
+6. Helpers Internos (Funciones prefijadas con '_').
+7. Entrypoint: Bloque `if __name__ == "__main__":` (Solo en scripts ejecutables).
+
+2. DOCUMENTACIÓN (DOCSTRINGS EN INGLÉS)
+--------------------------------------------------------------------------------
+- OBLIGATORIO: En Módulos, funciones públicas, clases y dataclasses.
+- ESTILO: Conciso, técnico e imperativo.
+- IDIOMA: Estrictamente Inglés (facilita mantenimiento futuro y uso de IA).
+- Ejemplo:
+    """Validate and normalize the configuration dictionary.
+
+    Returns a sanitized config and a list of non-fatal warnings.
+    """
+
+3. TIPADO ESTÁTICO (TYPE HINTING)
+--------------------------------------------------------------------------------
+- El código debe ser "mypy-compliant".
+- Usar `typing.List`, `typing.Dict`, `typing.Optional`, etc.
+- En funciones públicas, especificar siempre tipos de argumentos y retorno.
+    def run_pipeline(config: Dict[str, Any]) -> PipelineResult: ...
+
+4. FILOSOFÍA DE MANEJO DE ERRORES
+--------------------------------------------------------------------------------
+- CORE / SERVICES / PIPELINE:
+  * PROHIBIDO: Usar `print()` (ensucia stdout y rompe pipelines).
+  * PROHIBIDO: Lanzar popups o interactuar con UI.
+  * Flujo: Retornar objetos de resultado (ej: `PipelineResult`) o elevar
+    excepciones tipadas (`TranscriptionError`).
+  * Catch: Nunca usar `except Exception: pass` sin loguear.
+
+- CLI:
+  * Responsabilidad: Traducir excepciones del Core a mensajes en `stderr`
+    y códigos de salida (Exit Codes 0, 1, 2...).
+
+- GUI:
+  * Responsabilidad: Capturar excepciones del Core y mostrar `sg.popup_error`.
+
+5. LOGGING: POLÍTICA DE TRAZABILIDAD
+--------------------------------------------------------------------------------
+- CONFIGURACIÓN: El Core NUNCA configura el logger.
+  * CLI: Configura salida a Consola (`stderr`).
+  * GUI: Configura salida a Fichero Rotativo.
+
+- UBICACIÓN DEL LOG (CORREGIDO):
+  * NO guardar en la carpeta de salida (riesgo de borrado accidental).
+  * Windows: `%LOCALAPPDATA%\Transcriptor4AI\logs\`
+  * Linux/Mac: `~/.transcriptor4ai/logs/`
+  * Nombre: `transcriptor4ai.log` (Rotación: 2MB, 3 backups).
+
+- SUSTITUCIÓN DE PRINTS:
+  * `tree.service`: Debe retornar una `List[str]` con las líneas del árbol.
+    El consumidor (CLI/GUI) decide si imprimirlo o mostrarlo en una ventana.
+  * Trazas: all `print` de depuración se convierte en `logger.debug`.
+  * Hitos: all inicio/fin de proceso se convierte en `logger.info`.
+
+6. ACCIONES INMEDIATAS DE REFACTORIZACIÓN
+--------------------------------------------------------------------------------
+6.1 Validación:
+    Asegurar que `validate_config` sea la puerta de entrada única para
+    sanitizar inputs antes de cualquier lógica de negocio.
+
+6.2 Idioma:
+    Revisar docstrings existentes y pasarlos a inglés. Los mensajes de log
+    pueden mantenerse en inglés (técnico) o español, pero ser consistentes.
+================================================================================

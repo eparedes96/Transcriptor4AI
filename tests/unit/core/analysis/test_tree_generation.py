@@ -95,6 +95,7 @@ def test_generate_directory_tree_output_format(project_structure):
     assert "│   ├── main.py" in output
     assert "└── tests" in output
 
+    # AST integration check (Classes enabled)
     assert "Class: Main" in output
 
     # Exclusions
@@ -129,7 +130,6 @@ def test_generate_directory_tree_modes(project_structure):
     )
     out_tests = "\n".join(lines_tests)
 
-    assert "main.py" not in out_tests
     assert "test_main.py" in out_tests
     assert "src" not in out_tests
 

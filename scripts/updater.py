@@ -1,23 +1,25 @@
 from __future__ import annotations
 
 """
-Standalone Updater Utility for Transcriptor4AI.
+Standalone Updater Utility.
 
 This script is independent of the transcriptor4ai package to avoid
-import shadowing conflicts. It handles the binary swap lifecycle:
+import shadowing conflicts or file locks during updates.
+
+It handles the binary swap lifecycle:
 1. Process termination wait.
 2. Integrity verification (SHA-256 Checksum).
 3. File replacement with rollback safety.
 4. Application restart.
 """
 
+import argparse
+import hashlib
+import logging
 import os
+import subprocess
 import sys
 import time
-import subprocess
-import argparse
-import logging
-import hashlib
 from typing import Optional
 
 # Configure basic logging for the standalone script
@@ -34,7 +36,7 @@ def wait_for_pid(pid: int, timeout: int = 30) -> bool:
         timeout: Maximum seconds to wait.
 
     Returns:
-        True if the process terminated, False on timeout.
+        bool: True if the process terminated, False on timeout.
     """
     logger.info(f"Waiting for process {pid} to exit...")
     start_time = time.time()
@@ -51,7 +53,13 @@ def wait_for_pid(pid: int, timeout: int = 30) -> bool:
 
 def calculate_sha256(file_path: str) -> str:
     """
-    Calculate SHA-256 hash of a file using chunked reading for memory efficiency.
+    Calculate SHA-256 hash of a file using chunked reading.
+
+    Args:
+        file_path: Path to the file.
+
+    Returns:
+        str: Hexadecimal SHA-256 string.
     """
     sha256_hash = hashlib.sha256()
     try:
@@ -64,7 +72,12 @@ def calculate_sha256(file_path: str) -> str:
         return ""
 
 
-def run_update(old_exe: str, new_exe: str, pid: int, expected_sha256: Optional[str] = None) -> None:
+def run_update(
+        old_exe: str,
+        new_exe: str,
+        pid: int,
+        expected_sha256: Optional[str] = None
+) -> None:
     """
     Perform integrity check, file swap, and restart the application.
 
@@ -74,7 +87,6 @@ def run_update(old_exe: str, new_exe: str, pid: int, expected_sha256: Optional[s
         pid: PID of the running application to wait for.
         expected_sha256: Optional checksum to verify binary integrity.
     """
-
     # 1. Wait for the main app to close
     if not wait_for_pid(pid):
         logger.error("Timeout waiting for main application to close. Aborting update.")
@@ -108,6 +120,7 @@ def run_update(old_exe: str, new_exe: str, pid: int, expected_sha256: Optional[s
             except OSError:
                 pass
 
+        # Move current (running) exe to backup
         os.rename(old_exe, backup_exe)
 
         try:

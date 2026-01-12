@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 """
-Main Entry Point and Global Supervisor for Transcriptor4AI.
+Main Entry Point and Global Supervisor.
 
-This module acts as a smart router and safety net. It:
-1. Configures the system path to avoid module shadowing.
-2. Captures all unhandled exceptions via an aggressive global supervisor.
-3. Dispatches execution to either the CLI or GUI based on sys.argv.
+This module acts as the application's smart router and safety net. It:
+1. Configures the Python path to ensure module visibility.
+2. Registers a global exception handler to catch crashes.
+3. Dispatches execution to either the CLI or GUI based on arguments.
 """
 
 import os
@@ -18,17 +18,17 @@ from typing import Any
 # -----------------------------------------------------------------------------
 # Path Configuration (Anti-Shadowing Logic)
 # -----------------------------------------------------------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.join(BASE_DIR, "src")
 
-if SRC_DIR not in sys.path:
-    sys.path.insert(0, SRC_DIR)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if not getattr(sys, 'frozen', False):
+    SRC_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+    if SRC_DIR not in sys.path:
+        sys.path.insert(0, SRC_DIR)
 
 
 # -----------------------------------------------------------------------------
 # Global Exception Handling (Smart Error Reporter)
 # -----------------------------------------------------------------------------
-
 def global_exception_handler(exctype: type[BaseException], value: BaseException, tb: Any) -> None:
     """
     Catch any unhandled exception and route it to the appropriate
@@ -36,6 +36,11 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
 
     Includes a robust fallback for GUI crashes where the main event loop
     might be frozen.
+
+    Args:
+        exctype: The exception class.
+        value: The exception instance.
+        tb: The traceback object.
     """
     stack_trace = "".join(traceback.format_exception(exctype, value, tb))
     error_msg = str(value)
@@ -54,12 +59,7 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
 
     # 2. GUI Mode (No arguments)
     else:
-        # Fallback priority:
-        # 1. Custom GUI Modal (PySimpleGUI)
-        # 2. System Native Messagebox (Tkinter)
-        # 3. Standard Error (Console)
         try:
-            # Try our custom themed modal first
             from transcriptor4ai.interface.gui.handlers import show_crash_modal
             show_crash_modal(error_msg, stack_trace)
         except Exception as e:
@@ -67,7 +67,6 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
             try:
                 import tkinter.messagebox as mb
                 from tkinter import Tk
-                # Create a hidden root window for the messagebox
                 root = Tk()
                 root.withdraw()
                 mb.showerror(
@@ -90,10 +89,10 @@ sys.excepthook = global_exception_handler
 # -----------------------------------------------------------------------------
 # Entrypoint Router
 # -----------------------------------------------------------------------------
-
 def main() -> None:
     """
     Smart router logic to detect execution context.
+    Delegates to CLI or GUI application controllers.
     """
     try:
         # CLI Mode
@@ -107,7 +106,6 @@ def main() -> None:
             sys.exit(gui_main())
 
     except Exception as e:
-        # Emergency catch-all if the router itself fails
         global_exception_handler(type(e), e, sys.exc_info()[2])
 
 

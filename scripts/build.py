@@ -6,6 +6,8 @@ Industrial-grade Build Script for Transcriptor4AI.
 Automates the creation of a standalone executable using PyInstaller.
 Handles data resources (locales), icons, and dependency collection
 for network-enabled features.
+
+Assumes execution from the project root or scripts directory.
 """
 
 import os
@@ -23,7 +25,7 @@ def _clean_artifacts() -> None:
             print(f"[*] Cleaning {folder}...")
             shutil.rmtree(folder)
 
-    spec_file = "../transcriptor4ai.spec"
+    spec_file = "transcriptor4ai.spec"
     if os.path.exists(spec_file):
         os.remove(spec_file)
 
@@ -42,28 +44,35 @@ def build() -> None:
     # 2. Resource Path Management
     sep = ';' if platform.system() == 'Windows' else ':'
 
-    # Locales (Translations)
-    locales_src = os.path.join("../src", "transcriptor4ai", "locales", "*.json")
-    locales_dest = os.path.join("transcriptor4ai", "locales")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(script_dir)
 
-    # Sidecar Updater (Included as data to be extracted or run externally)
-    updater_src = "../updater.py"
+    src_dir = os.path.join(project_root, "src")
+    assets_dir = os.path.join(project_root, "assets")
+    scripts_dir = os.path.join(project_root, "scripts")
+
+    main_entry = os.path.join(src_dir, "transcriptor4ai", "main.py")
+
+    # Resources
+    locales_src = os.path.join(src_dir, "transcriptor4ai", "interface", "locales", "*.json")
+    locales_dest = os.path.join("transcriptor4ai", "interface", "locales")
+
+    updater_src = os.path.join(scripts_dir, "updater.py")
 
     data_args = [
         f"{locales_src}{sep}{locales_dest}",
         f"{updater_src}{sep}."
     ]
 
-    # 3. Branding (Icon)
-    icon_path = os.path.join("../assets", "icon.ico")
+    icon_path = os.path.join(assets_dir, "icon.ico")
 
-    # 4. PyInstaller Configuration
+    # PyInstaller Args
     args = [
-        'main.py',
+        main_entry,
         '--name=transcriptor4ai',
         '--onefile',
         '--console',
-        '--paths=src',
+        f'--paths={src_dir}',
         '--clean',
         '--collect-submodules=requests',
         '--collect-submodules=PySimpleGUI',
@@ -78,10 +87,9 @@ def build() -> None:
         print(f"[*] Icon found: {icon_path}")
         args.append(f'--icon={icon_path}')
     else:
-        print("[!] WARNING: Icon not found in 'assets/icon.ico'. Using default.")
+        print("[!] WARNING: Icon not found. Using default.")
 
-    # 5. Execution
-    print(f"[*] Running PyInstaller with following configuration...")
+    print(f"[*] Running PyInstaller with configured paths...")
     try:
         PyInstaller.__main__.run(args)
         print("\n[+] Build Successful! Executable located in 'dist/' folder.")

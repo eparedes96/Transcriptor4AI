@@ -86,7 +86,7 @@ def sanitize_text(text: str) -> str:
     """
     if not text:
         return ""
-    return "".join(list(sanitize_text_stream(text.splitlines(keepends=True))))
+    return "".join(list(sanitize_text_stream(iter(text.splitlines(keepends=True)))))
 
 
 def sanitize_text_stream(lines: Iterator[str]) -> Iterator[str]:
@@ -130,7 +130,7 @@ def mask_local_paths(text: str) -> str:
     """
     if not text:
         return ""
-    return "".join(list(mask_local_paths_stream(text.splitlines(keepends=True))))
+    return "".join(list(mask_local_paths_stream(iter(text.splitlines(keepends=True)))))
 
 
 def mask_local_paths_stream(lines: Iterator[str]) -> Iterator[str]:

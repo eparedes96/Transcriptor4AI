@@ -100,7 +100,6 @@ def transcribe_code(
     exclude_rx = compile_patterns(final_exclusions)
 
     # 3. Threading Infrastructure
-    # We use locks to ensure only one thread writes to a specific file at a time
     locks = {
         "module": threading.Lock(),
         "test": threading.Lock(),
@@ -115,8 +114,7 @@ def transcribe_code(
         "error": error_output_path
     }
 
-    # Tracking shared across workers (protected by local logic/locks)
-    results = {
+    results: Dict[str, Any] = {
         "processed": 0,
         "skipped": 0,
         "tests_written": 0,

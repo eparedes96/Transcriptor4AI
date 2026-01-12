@@ -22,7 +22,7 @@ from typing import Any, Dict
 
 import PySimpleGUI as sg
 
-from transcriptor4ai.domain.pipeline_models import PipelineResult
+from transcriptor4ai.core.pipeline.engine import PipelineResult
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.infra import fs
 from transcriptor4ai.infra.logging import (
@@ -187,7 +187,12 @@ def main() -> None:
 # -----------------------------------------------------------------------------
 # Private Event Helpers
 # -----------------------------------------------------------------------------
-def _handle_load_profile(window, values, app_state, config):
+def _handle_load_profile(
+        window: sg.Window,
+        values: Dict[str, Any],
+        app_state: Dict[str, Any],
+        config: Dict[str, Any]
+) -> None:
     sel_profile = values.get("-PROFILE_LIST-")
     if sel_profile and sel_profile in app_state.get("saved_profiles", {}):
         logger.info(f"Loading profile: {sel_profile}")
@@ -201,7 +206,12 @@ def _handle_load_profile(window, values, app_state, config):
         sg.popup_error(i18n.t("gui.profiles.error_select"))
 
 
-def _handle_save_profile(window, values, app_state, config):
+def _handle_save_profile(
+        window: sg.Window,
+        values: Dict[str, Any],
+        app_state: Dict[str, Any],
+        config: Dict[str, Any]
+) -> None:
     name = sg.popup_get_text(i18n.t("gui.profiles.prompt_name"), title=i18n.t("gui.profiles.save"))
     if name:
         name = name.strip()
@@ -217,7 +227,11 @@ def _handle_save_profile(window, values, app_state, config):
         sg.popup(i18n.t("gui.profiles.saved", name=name))
 
 
-def _handle_delete_profile(window, values, app_state):
+def _handle_delete_profile(
+        window: sg.Window,
+        values: Dict[str, Any],
+        app_state: Dict[str, Any]
+) -> None:
     sel_profile = values.get("-PROFILE_LIST-")
     if sel_profile and sel_profile in app_state["saved_profiles"]:
         if sg.popup_yes_no(i18n.t("gui.profiles.confirm_delete", name=sel_profile)) == "Yes":
@@ -230,7 +244,11 @@ def _handle_delete_profile(window, values, app_state):
         sg.popup_error(i18n.t("gui.profiles.error_select"))
 
 
-def _handle_update_finished(window, payload, update_metadata):
+def _handle_update_finished(
+        window: sg.Window,
+        payload: Any,
+        update_metadata: Dict[str, Any]
+) -> None:
     res, is_manual = payload
     if res.get("has_update"):
         latest = res.get('latest_version')
@@ -256,7 +274,11 @@ def _handle_update_finished(window, payload, update_metadata):
             sg.popup(f"Transcriptor4AI is up to date (v{cfg.CURRENT_CONFIG_VERSION}).")
 
 
-def _handle_download_done(window, payload, update_metadata):
+def _handle_download_done(
+        window: sg.Window,
+        payload: Any,
+        update_metadata: Dict[str, Any]
+) -> None:
     success, msg = payload
     if success:
         update_metadata["ready"] = True
@@ -268,7 +290,7 @@ def _handle_download_done(window, payload, update_metadata):
             webbrowser.open("https://github.com/eparedes96/Transcriptor4AI/releases")
 
 
-def _handle_ota_restart(update_metadata):
+def _handle_ota_restart(update_metadata: Dict[str, Any]) -> None:
     if update_metadata["ready"]:
         try:
             base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))

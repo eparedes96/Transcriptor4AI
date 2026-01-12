@@ -39,7 +39,7 @@ def minify_code(text: str, extension: str = ".py") -> str:
         return ""
 
     original_len = len(text)
-    result = "".join(list(minify_code_stream(text.splitlines(keepends=True), extension)))
+    result = "".join(list(minify_code_stream(iter(text.splitlines(keepends=True)), extension)))
 
     optimized_len = len(result)
     if original_len > 0:

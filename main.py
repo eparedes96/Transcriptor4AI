@@ -18,7 +18,7 @@ from typing import Any
 # -----------------------------------------------------------------------------
 # Path Configuration (Anti-Shadowing Logic)
 # -----------------------------------------------------------------------------
-
+# Calculate base directory relative to this file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if not getattr(sys, 'frozen', False):
     SRC_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
@@ -89,25 +89,30 @@ sys.excepthook = global_exception_handler
 # -----------------------------------------------------------------------------
 # Entrypoint Router
 # -----------------------------------------------------------------------------
-def main() -> None:
+def main() -> int:
     """
     Smart router logic to detect execution context.
     Delegates to CLI or GUI application controllers.
+
+    Returns:
+        int: Exit code (0 for success, non-zero for failure).
     """
     try:
         # CLI Mode
         if len(sys.argv) > 1:
             from transcriptor4ai.interface.cli.app import main as cli_main
-            sys.exit(cli_main())
+            return cli_main()
 
         # GUI Mode
         else:
             from transcriptor4ai.interface.gui.app import main as gui_main
-            sys.exit(gui_main())
+            gui_main()
+            return 0
 
     except Exception as e:
         global_exception_handler(type(e), e, sys.exc_info()[2])
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

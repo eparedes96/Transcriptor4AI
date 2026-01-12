@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 """
-Code Minification Utility for Transcriptor4AI.
+Code Minification Utility.
 
-Reduces token consumption by removing non-essential characters and comments.
-Supports stateful streaming, allowing the collapse of multi-line newlines without loading the whole file into memory.
+Reduces token consumption by removing non-essential characters (comments,
+whitespace) while preserving code logic. Supports stateful streaming to
+collapse multiple empty lines efficiently.
 """
 
 import logging
@@ -23,11 +24,16 @@ _C_STYLE_COMMENT_PATTERN: Final[re.Pattern] = re.compile(r"//.*")
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
-
 def minify_code(text: str, extension: str = ".py") -> str:
     """
-    Standard string-based minification.
-    Maintained for backward compatibility.
+    Minify a full string of code in memory.
+
+    Args:
+        text: The raw source code.
+        extension: The file extension to determine comment syntax.
+
+    Returns:
+        str: The minified code string.
     """
     if not text:
         return ""
@@ -43,21 +49,17 @@ def minify_code(text: str, extension: str = ".py") -> str:
     return result.strip()
 
 
-# -----------------------------------------------------------------------------
-# Public API
-# -----------------------------------------------------------------------------
-
 def minify_code_stream(lines: Iterator[str], extension: str = ".py") -> Iterator[str]:
     """
-    Stream-based minification. Performs line-by-line comment removal
-    and stateful newline collapsing.
+    Minify code line-by-line.
+    Performs comment removal and collapses consecutive empty lines.
 
     Args:
-        lines: An iterator of raw code lines.
-        extension: File extension to determine comment style.
+        lines: An iterator yielding lines of code.
+        extension: The file extension to determine comment syntax.
 
     Yields:
-        Optimized code lines.
+        str: Optimized code lines.
     """
     ext_lower = (extension or "").lower()
     empty_line_count = 0
@@ -65,7 +67,7 @@ def minify_code_stream(lines: Iterator[str], extension: str = ".py") -> Iterator
     for line in lines:
         processed = line
 
-        # 1. Remove Line and Inline Comments
+        # 1. Remove Line and Inline Comments based on language
         if ext_lower in ('.py', '.yaml', '.yml', '.sh', '.bash'):
             processed = _PYTHON_COMMENT_PATTERN.sub("", processed)
         elif ext_lower in ('.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go'):

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 """
-Security and Privacy Sanitizer for Transcriptor4AI.
+Security and Privacy Sanitizer.
 
-Provides high-performance redaction of secrets (API Keys, IPs, Emails) and anonymizes local system paths.
-Supports streaming/iterator-based processing for massive file support.
+Provides high-performance redaction of secrets (API Keys, IPs, Emails)
+and anonymizes local system paths using stream processing.
 """
 
 import logging
 import os
 import re
 from pathlib import Path
-from typing import Final, Iterator, Optional
+from typing import Final, Iterator, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -42,42 +42,63 @@ _COMPILED_ASSIGNMENTS: Final[re.Pattern] = re.compile(_GENERIC_SECRET_PATTERN)
 # -----------------------------------------------------------------------------
 # Private Helpers
 # -----------------------------------------------------------------------------
+def _get_user_info() -> Tuple[Optional[str], Optional[str]]:
+    """
+    Retrieve OS-level user info for path masking.
+    Handles potential OS errors in restricted environments (CI/Docker).
 
-def _get_user_info() -> tuple[Optional[str], Optional[str]]:
-    """Retrieve OS-level user info for path masking."""
+    Returns:
+        Tuple[Optional[str], Optional[str]]: (Username, HomeDirectory).
+    """
+    user_name: Optional[str] = None
+    home_dir: Optional[str] = None
+
     try:
         user_name = os.getlogin()
-        home_dir = str(Path.home()).replace("\\", "/")
-        return user_name, home_dir
-    except Exception as e:
-        logger.debug(f"Could not determine local user for path masking: {e}")
-        return None, None
+    except Exception:
+        try:
+            user_name = os.environ.get("USER") or os.environ.get("USERNAME")
+        except Exception:
+            pass
+
+    try:
+        home_path = Path.home()
+        home_dir = str(home_path).replace("\\", "/")
+    except Exception:
+        pass
+
+    return user_name, home_dir
 
 
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
-
 def sanitize_text(text: str) -> str:
     """
-    Standard string-based sanitization.
-    Maintained for backward compatibility and small file processing.
+    Sanitize a full string in memory.
+    Useful for small snippets or configuration files.
+
+    Args:
+        text: The raw input string.
+
+    Returns:
+        str: The sanitized string with redacted secrets.
     """
     if not text:
         return ""
-
     return "".join(list(sanitize_text_stream(text.splitlines(keepends=True))))
 
 
 def sanitize_text_stream(lines: Iterator[str]) -> Iterator[str]:
     """
-    Stream-based sanitization. Redacts secrets line by line.
+    Sanitize text line-by-line using a generator.
+    Redacts specific API keys, IPs, emails, and generic secret assignments.
 
     Args:
-        lines: An iterator of raw text lines.
+        lines: An iterator yielding lines of text.
 
     Yields:
-        Sanitized lines with placeholders.
+        str: Sanitized lines.
     """
     for line in lines:
         if not line.strip():
@@ -98,7 +119,15 @@ def sanitize_text_stream(lines: Iterator[str]) -> Iterator[str]:
 
 
 def mask_local_paths(text: str) -> str:
-    """Standard string-based path masking."""
+    """
+    Anonymize local paths in a full string.
+
+    Args:
+        text: The raw input string.
+
+    Returns:
+        str: The text with user paths replaced by <USER_HOME>.
+    """
     if not text:
         return ""
     return "".join(list(mask_local_paths_stream(text.splitlines(keepends=True))))
@@ -106,19 +135,21 @@ def mask_local_paths(text: str) -> str:
 
 def mask_local_paths_stream(lines: Iterator[str]) -> Iterator[str]:
     """
-    Stream-based path masking. Replaces local paths with <USER_HOME>.
+    Anonymize local paths line-by-line.
+    Replaces the current user's home directory and username with placeholders.
 
     Args:
-        lines: An iterator of raw text lines.
+        lines: An iterator yielding lines of text.
 
     Yields:
-        Masked lines.
+        str: Masked lines.
     """
     user_name, home_dir = _get_user_info()
 
     # Pre-compile patterns if info is available to optimize the stream
     home_pattern = None
     user_pattern = None
+
     if home_dir:
         home_pattern = re.compile(re.escape(home_dir), re.IGNORECASE)
     if user_name:

@@ -1,21 +1,16 @@
 from __future__ import annotations
 
 """
-Token counting utility for Transcriptor4AI (2026 Standard).
+Token Counting Utility.
 
-Provides token estimation for LLM contexts, aligned with the state of the art.
-Includes heuristics for non-OpenAI models.
-
-Strategy:
-1. Identify Model Type (GPT, Claude, Llama, Gemini).
-2. Tiktoken (Exact/Base): Uses 'o200k_base' or 'cl100k_base' depending on model generation.
-3. Multipliers: Applies correction factors for models known to be more verbose than GPT-4o.
-4. Fallback: Uses character density analysis if library missing.
+Provides token estimation for LLM contexts (GPT, Claude, etc.).
+Uses 'tiktoken' if available for accurate counting, falling back to
+heuristic character density analysis otherwise.
 """
 
 import logging
 import math
-from typing import Optional, Any
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +20,6 @@ logger = logging.getLogger(__name__)
 TIKTOKEN_AVAILABLE = False
 try:
     import tiktoken
-
     TIKTOKEN_AVAILABLE = True
 except ImportError:
     pass
@@ -37,10 +31,10 @@ except ImportError:
 CHARS_PER_TOKEN_AVG = 4
 
 # Encodings
-MODERN_ENCODING = "o200k_base"  # GPT-4o, GPT-5, Llama 4
+MODERN_ENCODING = "o200k_base"  # GPT-4o, GPT-5
 LEGACY_ENCODING = "cl100k_base"  # GPT-4, GPT-3.5
 
-# Multipliers relative to o200k_base (Approximations)
+# Multipliers relative to o200k_base (Approximations for other models)
 CLAUDE_FACTOR = 1.05
 GEMINI_FACTOR = 1.0
 
@@ -53,14 +47,16 @@ DEFAULT_MODEL = "GPT-4o / GPT-5"
 # -----------------------------------------------------------------------------
 def count_tokens(text: str, model: str = DEFAULT_MODEL) -> int:
     """
-    Estimate the number of tokens in a text string based on the target model.
+    Estimate the number of tokens in a text string.
+
+    Adapts the counting strategy based on the target model model family.
 
     Args:
-        text: The content string to analyze.
-        model: The target model name (e.g., "Claude 3.5", "GPT-4 Legacy").
+        text: The input text.
+        model: The target model name (e.g., "Claude 3.5").
 
     Returns:
-        Integer count of tokens. Returns 0 for empty input.
+        int: The estimated token count.
     """
     if not text:
         return 0
@@ -92,7 +88,12 @@ def count_tokens(text: str, model: str = DEFAULT_MODEL) -> int:
 
 
 def is_tiktoken_available() -> bool:
-    """Return True if the exact counting library is installed."""
+    """
+    Check if the accurate counting library is available.
+
+    Returns:
+        bool: True if tiktoken is installed.
+    """
     return TIKTOKEN_AVAILABLE
 
 
@@ -100,9 +101,7 @@ def is_tiktoken_available() -> bool:
 # Internal Helpers
 # -----------------------------------------------------------------------------
 def _count_with_encoding(text: str, encoding_name: str) -> int:
-    """
-    Use tiktoken with a specific encoding.
-    """
+    """Count tokens using specific tiktoken encoding."""
     try:
         encoding = tiktoken.get_encoding(encoding_name)
     except ValueError:
@@ -114,7 +113,7 @@ def _count_with_encoding(text: str, encoding_name: str) -> int:
 
 def _count_heuristic(text: str) -> int:
     """
-    Approximate tokens based on character count.
-    Formula: ceil(len(text) / 4)
+    Approximate tokens using character density.
+    Standard approximation: 4 characters ~= 1 token.
     """
     return math.ceil(len(text) / CHARS_PER_TOKEN_AVG)

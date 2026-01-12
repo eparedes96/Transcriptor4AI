@@ -26,7 +26,7 @@ from transcriptor4ai.core.pipeline.filters import (
 from transcriptor4ai.core.pipeline.worker import process_file_task
 from transcriptor4ai.core.pipeline.writer import initialize_output_file
 from transcriptor4ai.domain.transcription_models import TranscriptionError
-from transcriptor4ai.infra.fs import _safe_mkdir
+from transcriptor4ai.infra.fs import safe_mkdir
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def transcribe_code(
     input_path_abs = os.path.abspath(input_path)
 
     for p in [modules_output_path, tests_output_path, resources_output_path, error_output_path]:
-        _safe_mkdir(os.path.dirname(os.path.abspath(p)))
+        safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
     # 2. Pattern Compilation
     final_exclusions = list(exclude_patterns)

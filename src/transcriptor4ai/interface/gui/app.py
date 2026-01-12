@@ -24,7 +24,7 @@ import PySimpleGUI as sg
 
 from transcriptor4ai.domain.pipeline_models import PipelineResult
 from transcriptor4ai.domain import config as cfg
-from transcriptor4ai.infra import paths
+from transcriptor4ai.infra import fs
 from transcriptor4ai.infra.logging import (
     configure_logging,
     LoggingConfig,
@@ -239,7 +239,7 @@ def _handle_update_finished(window, payload, update_metadata):
 
         dest = ""
         if binary_url:
-            temp_dir = paths.get_user_data_dir()
+            temp_dir = fs.get_user_data_dir()
             dest = os.path.join(temp_dir, "tmp", f"transcriptor4ai_v{latest}.exe")
             os.makedirs(os.path.dirname(dest), exist_ok=True)
 

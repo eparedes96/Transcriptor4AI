@@ -74,11 +74,12 @@ def test_cli_path_arguments():
 
 def test_cli_defaults_are_explicit_in_overrides():
     """
-    Verify that argparse defaults are present in the override dict.
-    Note: The merge logic in app.py handles None vs values.
+    Verify behavior when flags are NOT provided.
+    Keys should be missing from overrides to respect config.json defaults.
     """
     args = parse_args([])
     overrides = args_to_overrides(args)
 
     assert overrides["input_path"] is None
-    assert overrides["generate_tree"] is False
+    assert "generate_tree" not in overrides
+    assert "process_modules" not in overrides

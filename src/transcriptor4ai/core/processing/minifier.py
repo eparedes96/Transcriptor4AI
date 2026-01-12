@@ -46,7 +46,8 @@ def minify_code(text: str, extension: str = ".py") -> str:
         reduction = 100 - (optimized_len * 100 / original_len)
         logger.debug(f"Minified {extension}: {original_len} -> {optimized_len} chars ({reduction:.1f}% reduction)")
 
-    return result.strip()
+    # Use rstrip() instead of strip() to preserve leading indentation of the first line
+    return result.rstrip()
 
 
 def minify_code_stream(lines: Iterator[str], extension: str = ".py") -> Iterator[str]:

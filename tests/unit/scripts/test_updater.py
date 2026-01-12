@@ -14,6 +14,7 @@ Verifies:
 import sys
 import os
 from unittest.mock import patch, MagicMock
+import pytest
 
 # Add 'scripts' to path for import, as it is outside 'src'
 scripts_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts"))
@@ -26,7 +27,8 @@ def test_calculate_sha256(tmp_path):
     f = tmp_path / "test_binary.exe"
     f.write_bytes(b"test_content")
 
-    expected_hash = "6ae8a75555209fd6c44157c0aed8016e763ff435a19cf186f7d7e064565333e6"
+    # Correct SHA256 for b"test_content"
+    expected_hash = "594a1b494545be568120d28c43b3319e41d7b8e51a8112ebbece7b3275591a9a"
 
     computed_hash = calculate_sha256(str(f))
     assert computed_hash == expected_hash

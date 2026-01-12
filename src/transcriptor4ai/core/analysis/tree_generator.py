@@ -93,7 +93,10 @@ def generate_directory_tree(
         test_detect_func=is_test,
     )
 
-    # 4. Render to Text
+    # 4. Prune Empty Directories
+    _prune_empty_nodes(tree_structure)
+
+    # 5. Render to Text
     lines: List[str] = []
     render_tree_structure(
         tree_structure,
@@ -104,7 +107,7 @@ def generate_directory_tree(
         show_methods=show_methods,
     )
 
-    # 5. Output Handling
+    # 6. Output Handling
     if print_to_log:
         logger.info("Tree Preview:\n" + "\n".join(lines))
 
@@ -148,7 +151,7 @@ def _build_structure(
         if rel_root == ".":
             rel_root = ""
 
-        # Navigate to current node in the structure
+        # Navigate/Create current node in the structure
         current_node_level: Tree = tree_structure
         if rel_root:
             for p in rel_root.split(os.sep):
@@ -180,3 +183,23 @@ def _build_structure(
             current_node_level[file_name] = FileNode(path=full_path)
 
     return tree_structure
+
+
+def _prune_empty_nodes(tree: Tree) -> None:
+    """
+    Recursively remove directory nodes (dicts) that are empty.
+    This cleans up the tree if filters removed all files in a folder.
+
+    Args:
+        tree: The recursive dictionary structure to clean.
+    """
+    keys_to_remove = []
+
+    for key, value in tree.items():
+        if isinstance(value, dict):
+            _prune_empty_nodes(value)
+            if not value:
+                keys_to_remove.append(key)
+
+    for key in keys_to_remove:
+        del tree[key]

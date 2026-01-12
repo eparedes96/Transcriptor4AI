@@ -19,13 +19,21 @@ from transcriptor4ai.core.pipeline.worker import process_file_task
 
 @pytest.fixture
 def mock_locks():
-    """Return a dictionary of MagicMock locks."""
-    return {
+    """
+    Return a dictionary of MagicMock locks configured to support
+    the context manager protocol ('with lock:').
+    """
+    locks = {
         "module": MagicMock(spec=threading.Lock),
         "test": MagicMock(spec=threading.Lock),
         "resource": MagicMock(spec=threading.Lock),
         "error": MagicMock(spec=threading.Lock),
     }
+    # Configure context manager methods for each lock mock
+    for lock in locks.values():
+        lock.__enter__.return_value = None
+        lock.__exit__.return_value = None
+    return locks
 
 
 @pytest.fixture
@@ -58,13 +66,11 @@ def test_worker_skips_modules_if_configured(mock_locks, mock_paths):
 
     assert result["ok"] is False
     assert result["mode"] == "skip"
-    # Ensure no lock was acquired
     mock_locks["module"].__enter__.assert_not_called()
 
 
 def test_worker_identifies_and_locks_tests(mock_locks, mock_paths):
     """Verify a test file is classified as 'test' and uses the test lock."""
-    # Mock the reader and writer to avoid IO
     with patch("transcriptor4ai.core.pipeline.worker.stream_file_content") as mock_stream, \
             patch("transcriptor4ai.core.pipeline.worker.append_entry") as mock_append:
         mock_stream.return_value = iter(["line1"])

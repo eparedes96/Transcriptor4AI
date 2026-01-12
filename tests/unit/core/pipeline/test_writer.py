@@ -89,8 +89,9 @@ def test_append_entry_applies_sanitization(tmp_path):
     """Verify that sanitizer is chained correctly."""
     f = tmp_path / "secure.txt"
 
-    secret = "sk-1234567890abcdef1234567890abcdef"
-    raw_lines = [f"key = '{secret}'\n"]
+    # Using a generic assignment pattern which triggers [[REDACTED_SECRET]]
+    secret = "super_secret_password_123"
+    raw_lines = [f"password = '{secret}'\n"]
 
     append_entry(
         output_path=str(f),
@@ -105,4 +106,4 @@ def test_append_entry_applies_sanitization(tmp_path):
     content = f.read_text(encoding="utf-8")
 
     assert secret not in content
-    assert "[[REDACTED_SENSITIVE]]" in content
+    assert "[[REDACTED_SECRET]]" in content

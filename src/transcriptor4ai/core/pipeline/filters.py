@@ -18,7 +18,7 @@ from typing import List, Set
 _RESOURCE_EXTENSIONS: Set[str] = {
     ".md", ".markdown", ".rst", ".txt",
     ".json", ".yaml", ".yml", ".toml", ".xml", ".csv", ".ini", ".cfg", ".conf", ".properties",
-    ".dockerignore", ".editorconfig"
+    ".dockerignore", ".editorconfig", ".css"
 }
 
 _RESOURCE_FILENAMES: Set[str] = {
@@ -120,7 +120,7 @@ def is_test(file_name: str) -> bool:
 
     Matches:
     - Python: test_*.py, *_test.py
-    - Java/C#: *Test.java, *Tests.cs
+    - Java/C#: Test*.java, *Test.java, *Tests.cs
     - JS/TS: *.spec.ts, *.test.js, *.cy.ts
     - Go: *_test.go
 
@@ -131,7 +131,7 @@ def is_test(file_name: str) -> bool:
         bool: True if it looks like a test.
     """
     pattern = (
-        r"^(test_.*|.*_test|.*Test|.*Tests|.*TestCase|.*\.spec|.*\.test|.*\.e2e|.*\.cy)"
+        r"^(test_.*|.*_test|Test.*|.*Test|.*Tests|.*TestCase|.*\.spec|.*\.test|.*\.e2e|.*\.cy)"
         r"\.(py|js|ts|jsx|tsx|java|kt|go|rs|cs|cpp|c|h|hpp|swift|php)$"
     )
     return re.match(pattern, file_name, re.IGNORECASE) is not None

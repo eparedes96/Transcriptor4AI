@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""
+AST Analysis Service.
+
+Parses Python source files to extract top-level definitions (classes, functions).
+Designed to be fault-tolerant: syntax errors in the user's code will not
+crash the analyzer.
+"""
+
 import ast
 import logging
 import os
@@ -8,9 +16,6 @@ from typing import List
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# AST Symbol Extraction
-# -----------------------------------------------------------------------------
 def extract_definitions(
         file_path: str,
         show_functions: bool,
@@ -18,22 +23,21 @@ def extract_definitions(
         show_methods: bool = False,
 ) -> List[str]:
     """
-    Parse a Python file using AST to extract top-level definitions.
+    Parse a Python file using AST to extract structural definitions.
 
     Args:
-        file_path: Absolute path to the file.
-        show_functions: Whether to list top-level functions.
-        show_classes: Whether to list classes.
-        show_methods: Whether to list methods inside classes.
+        file_path: Absolute path to the source file.
+        show_functions: If True, include top-level functions.
+        show_classes: If True, include class definitions.
+        show_methods: If True, include methods inside classes.
 
     Returns:
-        A list of formatted strings to be rendered in the tree.
-        Returns error messages as strings if parsing fails, ensuring the tree
-        visualizes the issue rather than crashing.
+        List[str]: A list of formatted strings describing the symbols found.
+        Returns a descriptive error string if parsing fails.
     """
     results: List[str] = []
 
-    # 1. Read File
+    # 1. Read File Content
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             source = f.read()
@@ -54,7 +58,7 @@ def extract_definitions(
         logger.warning(f"Unexpected AST error in {file_path}: {e}")
         return [msg]
 
-    # 3. Walk Nodes
+    # 3. Traverse Nodes
     for node in tree.body:
         # -- Functions --
         if show_functions and isinstance(node, ast.FunctionDef):

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 """
-Tree rendering logic for directory structures.
+Tree Renderer.
 
-Provides recursive functions to transform a Tree dictionary into 
-human-readable text, with optional AST symbol integration.
+Converts a recursive Tree dictionary structure into a visual string representation.
+Delegates to the AST parser for symbol extraction on leaf nodes.
 """
 
 from typing import List
@@ -13,9 +13,6 @@ from transcriptor4ai.core.analysis.ast_parser import extract_definitions
 from transcriptor4ai.domain.tree_models import FileNode, Tree
 
 
-# -----------------------------------------------------------------------------
-# Tree Rendering Logic
-# -----------------------------------------------------------------------------
 def render_tree_structure(
         tree_structure: Tree,
         lines: List[str],
@@ -25,15 +22,15 @@ def render_tree_structure(
         show_methods: bool = False,
 ) -> None:
     """
-    Recursive function to render the dictionary structure into a list of strings.
+    Recursively render the tree structure into a list of strings.
 
     Args:
-        tree_structure: The Tree dictionary (current level).
-        lines: The accumulator list for output lines.
-        prefix: Indentation string for the current level.
-        show_functions: Flag to enable function parsing.
-        show_classes: Flag to enable class parsing.
-        show_methods: Flag to enable method parsing.
+        tree_structure: The current level of the tree dictionary.
+        lines: The list accumulator for output lines.
+        prefix: The indentation string for the current level.
+        show_functions: Flag to enable function display.
+        show_classes: Flag to enable class display.
+        show_methods: Flag to enable method display.
     """
     entries = sorted(tree_structure.keys())
     total = len(entries)
@@ -44,7 +41,7 @@ def render_tree_structure(
 
         node = tree_structure[entry]
 
-        # Case A: Directory (Sub-tree)
+        # Case A: Directory (Recursion)
         if isinstance(node, dict):
             lines.append(f"{prefix}{connector}{entry}")
             new_prefix = prefix + ("    " if is_last else "│   ")
@@ -62,7 +59,7 @@ def render_tree_structure(
         if isinstance(node, FileNode):
             lines.append(f"{prefix}{connector}{entry}")
 
-            # Optional AST analysis
+            # AST Analysis Integration
             if show_functions or show_classes or show_methods:
                 symbols = extract_definitions(
                     node.path,
@@ -78,5 +75,5 @@ def render_tree_structure(
 
             continue
 
-        # Case C: Fallback (Should not happen with correct types)
+        # Case C: Fallback (Just name)
         lines.append(f"{prefix}{connector}{entry}")

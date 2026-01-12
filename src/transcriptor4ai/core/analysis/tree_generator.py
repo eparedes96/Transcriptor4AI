@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 """
-Directory tree generation service.
+Directory Tree Generator.
 
-Builds a hierarchical representation of the project structure and 
-extracts AST symbols if configured.
+Builds a hierarchical representation of the project structure.
+Supports filtering, Gitignore rules, and AST symbol integration.
 """
 
 import logging
@@ -12,6 +12,7 @@ import os
 import re
 from typing import Callable, List, Optional
 
+from transcriptor4ai.core.analysis.tree_renderer import render_tree_structure
 from transcriptor4ai.core.pipeline.filters import (
     compile_patterns,
     default_extensions,
@@ -23,14 +24,10 @@ from transcriptor4ai.core.pipeline.filters import (
     matches_include,
 )
 from transcriptor4ai.domain.tree_models import FileNode, Tree
-from transcriptor4ai.core.analysis.tree_renderer import render_tree_structure
 
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# Public API
-# -----------------------------------------------------------------------------
 def generate_directory_tree(
         input_path: str,
         mode: str = "all",
@@ -45,32 +42,27 @@ def generate_directory_tree(
         save_path: str = "",
 ) -> List[str]:
     """
-    Generate a hierarchical text representation of the file structure.
-
-    Optionally parses files to show symbols (functions, classes, methods).
-    This service does NOT print to stdout.
+    Generate a text-based tree representation of the directory structure.
 
     Args:
         input_path: Root directory to scan.
-        mode: Processing mode ("all", "modules_only", "tests_only").
+        mode: Scan mode ("all", "modules_only", "tests_only").
         extensions: List of allowed file extensions.
         include_patterns: Regex patterns for inclusion.
         exclude_patterns: Regex patterns for exclusion.
-        respect_gitignore: If True, parse .gitignore and add to exclusions.
-        show_functions: If True, parse and show top-level functions.
-        show_classes: If True, parse and show top-level classes.
-        show_methods: If True (and classes=True), show methods.
-        print_to_log: If True, logs the tree at INFO level.
-        save_path: If provided, saves the tree to this file path.
+        respect_gitignore: Whether to parse .gitignore files.
+        show_functions: Whether to list functions (Python only).
+        show_classes: Whether to list classes (Python only).
+        show_methods: Whether to list methods (Python only).
+        print_to_log: If True, log the tree to INFO.
+        save_path: If provided, save the tree to this file.
 
     Returns:
-        A list of strings representing the tree lines.
+        List[str]: The lines of the generated tree.
     """
     logger.info(f"Generating directory tree for: {input_path}")
 
-    # -------------------------
-    # Input Normalization
-    # -------------------------
+    # 1. Normalization
     if extensions is None:
         extensions = default_extensions()
     if include_patterns is None:
@@ -80,10 +72,7 @@ def generate_directory_tree(
 
     input_path_abs = os.path.abspath(input_path)
 
-    # -------------------------
-    # Pattern Compilation
-    # -------------------------
-    # Merge gitignore patterns if requested
+    # 2. Pattern Compilation
     final_exclusions = list(exclude_patterns)
     if respect_gitignore:
         git_patterns = load_gitignore_patterns(input_path_abs)
@@ -94,9 +83,7 @@ def generate_directory_tree(
     include_rx = compile_patterns(include_patterns)
     exclude_rx = compile_patterns(final_exclusions)
 
-    # -------------------------
-    # Build Structure
-    # -------------------------
+    # 3. Build Internal Structure
     tree_structure = _build_structure(
         input_path_abs,
         mode=mode,
@@ -106,9 +93,7 @@ def generate_directory_tree(
         test_detect_func=is_test,
     )
 
-    # -------------------------
-    # Render Tree
-    # -------------------------
+    # 4. Render to Text
     lines: List[str] = []
     render_tree_structure(
         tree_structure,
@@ -119,9 +104,7 @@ def generate_directory_tree(
         show_methods=show_methods,
     )
 
-    # -------------------------
-    # Output Handling
-    # -------------------------
+    # 5. Output Handling
     if print_to_log:
         logger.info("Tree Preview:\n" + "\n".join(lines))
 
@@ -143,9 +126,6 @@ def generate_directory_tree(
     return lines
 
 
-# -----------------------------------------------------------------------------
-# Internal Helpers
-# -----------------------------------------------------------------------------
 def _build_structure(
         input_path: str,
         mode: str,
@@ -154,7 +134,9 @@ def _build_structure(
         exclude_patterns_rx: List[re.Pattern],
         test_detect_func: Callable[[str], bool],
 ) -> Tree:
-    """Recursively build the Tree dictionary from the filesystem."""
+    """
+    Recursively scan the filesystem and build a Tree dictionary.
+    """
     tree_structure: Tree = {}
 
     for root, dirs, files in os.walk(input_path):
@@ -166,7 +148,7 @@ def _build_structure(
         if rel_root == ".":
             rel_root = ""
 
-        # Navigate or create intermediate nodes
+        # Navigate to current node in the structure
         current_node_level: Tree = tree_structure
         if rel_root:
             for p in rel_root.split(os.sep):
@@ -178,7 +160,6 @@ def _build_structure(
 
         # Process Files
         for file_name in files:
-            # Check Patterns (now includes gitignore patterns)
             if matches_any(file_name, exclude_patterns_rx):
                 continue
             if not matches_include(file_name, include_patterns_rx):
@@ -187,7 +168,7 @@ def _build_structure(
             if ext not in extensions:
                 continue
 
-            # Check Mode (Tests/Modules)
+            # Filtering Mode Logic
             file_is_test = test_detect_func(file_name)
             if mode == "tests_only" and not file_is_test:
                 continue

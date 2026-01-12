@@ -1,29 +1,25 @@
 from __future__ import annotations
 
 """
-Configuration validation and normalization gatekeeper.
+Configuration Validator.
 
-This module ensures that all input data follows the expected types and formats 
-before reaching the business logic, acting as the primary security layer for 
-the pipeline.
+Acts as a gatekeeper to ensure that the configuration dictionary passed
+to the pipeline contains valid types and normalized values.
 """
 
 import logging
 from typing import Any, Dict, List, Tuple
 
-from transcriptor4ai.domain.config import get_default_config
 from transcriptor4ai.core.pipeline.filters import (
     default_extensions,
     default_include_patterns,
     default_exclude_patterns,
 )
+from transcriptor4ai.domain.config import get_default_config
 
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# Public API
-# -----------------------------------------------------------------------------
 def validate_config(
         config: Any,
         *,
@@ -32,23 +28,21 @@ def validate_config(
     """
     Validate and normalize the configuration dictionary.
 
-    This function acts as a gatekeeper to ensure the pipeline receives
-    sanitized data. It does not touch the filesystem.
+    Ensures types are correct (converting strings to bools/lists if needed)
+    and fills in missing values with defaults.
 
     Args:
-        config: The raw configuration dictionary (or potentially invalid type).
+        config: The raw configuration dictionary (or untrusted input).
         strict: If True, raises TypeError/ValueError on invalid data.
                 If False, falls back to defaults and logs warnings.
 
     Returns:
-        A tuple containing:
-        1. The normalized configuration dictionary.
-        2. A list of warning messages (strings).
+        Tuple[Dict, List[str]]: (Normalized Config, List of Warnings).
     """
     warnings: List[str] = []
     defaults = get_default_config()
 
-    # 1. Base Validation: Type Check
+    # Base Validation: Type Check
     if not isinstance(config, dict):
         msg = f"Invalid config type: expected dict, received {type(config).__name__}."
         if strict:
@@ -61,158 +55,35 @@ def validate_config(
     merged: Dict[str, Any] = dict(defaults)
     merged.update(config)
 
-    # 2. String Normalization
-    merged["input_path"] = _as_str(
-        merged.get("input_path"),
-        defaults["input_path"],
-        "input_path",
-        warnings,
-        strict
-    )
-    merged["output_base_dir"] = _as_str(
-        merged.get("output_base_dir"),
-        defaults["output_base_dir"],
-        "output_base_dir",
-        warnings,
-        strict
-    )
-    merged["output_subdir_name"] = _as_str(
-        merged.get("output_subdir_name"),
-        defaults["output_subdir_name"],
-        "output_subdir_name",
-        warnings,
-        strict
-    )
-    merged["output_prefix"] = _as_str(
-        merged.get("output_prefix"),
-        defaults["output_prefix"],
-        "output_prefix",
-        warnings,
-        strict
-    )
-    # Context Optimization
-    merged["target_model"] = _as_str(
-        merged.get("target_model"),
-        defaults.get("target_model", "GPT-4o / GPT-5"),
-        "target_model",
-        warnings,
-        strict
-    )
+    # 1. String Fields
+    for field in ["input_path", "output_base_dir", "output_subdir_name",
+                  "output_prefix", "target_model"]:
+        merged[field] = _as_str(
+            merged.get(field),
+            defaults.get(field, ""),
+            field,
+            warnings,
+            strict
+        )
 
-    # 3. Content Selection & Output Format (Booleans)
-    merged["process_modules"] = _as_bool(
-        merged.get("process_modules"),
-        defaults["process_modules"],
-        "process_modules",
-        warnings,
-        strict
-    )
-    merged["process_tests"] = _as_bool(
-        merged.get("process_tests"),
-        defaults["process_tests"],
-        "process_tests",
-        warnings,
-        strict
-    )
-    merged["process_resources"] = _as_bool(
-        merged.get("process_resources"),
-        defaults["process_resources"],
-        "process_resources",
-        warnings,
-        strict
-    )
+    # 2. Boolean Fields
+    bool_fields = [
+        "process_modules", "process_tests", "process_resources",
+        "create_individual_files", "create_unified_file",
+        "show_functions", "show_classes", "show_methods",
+        "generate_tree", "print_tree", "save_error_log", "respect_gitignore",
+        "enable_sanitizer", "mask_user_paths", "minify_output"
+    ]
+    for field in bool_fields:
+        merged[field] = _as_bool(
+            merged.get(field),
+            defaults.get(field, False),
+            field,
+            warnings,
+            strict
+        )
 
-    merged["create_individual_files"] = _as_bool(
-        merged.get("create_individual_files"),
-        defaults["create_individual_files"],
-        "create_individual_files",
-        warnings,
-        strict
-    )
-    merged["create_unified_file"] = _as_bool(
-        merged.get("create_unified_file"),
-        defaults["create_unified_file"],
-        "create_unified_file",
-        warnings,
-        strict
-    )
-
-    # 4. Feature Flags (AST & Logging & Filtering)
-    merged["show_functions"] = _as_bool(
-        merged.get("show_functions"),
-        defaults["show_functions"],
-        "show_functions",
-        warnings,
-        strict
-    )
-    merged["show_classes"] = _as_bool(
-        merged.get("show_classes"),
-        defaults["show_classes"],
-        "show_classes",
-        warnings,
-        strict
-    )
-    merged["show_methods"] = _as_bool(
-        merged.get("show_methods"),
-        defaults["show_methods"],
-        "show_methods",
-        warnings,
-        strict
-    )
-
-    merged["generate_tree"] = _as_bool(
-        merged.get("generate_tree"),
-        defaults["generate_tree"],
-        "generate_tree",
-        warnings,
-        strict
-    )
-    merged["print_tree"] = _as_bool(
-        merged.get("print_tree"),
-        defaults["print_tree"],
-        "print_tree",
-        warnings,
-        strict
-    )
-    merged["save_error_log"] = _as_bool(
-        merged.get("save_error_log"),
-        defaults["save_error_log"],
-        "save_error_log",
-        warnings,
-        strict
-    )
-    merged["respect_gitignore"] = _as_bool(
-        merged.get("respect_gitignore"),
-        defaults["respect_gitignore"],
-        "respect_gitignore",
-        warnings,
-        strict
-    )
-
-    # 5. Security & Optimization Flags
-    merged["enable_sanitizer"] = _as_bool(
-        merged.get("enable_sanitizer"),
-        defaults["enable_sanitizer"],
-        "enable_sanitizer",
-        warnings,
-        strict
-    )
-    merged["mask_user_paths"] = _as_bool(
-        merged.get("mask_user_paths"),
-        defaults["mask_user_paths"],
-        "mask_user_paths",
-        warnings,
-        strict
-    )
-    merged["minify_output"] = _as_bool(
-        merged.get("minify_output"),
-        defaults["minify_output"],
-        "minify_output",
-        warnings,
-        strict
-    )
-
-    # 6. Lists Normalization: Extensions and Patterns
+    # 3. List Fields
     merged["extensions"] = _as_list_str(
         merged.get("extensions"),
         default_extensions(),
@@ -241,10 +112,10 @@ def validate_config(
 
 
 # -----------------------------------------------------------------------------
-# Internal Helpers (Private)
+# Internal Helpers
 # -----------------------------------------------------------------------------
 def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: bool) -> str:
-    """Ensure the value is a non-empty string or use fallback."""
+    """Ensure value is a string."""
     if value is None:
         return fallback
     if isinstance(value, str):
@@ -254,12 +125,11 @@ def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: 
     if strict:
         raise TypeError(msg)
     warnings.append(f"{msg} Using fallback.")
-    logger.warning(msg)
     return fallback
 
 
 def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict: bool) -> bool:
-    """Coerce various input types into a boolean value."""
+    """Coerce value to boolean."""
     if isinstance(value, bool):
         return value
     if value is None:
@@ -272,22 +142,21 @@ def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict
         if isinstance(value, str):
             s = value.strip().lower()
             if s in ("true", "1", "yes", "y", "si", "sí"):
-                warnings.append(f"Field '{field}' converted from str '{value}' to True.")
+                warnings.append(f"Field '{field}' converted from '{value}' to True.")
                 return True
             if s in ("false", "0", "no", "n"):
-                warnings.append(f"Field '{field}' converted from str '{value}' to False.")
+                warnings.append(f"Field '{field}' converted from '{value}' to False.")
                 return False
 
     msg = f"Invalid field '{field}': expected bool, received {type(value).__name__}."
     if strict:
         raise TypeError(msg)
     warnings.append(f"{msg} Using fallback.")
-    logger.warning(msg)
     return fallback
 
 
 def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str], strict: bool) -> List[str]:
-    """Ensure the value is a list of strings, handles CSV strings in non-strict mode."""
+    """Ensure value is a list of strings."""
     if value is None:
         return list(fallback)
 
@@ -306,23 +175,21 @@ def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str
                 if s:
                     out.append(s)
             else:
-                msg = f"Invalid item in '{field}[{i}]': expected str, received {type(item).__name__}."
+                msg = f"Invalid item in '{field}[{i}]': expected str."
                 if strict:
                     raise TypeError(msg)
                 warnings.append(f"{msg} Item discarded.")
-                logger.warning(msg)
         return out if out else list(fallback)
 
     msg = f"Invalid field '{field}': expected list[str], received {type(value).__name__}."
     if strict:
         raise TypeError(msg)
     warnings.append(f"{msg} Using fallback.")
-    logger.warning(msg)
     return list(fallback)
 
 
 def _normalize_extensions(exts: List[str], warnings: List[str], strict: bool) -> List[str]:
-    """Ensure all extensions start with a dot."""
+    """Ensure extensions start with a dot."""
     out: List[str] = []
     for ext in exts:
         e = ext.strip()

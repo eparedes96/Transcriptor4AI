@@ -10,11 +10,13 @@ It supports:
 - Thread-safe handler management to avoid duplication.
 """
 
+import atexit
 import logging
 import os
 import sys
+import queue
 from dataclasses import dataclass
-from logging.handlers import RotatingFileHandler
+from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
 from typing import Optional, Dict
 
 from transcriptor4ai.infra.fs import get_user_data_dir
@@ -24,6 +26,7 @@ from transcriptor4ai.infra.fs import get_user_data_dir
 # -----------------------------------------------------------------------------
 _CONFIGURED_FLAG_ATTR: str = "_transcriptor4ai_configured"
 _HANDLER_TAG_ATTR: str = "_transcriptor4ai_handler"
+_QUEUE_LISTENER_ATTR: str = "_transcriptor4ai_queue_listener"
 
 _LEVEL_MAP: Dict[str, int] = {
     "DEBUG": logging.DEBUG,
@@ -90,10 +93,13 @@ def get_default_gui_log_path(
 
 def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Logger:
     """
-    Configure the root logger with the provided settings.
+    Configure the root logger with the provided settings using QueueHandler.
 
     This function is idempotent: it checks if logging has already been configured
     by this module to prevent duplicate handlers, unless `force=True`.
+
+    This uses a non-blocking QueueHandler to decouple logging I/O
+    from the main application thread (crucial for GUI responsiveness).
 
     Args:
         cfg: Configuration object.
@@ -112,33 +118,56 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         level_int = _parse_level(cfg.level)
         root.setLevel(level_int)
 
-        # Cleanup only our own previous handlers to respect other libraries
+        # Cleanup previous handlers and listeners
         _remove_our_handlers(root)
+        _stop_existing_listener(root)
 
         # Formatters
         console_formatter = logging.Formatter(cfg.console_fmt)
         file_formatter = logging.Formatter(cfg.file_fmt, datefmt=cfg.datefmt)
 
-        # 1. Console Handler
+        handlers_list = []
+
+        # 1. Console Handler (Direct stderr)
         if cfg.console:
-            _add_console_handler(root, level_int, console_formatter)
+            sh = logging.StreamHandler(sys.stderr)
+            sh.setLevel(level_int)
+            sh.setFormatter(console_formatter)
+            _tag_handler(sh)
+            handlers_list.append(sh)
 
-        # 2. File Handler
+        # 2. File Handler (Rotating)
         if cfg.log_file:
-            _safe_add_rotating_file_handler(
-                root=root,
-                log_file=cfg.log_file,
-                level_int=level_int,
-                formatter=file_formatter,
-                max_bytes=cfg.max_bytes,
-                backup_count=cfg.backup_count,
+            fh = _create_rotating_file_handler(
+                cfg.log_file,
+                level_int,
+                file_formatter,
+                cfg.max_bytes,
+                cfg.backup_count
             )
+            if fh:
+                handlers_list.append(fh)
 
-        # Mark as successfully configured
-        try:
-            setattr(root, _CONFIGURED_FLAG_ATTR, True)
-        except Exception:
-            pass
+        if not handlers_list:
+            return root
+
+        # 3. Thread-Safety: Setup QueueListener
+        log_queue = queue.Queue(-1)  # Unlimited size
+        queue_handler = QueueHandler(log_queue)
+        _tag_handler(queue_handler)
+
+        listener = QueueListener(log_queue, *handlers_list, respect_handler_level=True)
+        listener.start()
+
+        # Attach QueueHandler to root
+        root.addHandler(queue_handler)
+
+        # Store reference to listener to stop it later
+        setattr(root, _QUEUE_LISTENER_ATTR, listener)
+        setattr(root, _CONFIGURED_FLAG_ATTR, True)
+
+        # Ensure listener stops at exit
+        atexit.register(listener.stop)
 
         return root
 
@@ -147,11 +176,13 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
             fallback = logging.getLogger()
             fallback.setLevel(logging.INFO)
             _remove_our_handlers(fallback)
-            _add_console_handler(
-                fallback,
-                logging.INFO,
-                logging.Formatter("CRITICAL FALLBACK | %(levelname)s | %(message)s"),
-            )
+            _stop_existing_listener(fallback)
+
+            sh = logging.StreamHandler(sys.stderr)
+            sh.setFormatter(logging.Formatter("CRITICAL FALLBACK | %(levelname)s | %(message)s"))
+            _tag_handler(sh)
+            fallback.addHandler(sh)
+
             fallback.warning("Logging configuration failed entirely. Using emergency console.")
             return fallback
         except Exception:
@@ -236,30 +267,24 @@ def _remove_our_handlers(root: logging.Logger) -> None:
                 pass
 
 
-def _add_console_handler(
-        root: logging.Logger,
-        level_int: int,
-        formatter: logging.Formatter,
-) -> None:
-    """Initialize and attach a standard stream handler (stderr)."""
-    sh = logging.StreamHandler(sys.stderr)
-    sh.setLevel(level_int)
-    sh.setFormatter(formatter)
-    _tag_handler(sh)
-    root.addHandler(sh)
+def _stop_existing_listener(root: logging.Logger) -> None:
+    """Stop and cleanup any existing QueueListener attached to root."""
+    listener = getattr(root, _QUEUE_LISTENER_ATTR, None)
+    if listener and isinstance(listener, QueueListener):
+        listener.stop()
+        setattr(root, _QUEUE_LISTENER_ATTR, None)
 
 
-def _safe_add_rotating_file_handler(
-        root: logging.Logger,
+def _create_rotating_file_handler(
         log_file: str,
         level_int: int,
         formatter: logging.Formatter,
         max_bytes: int,
         backup_count: int,
-) -> None:
+) -> Optional[RotatingFileHandler]:
     """
-    Attempt to initialize a RotatingFileHandler safely.
-    Logs a warning to the console if file access fails, instead of crashing.
+    Attempt to create a RotatingFileHandler safely.
+    Returns None if file access fails.
     """
     try:
         _ensure_parent_dir(log_file)
@@ -272,10 +297,7 @@ def _safe_add_rotating_file_handler(
         fh.setLevel(level_int)
         fh.setFormatter(formatter)
         _tag_handler(fh)
-        root.addHandler(fh)
+        return fh
     except Exception as e:
-        fallback_fmt = logging.Formatter("%(levelname)s | %(message)s")
-        _add_console_handler(root, level_int, fallback_fmt)
-        root.warning(
-            f"Failed to initialize file logging at '{log_file}'. Error: {e}"
-        )
+        sys.stderr.write(f"WARNING: Failed to initialize file logging at '{log_file}': {e}\n")
+        return None

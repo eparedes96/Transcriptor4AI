@@ -1,4 +1,4 @@
-﻿name: transcriptor4ai
+name: transcriptor4ai
 channels:
   - conda-forge
   - defaults
@@ -7,17 +7,13 @@ dependencies:
   - pip
   - pytest
   - pytest-mock
+  - pysimplegui
   - pyinstaller
   - requests
   - setuptools
   - wheel
   - mypy
   - tiktoken
-  - ruff
-  - pre-commit
   - pip:
       - types-setuptools
       - types-requests
-      - customtkinter
-      - tkinterdnd2
-      - python-semantic-release

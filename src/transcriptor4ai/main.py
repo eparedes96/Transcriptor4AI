@@ -76,7 +76,6 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
                 )
                 root.destroy()
             except Exception:
-                # Absolute last resort
                 print(f"CRITICAL SYSTEM ERROR: {error_msg}\n{stack_trace}", file=sys.stderr)
 
         sys.exit(1)

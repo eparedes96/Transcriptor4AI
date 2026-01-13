@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "1.6.0"
+version = "2.0.0"
 description = "High-performance context extraction engine featuring parallel streaming, security sanitization, and seamless background OTA updates."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -22,9 +22,13 @@ classifiers = [
     "Topic :: Security",
 ]
 dependencies = [
-    "PySimpleGUI",
+    "customtkinter>=5.2.2",
+    "tkinterdnd2>=0.3.0",
     "tiktoken>=0.7.0",
     "requests>=2.31.0",
+    "ruff>=0.1.13",
+    "pre-commit>=3.6.0",
+    "python-semantic-release>=9.0.0",
 ]
 
 [project.urls]
@@ -54,7 +58,11 @@ warn_unused_configs = true
 show_error_codes = true
 
 [[tool.mypy.overrides]]
-module = "PySimpleGUI"
+module = "customtkinter"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tkinterdnd2"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -72,3 +80,31 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --strict-markers"
+
+# =============================================================================
+# RUFF CONFIGURATION (V2.0.0 Standard)
+# =============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# =============================================================================
+# SEMANTIC RELEASE CONFIGURATION
+# =============================================================================
+[tool.semantic_release]
+version_variable = [
+    "src/transcriptor4ai/domain/config.py:CURRENT_CONFIG_VERSION",
+    "pyproject.toml:version"
+]
+branch = "main"
+upload_to_pypi = false
+upload_to_release = true
+build_command = "python scripts/build.py"

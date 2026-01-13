@@ -222,7 +222,7 @@ class AppController:
             else:
                 mb.showerror("Pipeline Failed", result.error)
         elif isinstance(result, Exception):
-            show_crash_modal(self.app, str(result), "See logs for details.")
+            show_crash_modal(str(result), "See logs for details.", self.app)
 
     def _toggle_ui(self, disabled: bool) -> None:
         state = "disabled" if disabled else "normal"
@@ -342,8 +342,74 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
                   command=toplevel.destroy).pack(side="left", expand=True, padx=5)
 
 
-def show_crash_modal(parent: ctk.CTk, error_msg: str, stack_trace: str) -> None:
-    """Display critical error details."""
+def show_feedback_window(parent: ctk.CTk) -> None:
+    """Display the Feedback Hub modal window."""
+    toplevel = ctk.CTkToplevel(parent)
+    toplevel.title("Feedback Hub")
+    toplevel.geometry("500x450")
+    toplevel.grab_set()
+
+    ctk.CTkLabel(toplevel, text="Send Feedback", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=20)
+    ctk.CTkLabel(toplevel, text="Help us improve Transcriptor4AI.").pack(pady=(0, 20))
+
+    ctk.CTkLabel(toplevel, text="Subject:").pack(anchor="w", padx=20)
+    subject = ctk.CTkEntry(toplevel)
+    subject.pack(fill="x", padx=20, pady=(0, 10))
+
+    ctk.CTkLabel(toplevel, text="Message:").pack(anchor="w", padx=20)
+    msg = ctk.CTkTextbox(toplevel, height=150)
+    msg.pack(fill="x", padx=20, pady=(0, 10))
+
+    # Logs Checkbox (Visual only for now)
+    chk_logs = ctk.CTkCheckBox(toplevel, text="Include recent logs", onvalue=True, offvalue=False)
+    chk_logs.select()
+    chk_logs.pack(anchor="w", padx=20, pady=(0, 20))
+
+    def _send():
+        if not subject.get() or not msg.get("1.0", "end").strip():
+            mb.showerror("Error", "Please fill all fields.")
+            return
+
+        # Prepare payload
+        payload = {
+            "subject": subject.get(),
+            "message": msg.get("1.0", "end"),
+            "logs": get_recent_logs(50) if chk_logs.get() else ""
+        }
+
+        # Background submission
+        threading.Thread(
+            target=threads.submit_feedback_task,
+            args=(payload, lambda res: _on_sent(res)),
+            daemon=True
+        ).start()
+
+        toplevel.destroy()
+        mb.showinfo("Feedback", "Sending feedback in background...")
+
+    def _on_sent(result: Tuple[bool, str]) -> None:
+        pass
+
+    ctk.CTkButton(toplevel, text="Send Feedback", command=_send).pack(pady=10)
+
+
+def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk] = None) -> None:
+    """
+    Display critical error details.
+
+    Args:
+        error_msg: The exception message.
+        stack_trace: Full traceback string.
+        parent: The parent window. If None (Global Handler), a temporary root is created.
+    """
+    is_root_created = False
+
+    # Emergency fallback if no root exists
+    if parent is None:
+        parent = ctk.CTk()
+        parent.withdraw()
+        is_root_created = True
+
     toplevel = ctk.CTkToplevel(parent)
     toplevel.title("Critical Error")
     toplevel.geometry("700x500")
@@ -360,23 +426,19 @@ def show_crash_modal(parent: ctk.CTk, error_msg: str, stack_trace: str) -> None:
     textbox.configure(state="disabled")
     textbox.pack(fill="both", expand=True, padx=20, pady=10)
 
-    def _send_report():
-        payload = {
-            "error": error_msg,
-            "stack_trace": stack_trace,
-            "os": platform.system(),
-            "logs": get_recent_logs(100)
-        }
-
-        # Simple feedback simulation
-        mb.showinfo("Report", "Report feature is being upgraded for V2.0.\nLog data has been preserved.")
+    def _close():
+        toplevel.destroy()
+        if is_root_created and parent:
+            parent.destroy()
 
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     btn_frame.pack(fill="x", padx=20, pady=20)
 
-    ctk.CTkButton(btn_frame, text="Send Report", fg_color="green", command=_send_report).pack(side="left", padx=10)
-    ctk.CTkButton(btn_frame, text="Close", fg_color="#D9534F", command=toplevel.destroy).pack(side="right", padx=10)
+    ctk.CTkButton(btn_frame, text="Close", fg_color="#D9534F", command=_close).pack(expand=True)
 
+    # If we created the root, we must start the loop
+    if is_root_created:
+        parent.mainloop()
 
 def show_update_prompt_modal(
         parent: ctk.CTk,

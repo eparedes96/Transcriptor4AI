@@ -125,7 +125,7 @@ def main() -> None:
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
 
-    sidebar_frame.btn_feedback.configure(command=handlers.show_feedback_window)
+    sidebar_frame.btn_feedback.configure(command=lambda: handlers.show_feedback_window(app))
 
     # -------------------------------------------------------------------------
     # 5. Background Tasks & Polling

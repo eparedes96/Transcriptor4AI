@@ -35,6 +35,12 @@ config.json
 *_full_context.txt
 transcript/
 
+# --- Testing ---
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
 # --- OS Specific ---
 .DS_Store
 Thumbs.db

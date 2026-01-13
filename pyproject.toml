@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "1.5.1"
+version = "1.6.0"
 description = "High-performance context extraction engine featuring parallel streaming, security sanitization, and seamless background OTA updates."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,15 +31,15 @@ dependencies = [
 "Homepage" = "https://github.com/eparedesbalen/transcriptor4ai"
 
 [project.scripts]
-transcriptor-cli = "transcriptor4ai.cli:main"
-transcriptor-gui = "transcriptor4ai.ui.gui:main"
+transcriptor-cli = "transcriptor4ai.interface.cli.app:main"
+transcriptor-gui = "transcriptor4ai.interface.gui.app:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["transcriptor4ai*"]
 
 [tool.setuptools.package-data]
-transcriptor4ai = ["locales/*.json"]
+transcriptor4ai = ["interface/locales/*.json"]
 
 # =============================================================================
 # MYPY CONFIGURATION

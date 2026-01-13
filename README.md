@@ -1,7 +1,7 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.5.1-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-1.6.0-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
@@ -16,19 +16,19 @@ Stop wasting time copying and pasting files or exposing sensitive data. Transcri
 
 When working with AI and large projects, you face three main challenges: **Context Limits**, **Security Risks**, and **Manual Toil**. Transcriptor4AI solves them all:
 
-*   **Privacy First**: Never send an API key or a local path to the cloud by mistake.
-*   **Token Efficiency**: Reduce the cost of your prompts by stripping away redundant code and comments.
+*   **Privacy First**: Never send an API key or a local path to the cloud by mistake. The sanitizer runs locally.
+*   **Token Efficiency**: Reduce the cost of your prompts by stripping away redundant code and comments (Minification).
 *   **Structural Clarity**: Provide the AI with a map of your project (AST Tree) so it understands how classes and functions relate.
-*   **Industrial Performance**: Built to handle everything from small scripts to massive monorepos without slowing down your machine.
+*   **Industrial Performance**: Built with a parallel streaming engine to handle everything from small scripts to massive monorepos without slowing down your machine.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🛡️ Security & Privacy
-*   **Secret Redaction**: Automatically identifies and masks API keys, passwords, and tokens.
-*   **Path Anonymization**: Replaces local system paths with generic tags to protect your identity and system structure.
-*   **Gitignore Compliance**: Respects your `.gitignore` rules out of the box.
+*   **Secret Redaction**: Automatically identifies and masks API keys (AWS, OpenAI), passwords, and tokens.
+*   **Path Anonymization**: Replaces local system paths (`C:/Users/...`) with generic tags to protect your identity.
+*   **Gitignore Compliance**: Respects your `.gitignore` rules out of the box to avoid leaking temporary files.
 
 ### 📉 Smart Optimization
 *   **Code Compression**: Strips comments and excessive whitespace, reducing token count by up to 25% while preserving logic.
@@ -41,7 +41,7 @@ When working with AI and large projects, you face three main challenges: **Conte
 ### ⚙️ Professional Workflow
 *   **Dual Interface**: Use the intuitive **GUI** for daily development or the **CLI** for automation and pipelines.
 *   **Profiles**: Save different configurations (e.g., "Full Audit" vs "Minimal Logic") and switch between them instantly.
-*   **Seamless Updates**: The app stays up to date automatically via background downloads and an integrated integrity checker.
+*   **Seamless Updates**: The app stays up to date automatically via background downloads (OTA) and integrity checks.
 
 ---
 
@@ -57,11 +57,11 @@ When working with AI and large projects, you face three main challenges: **Conte
 git clone https://github.com/eparedes96/Transcriptor4AI.git
 cd Transcriptor4AI
 
-# Install dependencies via Conda
+# Install dependencies via Conda (Production environment)
 conda env update --file environment.yml --prune
 conda activate transcriptor4ai
 
-# Install in development mode
+# Install package in editable mode
 pip install -e .
 ```
 
@@ -73,7 +73,11 @@ pip install -e .
 The most common way to use Transcriptor4AI. Launch it, select your folder, and get your context.
 
 ```bash
+# Using the installed command
 transcriptor-gui
+
+# OR running from source (New Entrypoint)
+python src/transcriptor4ai/main.py
 ```
 
 *   **Simulation Mode**: Use **"SIMULATE"** to see exactly what will be sent and how many tokens it will cost without creating any files.
@@ -106,11 +110,12 @@ Every run generates a structured directory (default: `transcript/`) with:
 
 ## ⚙️ Configuration
 
-Transcriptor4AI stores your preferences and profiles in a local `config.json`.
+Transcriptor4AI stores your preferences and profiles in a local `config.json` inside your user data folder.
 
+**Sample Configuration:**
 ```json
 {
-    "version": "1.5.0",
+    "version": "1.6.0",
     "app_settings": {
         "theme": "SystemDefault",
         "auto_check_updates": true
@@ -126,22 +131,29 @@ Transcriptor4AI stores your preferences and profiles in a local `config.json`.
 
 ---
 
-## 🛠️ Development & Build
+## 🛠️ Development & Architecture
+
+This project follows a **Hexagonal Architecture** to ensure maintainability and robustness:
+*   **Domain**: Data models and business rules.
+*   **Core**: Pipeline logic, workers, and AST analysis.
+*   **Infra**: FileSystem, Logging, and Network adapters.
+*   **Interface**: CLI and GUI adapters.
 
 ### Quality Assurance
+Run the comprehensive test suite (Unit, Integration, E2E):
 ```bash
 # Run the complete industrial test suite
 pytest -v
 
-# Static type analysis
+# Static type analysis with strict checking
 mypy src/transcriptor4ai
 ```
 
 ### Standalone Build
 To create a standalone executable (`.exe`):
 ```bash
-# Generate a standalone executable using the build script
-python build.py
+# Use the refactored build script in the scripts/ folder
+python scripts/build.py
 ```
 
 ---

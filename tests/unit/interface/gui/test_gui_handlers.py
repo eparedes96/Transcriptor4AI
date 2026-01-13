@@ -9,6 +9,7 @@ Verifies:
 3. System interaction calls (mocked).
 """
 
+import os
 from unittest.mock import patch
 import pytest
 
@@ -57,7 +58,7 @@ def test_open_file_explorer_calls_system(tmp_path):
 
     # Test Windows
     with patch("platform.system", return_value="Windows"):
-        with patch("os.startfile") as mock_start:
+        with patch("os.startfile", create=True) as mock_start:
             open_file_explorer(path_str)
             mock_start.assert_called_with(path_str)
 
@@ -70,6 +71,7 @@ def test_open_file_explorer_calls_system(tmp_path):
 
 def test_open_file_explorer_handles_invalid_path():
     """It should verify path existence before calling system."""
+
     with patch("subprocess.Popen") as mock_popen:
         open_file_explorer("/non/existent/path")
         mock_popen.assert_not_called()

@@ -4,17 +4,17 @@ from __future__ import annotations
 Unit tests for GUI Handlers (Controller Logic).
 
 Verifies:
-1. Synchronization of GUI form values to Config dict.
+1. Synchronization of GUI form values to Config dict via AppController.
 2. String parsing utilities specific to GUI inputs.
 3. System interaction calls (mocked).
 """
 
 import os
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 import pytest
 
 from transcriptor4ai.interface.gui.handlers import (
-    update_config_from_gui,
+    AppController,
     parse_list_from_string,
     open_file_explorer
 )
@@ -28,25 +28,79 @@ def test_parse_list_from_string_gui():
     assert parse_list_from_string(None) == []
 
 
-def test_update_config_from_gui_sync(mock_config_dict):
+# ------ INICIO DE MODIFICACIÓN: V2.0.0 Controller Test ------
+def test_controller_sync_config_from_view(mock_config_dict):
     """
-    Verify that the config dictionary is updated with values from the GUI event.
+    Verify that the AppController correctly scrapes values from
+    CustomTkinter widgets and updates the config dictionary.
     """
-    # Simulate PySimpleGUI values dict
-    gui_values = {
-        "input_path": "/new/input",
-        "output_base_dir": "/new/output",
-        "process_modules": False,
-        "extensions": ".rs, .toml",
-        "target_model": "Claude 3.5"
-    }
+    # 1. Setup Controller with mocks
+    mock_app = MagicMock()
+    mock_app_state = {}
+    controller = AppController(mock_app, mock_config_dict, mock_app_state)
 
-    update_config_from_gui(mock_config_dict, gui_values)
+    # 2. Mock Views & Widgets
+    mock_dash = MagicMock()
+    mock_settings = MagicMock()
 
-    assert mock_config_dict["input_path"] == "/new/input"
-    assert mock_config_dict["process_modules"] is False
-    assert mock_config_dict["extensions"] == [".rs", ".toml"]
-    assert mock_config_dict["target_model"] == "Claude 3.5"
+    # Configure Dashboard Mocks (Simulate User Input)
+    mock_dash.entry_input.get.return_value = "/new/input"
+    mock_dash.entry_output.get.return_value = "/new/output"
+    mock_dash.entry_subdir.get.return_value = "new_sub"
+    mock_dash.entry_prefix.get.return_value = "new_prefix"
+
+    # Simulate Switches (1=True, 0=False in CTK)
+    mock_dash.sw_modules.get.return_value = 0
+    mock_dash.sw_tests.get.return_value = 1
+    mock_dash.sw_resources.get.return_value = 1
+    mock_dash.sw_tree.get.return_value = 1
+
+    # Simulate AST Checkboxes
+    mock_dash.chk_func.get.return_value = 1
+    mock_dash.chk_class.get.return_value = 0
+    mock_dash.chk_meth.get.return_value = 0
+
+    # Configure Settings Mocks
+    mock_settings.entry_ext.get.return_value = ".rs, .toml"
+    mock_settings.entry_inc.get.return_value = "src/.*"
+    mock_settings.entry_exc.get.return_value = ""
+
+    mock_settings.sw_gitignore.get.return_value = 1
+    mock_settings.sw_individual.get.return_value = 1
+    mock_settings.sw_unified.get.return_value = 0
+    mock_settings.sw_sanitizer.get.return_value = 1
+    mock_settings.sw_mask.get.return_value = 0
+    mock_settings.sw_minify.get.return_value = 1
+    mock_settings.sw_error_log.get.return_value = 0
+
+    # Register mocks with controller
+    controller.register_views(mock_dash, mock_settings, MagicMock(), MagicMock())
+
+    # 3. Execute Sync
+    controller.sync_config_from_view()
+
+    # 4. Assertions
+    # Check Paths
+    assert controller.config["input_path"] == "/new/input"
+    assert controller.config["output_base_dir"] == "/new/output"
+
+    # Check Logic Flags
+    assert controller.config["process_modules"] is False
+    assert controller.config["process_tests"] is True
+    assert controller.config["generate_tree"] is True
+
+    # Check AST
+    assert controller.config["show_functions"] is True
+    assert controller.config["show_classes"] is False
+
+    # Check Lists
+    assert controller.config["extensions"] == [".rs", ".toml"]
+    assert controller.config["include_patterns"] == ["src/.*"]
+
+    # Check Security/Format
+    assert controller.config["create_unified_file"] is False
+    assert controller.config["enable_sanitizer"] is True
+    assert controller.config["minify_output"] is True
 
 
 def test_open_file_explorer_calls_system(tmp_path):
@@ -72,6 +126,9 @@ def test_open_file_explorer_calls_system(tmp_path):
 def test_open_file_explorer_handles_invalid_path():
     """It should verify path existence before calling system."""
 
-    with patch("subprocess.Popen") as mock_popen:
-        open_file_explorer("/non/existent/path")
-        mock_popen.assert_not_called()
+    # Mock showerror to avoid UI popup during test
+    with patch("tkinter.messagebox.showerror") as mock_alert:
+        with patch("subprocess.Popen") as mock_popen:
+            open_file_explorer("/non/existent/path")
+            mock_popen.assert_not_called()
+            mock_alert.assert_called_once()

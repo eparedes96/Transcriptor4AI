@@ -41,6 +41,7 @@ def open_file_explorer(path: str) -> None:
     """
     if not os.path.exists(path):
         logger.warning(f"Attempted to open non-existent path: {path}")
+        mb.showerror(i18n.t("gui.dialogs.error_title"), i18n.t("gui.popups.error_path", path=path))
         return
     try:
         sys_name = platform.system()

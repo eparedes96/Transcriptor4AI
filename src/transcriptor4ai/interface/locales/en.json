@@ -44,6 +44,21 @@
     }
   },
   "gui": {
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "logs": "System Logs",
+      "update": "Update Ready"
+    },
+    "dashboard": {
+      "source_header": "Source Directory Path",
+      "dest_header": "Destination Directory",
+      "ast_func": "Show Functions",
+      "ast_class": "Show Classes",
+      "ast_meth": "Show Methods",
+      "btn_start": "START PROCESSING",
+      "btn_simulating": "SIMULATING..."
+    },
     "sections": {
       "input": "Source Directory:",
       "output": "Base Output Directory (a subdirectory will be created inside):",
@@ -111,7 +126,16 @@
       "no_selection": "-- No Profile --"
     },
     "settings": {
-      "stack_header": "Quick Stack Presets"
+      "stack_header": "Quick Stack Presets",
+      "output_strat": "Output Strategy",
+      "security": "Security & Optimization"
+    },
+    "combos": {
+      "select_stack": "-- Select Stack --",
+      "no_profile": "-- No Profile --"
+    },
+    "logs": {
+      "copy": "Copy Logs"
     },
     "feedback": {
       "type_label": "Report Type:",
@@ -125,6 +149,21 @@
       "processing": "⏳ Processing... Please wait.",
       "success": "Session saved successfully.",
       "reset": "Configuration reset to defaults."
+    },
+    "dialogs": {
+      "error_title": "Error",
+      "success_title": "Success",
+      "saved_title": "Saved",
+      "confirm_title": "Confirm",
+      "invalid_input": "Invalid Input Directory",
+      "pipeline_failed": "Pipeline Failed",
+      "sending_feedback": "Sending feedback in background...",
+      "update_title": "Update Available",
+      "up_to_date": "App is up to date."
+    },
+    "crash": {
+      "title": "Critical Error",
+      "header": "CRITICAL ERROR DETECTED"
     },
     "popups": {
       "title_result": "Result",

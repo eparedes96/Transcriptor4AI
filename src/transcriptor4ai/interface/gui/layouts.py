@@ -77,7 +77,7 @@ class SidebarFrame(ctk.CTkFrame):
         # 2. Navigation Buttons
         self.btn_dashboard = ctk.CTkButton(
             self,
-            text="Dashboard",
+            text=i18n.t("gui.sidebar.dashboard"),
             command=lambda: self.nav_callback("dashboard"),
             fg_color="transparent",
             border_width=2,
@@ -87,7 +87,7 @@ class SidebarFrame(ctk.CTkFrame):
 
         self.btn_settings = ctk.CTkButton(
             self,
-            text="Settings",
+            text=i18n.t("gui.sidebar.settings"),
             command=lambda: self.nav_callback("settings"),
             fg_color="transparent",
             border_width=2,
@@ -97,7 +97,7 @@ class SidebarFrame(ctk.CTkFrame):
 
         self.btn_logs = ctk.CTkButton(
             self,
-            text="System Logs",
+            text=i18n.t("gui.sidebar.logs"),
             command=lambda: self.nav_callback("logs"),
             fg_color="transparent",
             border_width=2,
@@ -108,7 +108,7 @@ class SidebarFrame(ctk.CTkFrame):
         # 3. Update Badge (Hidden by default)
         self.update_badge = ctk.CTkButton(
             self,
-            text="Update Ready",
+            text=i18n.t("gui.sidebar.update"),
             fg_color="#2CC985",
             hover_color="#229A65",
             state="disabled",
@@ -137,7 +137,7 @@ class SidebarFrame(ctk.CTkFrame):
 class DashboardFrame(ctk.CTkFrame):
     """
     Main workspace: IO paths, Action buttons.
-    Wrapped in ScrollableFrame for small screens (Fix #8).
+    Wrapped in ScrollableFrame for small screens.
     """
 
     def __init__(self, master: Any, config: Dict[str, Any], **kwargs: Any):
@@ -159,7 +159,7 @@ class DashboardFrame(ctk.CTkFrame):
         # Input Header
         ctk.CTkLabel(
             self.frame_io,
-            text="Source Directory Path",
+            text=i18n.t("gui.dashboard.source_header"),
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=("gray40", "gray60")
         ).grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 0), sticky="w")
@@ -168,13 +168,18 @@ class DashboardFrame(ctk.CTkFrame):
         self.entry_input = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/project")
         self.entry_input.insert(0, config.get("input_path", ""))
         self.entry_input.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
-        self.btn_browse_in = ctk.CTkButton(self.frame_io, text="Browse", width=80)
+
+        self.btn_browse_in = ctk.CTkButton(
+            self.frame_io,
+            text=i18n.t("gui.buttons.explore"),
+            width=80
+        )
         self.btn_browse_in.grid(row=1, column=1, padx=10, pady=10)
 
         # Output Header
         ctk.CTkLabel(
             self.frame_io,
-            text="Destination Directory",
+            text=i18n.t("gui.dashboard.dest_header"),
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color=("gray40", "gray60")
         ).grid(row=2, column=0, columnspan=2, padx=10, pady=(10, 0), sticky="w")
@@ -183,7 +188,12 @@ class DashboardFrame(ctk.CTkFrame):
         self.entry_output = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/output")
         self.entry_output.insert(0, config.get("output_base_dir", ""))
         self.entry_output.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
-        self.btn_browse_out = ctk.CTkButton(self.frame_io, text="Browse", width=80)
+
+        self.btn_browse_out = ctk.CTkButton(
+            self.frame_io,
+            text=i18n.t("gui.buttons.examine"),
+            width=80
+        )
         self.btn_browse_out.grid(row=3, column=1, padx=10, pady=10)
 
         # Subdir & Prefix Headers
@@ -221,43 +231,42 @@ class DashboardFrame(ctk.CTkFrame):
         self.frame_opts.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self.frame_opts.grid_columnconfigure((0, 1, 2), weight=1)
 
-        self.sw_modules = ctk.CTkSwitch(self.frame_opts, text="Modules (Source)")
+        self.sw_modules = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.modules"))
         if config.get("process_modules"): self.sw_modules.select()
         self.sw_modules.grid(row=0, column=0, padx=20, pady=15, sticky="w")
 
-        self.sw_tests = ctk.CTkSwitch(self.frame_opts, text="Tests")
+        self.sw_tests = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.tests"))
         if config.get("process_tests"): self.sw_tests.select()
         self.sw_tests.grid(row=0, column=1, padx=20, pady=15, sticky="w")
 
-        self.sw_resources = ctk.CTkSwitch(self.frame_opts, text="Resources")
+        self.sw_resources = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.resources"))
         if config.get("process_resources"): self.sw_resources.select()
         self.sw_resources.grid(row=0, column=2, padx=20, pady=15, sticky="w")
 
-        # Tree Toggle (Triggers AST frame via Controller)
-        self.sw_tree = ctk.CTkSwitch(self.frame_opts, text="Generate Tree")
+        # Tree Toggle
+        self.sw_tree = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.gen_tree"))
         if config.get("generate_tree"): self.sw_tree.select()
         self.sw_tree.grid(row=1, column=0, padx=20, pady=15, sticky="w")
 
-        # --- AST Options Sub-Frame
+        # --- AST Options Sub-Frame ---
         self.frame_ast = ctk.CTkFrame(self.scroll, fg_color="transparent")
 
-        # AST Checkboxes
-        self.chk_func = ctk.CTkCheckBox(self.frame_ast, text="Show Functions")
+        self.chk_func = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_func"))
         if config.get("show_functions"): self.chk_func.select()
         self.chk_func.pack(side="left", padx=20)
 
-        self.chk_class = ctk.CTkCheckBox(self.frame_ast, text="Show Classes")
+        self.chk_class = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_class"))
         if config.get("show_classes"): self.chk_class.select()
         self.chk_class.pack(side="left", padx=20)
 
-        self.chk_meth = ctk.CTkCheckBox(self.frame_ast, text="Show Methods")
+        self.chk_meth = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_meth"))
         if config.get("show_methods"): self.chk_meth.select()
         self.chk_meth.pack(side="left", padx=20)
 
         # --- Section 3: Action Bar ---
         self.btn_process = ctk.CTkButton(
             self.scroll,
-            text="START PROCESSING",
+            text=i18n.t("gui.dashboard.btn_start"),
             height=50,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#007ACC"
@@ -266,7 +275,7 @@ class DashboardFrame(ctk.CTkFrame):
 
         self.btn_simulate = ctk.CTkButton(
             self.scroll,
-            text="Simulate (Dry Run)",
+            text=i18n.t("gui.buttons.simulate"),
             fg_color="transparent",
             border_width=1,
             text_color=("gray10", "#DCE4EE")
@@ -280,7 +289,7 @@ class DashboardFrame(ctk.CTkFrame):
 class SettingsFrame(ctk.CTkFrame):
     """
     Advanced configuration: Profiles, Filters, Formatting.
-    Wrapped in ScrollableFrame for small screens (Fix #8).
+    Wrapped in ScrollableFrame for small screens.
     """
 
     def __init__(self, master: Any, config: Dict[str, Any], profile_names: List[str], **kwargs: Any):
@@ -294,11 +303,14 @@ class SettingsFrame(ctk.CTkFrame):
         self.scroll.grid(row=0, column=0, sticky="nsew")
         self.scroll.grid_columnconfigure(0, weight=1)
 
-        # 1. Profiles (Moved to Top)
+        # 1. Profiles
         self.frame_profiles = ctk.CTkFrame(self.scroll)
         self.frame_profiles.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(self.frame_profiles, text="Profiles", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10,
-                                                                                                 pady=5)
+        ctk.CTkLabel(
+            self.frame_profiles,
+            text=i18n.t("gui.labels.profile"),
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=10, pady=5)
 
         self.combo_profiles = ctk.CTkComboBox(
             self.frame_profiles,
@@ -307,12 +319,12 @@ class SettingsFrame(ctk.CTkFrame):
         )
         self.combo_profiles.pack(side="left", padx=10, pady=10, fill="x", expand=True)
 
-        self.btn_load = ctk.CTkButton(self.frame_profiles, text="Load", width=60)
+        self.btn_load = ctk.CTkButton(self.frame_profiles, text=i18n.t("gui.profiles.load"), width=60)
         self.btn_load.pack(side="left", padx=5)
-        self.btn_save = ctk.CTkButton(self.frame_profiles, text="Save", width=60)
+        self.btn_save = ctk.CTkButton(self.frame_profiles, text=i18n.t("gui.profiles.save"), width=60)
         self.btn_save.pack(side="left", padx=5)
-        self.btn_del = ctk.CTkButton(self.frame_profiles, text="Del", width=60, fg_color="#D9534F",
-                                     hover_color="#C9302C")
+        self.btn_del = ctk.CTkButton(self.frame_profiles, text=i18n.t("gui.profiles.del"), width=60,
+                                     fg_color="#D9534F", hover_color="#C9302C")
         self.btn_del.pack(side="left", padx=5)
 
         # 2. Quick Stack Presets
@@ -326,7 +338,7 @@ class SettingsFrame(ctk.CTkFrame):
 
         self.combo_stack = ctk.CTkComboBox(
             self.frame_stack,
-            values=["-- Select Stack --"] + sorted(list(cfg.DEFAULT_STACKS.keys())),
+            values=[i18n.t("gui.combos.select_stack")] + sorted(list(cfg.DEFAULT_STACKS.keys())),
             width=300,
             state="readonly"
         )
@@ -337,22 +349,25 @@ class SettingsFrame(ctk.CTkFrame):
         self.frame_filters.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         self.frame_filters.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(self.frame_filters, text="Extensions:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(self.frame_filters, text=i18n.t("gui.labels.extensions")).grid(row=0, column=0, padx=10, pady=10,
+                                                                                    sticky="w")
         self.entry_ext = ctk.CTkEntry(self.frame_filters)
         self.entry_ext.insert(0, ",".join(config.get("extensions", [])))
         self.entry_ext.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(self.frame_filters, text="Include Regex:").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(self.frame_filters, text=i18n.t("gui.labels.include")).grid(row=1, column=0, padx=10, pady=10,
+                                                                                 sticky="w")
         self.entry_inc = ctk.CTkEntry(self.frame_filters)
         self.entry_inc.insert(0, ",".join(config.get("include_patterns", [])))
         self.entry_inc.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
 
-        ctk.CTkLabel(self.frame_filters, text="Exclude Regex:").grid(row=2, column=0, padx=10, pady=10, sticky="w")
+        ctk.CTkLabel(self.frame_filters, text=i18n.t("gui.labels.exclude")).grid(row=2, column=0, padx=10, pady=10,
+                                                                                 sticky="w")
         self.entry_exc = ctk.CTkEntry(self.frame_filters)
         self.entry_exc.insert(0, ",".join(config.get("exclude_patterns", [])))
         self.entry_exc.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
 
-        self.sw_gitignore = ctk.CTkSwitch(self.frame_filters, text="Respect .gitignore")
+        self.sw_gitignore = ctk.CTkSwitch(self.frame_filters, text=i18n.t("gui.checkboxes.gitignore"))
         if config.get("respect_gitignore"): self.sw_gitignore.select()
         self.sw_gitignore.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
 
@@ -360,21 +375,27 @@ class SettingsFrame(ctk.CTkFrame):
         self.frame_fmt = ctk.CTkFrame(self.scroll)
         self.frame_fmt.grid(row=3, column=0, sticky="ew", pady=(0, 10))
 
-        ctk.CTkLabel(self.frame_fmt, text="Output Strategy", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10,
-                                                                                                   pady=5)
+        ctk.CTkLabel(
+            self.frame_fmt,
+            text=i18n.t("gui.settings.output_strat"),
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=10, pady=5)
 
-        self.sw_individual = ctk.CTkSwitch(self.frame_fmt, text="Create Individual Files")
+        self.sw_individual = ctk.CTkSwitch(self.frame_fmt, text=i18n.t("gui.checkboxes.individual"))
         if config.get("create_individual_files"): self.sw_individual.select()
         self.sw_individual.pack(anchor="w", padx=10, pady=5)
 
-        self.sw_unified = ctk.CTkSwitch(self.frame_fmt, text="Create Unified Context File")
+        self.sw_unified = ctk.CTkSwitch(self.frame_fmt, text=i18n.t("gui.checkboxes.unified"))
         if config.get("create_unified_file"): self.sw_unified.select()
         self.sw_unified.pack(anchor="w", padx=10, pady=5)
 
-        ctk.CTkLabel(self.frame_fmt, text="Security & Optimization", font=ctk.CTkFont(weight="bold")).pack(anchor="w",
-                                                                                                           padx=10,
-                                                                                                           pady=(15, 5))
+        ctk.CTkLabel(
+            self.frame_fmt,
+            text=i18n.t("gui.settings.security"),
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=10, pady=(15, 5))
 
+        # Security switches
         self.sw_sanitizer = ctk.CTkSwitch(self.frame_fmt, text="Sanitize Secrets (Redact Keys/IPs)")
         if config.get("enable_sanitizer"): self.sw_sanitizer.select()
         self.sw_sanitizer.pack(anchor="w", padx=10, pady=5)
@@ -387,12 +408,12 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("minify_output"): self.sw_minify.select()
         self.sw_minify.pack(anchor="w", padx=10, pady=5)
 
-        # Restored: Save Error Log
+        # Save Error Log
         self.sw_error_log = ctk.CTkSwitch(self.frame_fmt, text=i18n.t("gui.checkboxes.log_err"))
         if config.get("save_error_log"): self.sw_error_log.select()
         self.sw_error_log.pack(anchor="w", padx=10, pady=5)
 
-        # Restored: Reset Config Button
+        # Reset Config Button
         self.btn_reset = ctk.CTkButton(
             self.scroll,
             text=i18n.t("gui.buttons.reset"),
@@ -419,7 +440,11 @@ class LogsFrame(ctk.CTkFrame):
         self.textbox = ctk.CTkTextbox(self, state="disabled", font=("Consolas", 10))
         self.textbox.grid(row=0, column=0, sticky="nsew")
 
-        self.btn_copy = ctk.CTkButton(self, text="Copy Logs", command=self._copy_logs)
+        self.btn_copy = ctk.CTkButton(
+            self,
+            text=i18n.t("gui.logs.copy"),
+            command=self._copy_logs
+        )
         self.btn_copy.grid(row=1, column=0, pady=10, sticky="e")
 
     def append_log(self, msg: str) -> None:

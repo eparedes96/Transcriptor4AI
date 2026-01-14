@@ -52,7 +52,7 @@ def open_file_explorer(path: str) -> None:
             subprocess.Popen(["xdg-open", path])
     except Exception as e:
         logger.error(f"Failed to open file explorer: {e}")
-        mb.showerror("Error", f"Could not open folder:\n{e}")
+        mb.showerror(i18n.t("gui.dialogs.error_title"), f"Could not open folder:\n{e}")
 
 
 def parse_list_from_string(value: Optional[str]) -> List[str]:
@@ -140,7 +140,7 @@ class AppController:
         self.settings_view.entry_exc.insert(0, ",".join(self.config.get("exclude_patterns", [])))
 
         self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
-        self.settings_view.combo_stack.set("-- Select Stack --")
+        self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
         self._set_switch(self.settings_view.sw_gitignore, "respect_gitignore")
         self._set_switch(self.settings_view.sw_individual, "create_individual_files")
         self._set_switch(self.settings_view.sw_unified, "create_unified_file")
@@ -166,10 +166,10 @@ class AppController:
         if not self.dashboard_view: return
 
         # Dashboard
-        self.config["input_path"] = self.dashboard_view.entry_input.get()
-        self.config["output_base_dir"] = self.dashboard_view.entry_output.get()
-        self.config["output_subdir_name"] = self.dashboard_view.entry_subdir.get()
-        self.config["output_prefix"] = self.dashboard_view.entry_prefix.get()
+        self.config["input_path"] = self.dashboard_view.entry_input.get().strip()
+        self.config["output_base_dir"] = self.dashboard_view.entry_output.get().strip()
+        self.config["output_subdir_name"] = self.dashboard_view.entry_subdir.get().strip()
+        self.config["output_prefix"] = self.dashboard_view.entry_prefix.get().strip()
 
         self.config["process_modules"] = bool(self.dashboard_view.sw_modules.get())
         self.config["process_tests"] = bool(self.dashboard_view.sw_tests.get())
@@ -181,7 +181,7 @@ class AppController:
         self.config["show_classes"] = bool(self.dashboard_view.chk_class.get())
         self.config["show_methods"] = bool(self.dashboard_view.chk_meth.get())
 
-        # Settings
+        # Settings - Strict List Parsing
         self.config["extensions"] = parse_list_from_string(self.settings_view.entry_ext.get())
         self.config["include_patterns"] = parse_list_from_string(self.settings_view.entry_inc.get())
         self.config["exclude_patterns"] = parse_list_from_string(self.settings_view.entry_exc.get())
@@ -198,17 +198,21 @@ class AppController:
     def start_processing(self, dry_run: bool = False, overwrite: bool = False) -> None:
         self.sync_config_from_view()
 
-        if not os.path.isdir(self.config["input_path"]):
-            mb.showerror("Error", "Invalid Input Directory")
+        input_path = self.config.get("input_path", "")
+        if not os.path.isdir(input_path):
+            mb.showerror(i18n.t("gui.dialogs.error_title"), i18n.t("gui.dialogs.invalid_input"))
             return
 
         self._toggle_ui(disabled=True)
-        btn_text = "SIMULATING..." if dry_run else "PROCESSING..."
+        btn_text = i18n.t("gui.dashboard.btn_simulating") if dry_run else "PROCESSING..."
         self.dashboard_view.btn_process.configure(text=btn_text, fg_color="gray")
 
         self._cancellation_event.clear()
 
-        # Start thread with explicit overwrite flag (from logic flow, not UI switch)
+        # Debug log to verify data integrity before core execution
+        logger.debug(f"Starting pipeline (DryRun={dry_run}). Config Payload: {self.config}")
+
+        # Start thread
         threading.Thread(
             target=threads.run_pipeline_task,
             args=(self.config, overwrite, dry_run, self._on_process_complete, self._cancellation_event),
@@ -228,13 +232,13 @@ class AppController:
                     return
 
         self._toggle_ui(disabled=False)
-        self.dashboard_view.btn_process.configure(text="START PROCESSING", fg_color="#007ACC")
+        self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#007ACC")
 
         if isinstance(result, PipelineResult):
             if result.ok:
                 show_results_window(self.app, result)
             else:
-                mb.showerror("Pipeline Failed", result.error)
+                mb.showerror(i18n.t("gui.dialogs.pipeline_failed"), result.error)
         elif isinstance(result, Exception):
             show_crash_modal(str(result), "See logs for details.", self.app)
 
@@ -252,7 +256,7 @@ class AppController:
             self.config["extensions"] = extensions
 
     def on_tree_toggled(self) -> None:
-        """Show/Hide AST options based on Tree Switch state (Fix #1)."""
+        """Show/Hide AST options based on Tree Switch state."""
         if self.dashboard_view.sw_tree.get():
             self.dashboard_view.frame_ast.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         else:
@@ -260,10 +264,10 @@ class AppController:
 
     def reset_config(self) -> None:
         """Reset the current configuration to factory defaults."""
-        if mb.askyesno("Confirm Reset", "Are you sure you want to reset all settings to their defaults?"):
+        if mb.askyesno(i18n.t("gui.dialogs.confirm_title"), "Are you sure you want to reset all settings to their defaults?"):
             self.config = cfg.get_default_config()
             self.sync_view_from_config()
-            mb.showinfo("Success", "Settings have been reset to default.")
+            mb.showinfo(i18n.t("gui.dialogs.success_title"), "Settings have been reset to default.")
 
     # --- Profile Management ---
     def load_profile(self) -> None:
@@ -276,11 +280,11 @@ class AppController:
             temp.update(profiles[name])
             self.config.update(temp)
             self.sync_view_from_config()
-            self.settings_view.combo_stack.set("-- Select Stack --")
-            mb.showinfo("Success", f"Profile '{name}' loaded.")
+            self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
+            mb.showinfo(i18n.t("gui.dialogs.success_title"), f"Profile '{name}' loaded.")
 
     def save_profile(self) -> None:
-        dialog = ctk.CTkInputDialog(text="Enter profile name:", title="Save Profile")
+        dialog = ctk.CTkInputDialog(text=i18n.t("gui.profiles.prompt_name"), title="Save Profile")
         name = dialog.get_input()
         if name:
             name = name.strip()
@@ -296,7 +300,7 @@ class AppController:
             self.app_state.setdefault("saved_profiles", {})[name] = self.config.copy()
             cfg.save_app_state(self.app_state)
             self._update_profile_list(name)
-            mb.showinfo("Saved", f"Profile '{name}' saved.")
+            mb.showinfo(i18n.t("gui.dialogs.saved_title"), i18n.t("gui.profiles.saved", name=name))
 
     def delete_profile(self) -> None:
         name = self.settings_view.combo_profiles.get()
@@ -304,7 +308,7 @@ class AppController:
 
         profiles = self.app_state.get("saved_profiles", {})
         if name in profiles:
-            if mb.askyesno("Confirm", f"Delete profile '{name}'?"):
+            if mb.askyesno(i18n.t("gui.dialogs.confirm_title"), i18n.t("gui.profiles.confirm_delete", name=name)):
                 del profiles[name]
                 cfg.save_app_state(self.app_state)
                 self._update_profile_list()
@@ -327,13 +331,13 @@ class AppController:
 def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
     """Display execution results in a Toplevel window."""
     toplevel = ctk.CTkToplevel(parent)
-    toplevel.title("Execution Result")
+    toplevel.title(i18n.t("gui.popups.title_result"))
     toplevel.geometry("600x500")
     toplevel.grab_set()
 
     summary = result.summary or {}
     dry_run = summary.get("dry_run", False)
-    header = "SIMULATION COMPLETE" if dry_run else "PROCESS COMPLETED"
+    header = i18n.t("gui.results_window.dry_run_header") if dry_run else i18n.t("gui.results_window.success_header")
     color = "#007ACC" if dry_run else "#2CC985"
 
     # Header
@@ -346,12 +350,11 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
     # Stats
     stats_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     stats_frame.pack(pady=10)
-    ctk.CTkLabel(stats_frame, text=f"Processed: {summary.get('processed', 0)}").pack()
-    ctk.CTkLabel(stats_frame, text=f"Skipped: {summary.get('skipped', 0)}").pack()
-    ctk.CTkLabel(stats_frame, text=f"Est. Tokens: {result.token_count:,}").pack()
+    ctk.CTkLabel(stats_frame, text=f"{i18n.t('gui.results_window.stats_processed')}: {summary.get('processed', 0)}").pack()
+    ctk.CTkLabel(stats_frame, text=f"{i18n.t('gui.results_window.stats_skipped')}: {summary.get('skipped', 0)}").pack()
+    ctk.CTkLabel(stats_frame, text=f"{i18n.t('gui.results_window.stats_tokens')}: {result.token_count:,}").pack()
 
-    # Files List
-    ctk.CTkLabel(toplevel, text="Generated Files:").pack(pady=(20, 5))
+    ctk.CTkLabel(toplevel, text=i18n.t("gui.results_window.files_label")).pack(pady=(20, 5))
     scroll_frame = ctk.CTkScrollableFrame(toplevel, height=150)
     scroll_frame.pack(fill="x", padx=20)
 
@@ -376,18 +379,18 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
                 with open(unified_path, "r", encoding="utf-8") as f:
                     parent.clipboard_clear()
                     parent.clipboard_append(f.read())
-                mb.showinfo("Copied", "Unified content copied to clipboard.")
+                mb.showinfo(i18n.t("gui.results_window.copied_msg"), "Unified content copied to clipboard.")
             except Exception as e:
-                mb.showerror("Error", str(e))
+                mb.showerror(i18n.t("gui.dialogs.error_title"), str(e))
 
-    ctk.CTkButton(btn_frame, text="Open Folder", command=_open).pack(side="left", expand=True, padx=5)
+    ctk.CTkButton(btn_frame, text=i18n.t("gui.results_window.btn_open"), command=_open).pack(side="left", expand=True, padx=5)
 
-    copy_btn = ctk.CTkButton(btn_frame, text="Copy Unified", command=_copy)
+    copy_btn = ctk.CTkButton(btn_frame, text=i18n.t("gui.results_window.btn_copy"), command=_copy)
     copy_btn.pack(side="left", expand=True, padx=5)
     if dry_run or not unified_path:
         copy_btn.configure(state="disabled")
 
-    ctk.CTkButton(btn_frame, text="Close", fg_color="transparent", border_width=1,
+    ctk.CTkButton(btn_frame, text=i18n.t("gui.results_window.btn_close"), fg_color="transparent", border_width=1,
                   text_color=("gray10", "#DCE4EE"),
                   command=toplevel.destroy).pack(side="left", expand=True, padx=5)
 
@@ -425,7 +428,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
 
     def _send():
         if not subject.get() or not msg.get("1.0", "end").strip():
-            mb.showerror("Error", "Please fill all fields.")
+            mb.showerror(i18n.t("gui.dialogs.error_title"), "Please fill all fields.")
             return
 
         # Prepare payload
@@ -444,7 +447,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
         ).start()
 
         toplevel.destroy()
-        mb.showinfo("Feedback", "Sending feedback in background...")
+        mb.showinfo("Feedback", i18n.t("gui.dialogs.sending_feedback"))
 
     def _on_sent(result: Tuple[bool, str]) -> None:
         pass
@@ -472,12 +475,12 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
         is_root_created = True
 
     toplevel = ctk.CTkToplevel(parent)
-    toplevel.title("Critical Error")
+    toplevel.title(i18n.t("gui.crash.title"))
     toplevel.geometry("700x500")
     toplevel.grab_set()
 
     ctk.CTkLabel(
-        toplevel, text="CRITICAL ERROR DETECTED",
+        toplevel, text=i18n.t("gui.crash.header"),
         font=ctk.CTkFont(size=16, weight="bold"),
         text_color="#D9534F"
     ).pack(pady=20)
@@ -514,7 +517,7 @@ def show_update_prompt_modal(
     Shows a modal for updates. Returns True if user accepts OTA download.
     """
     if not mb.askyesno(
-            "Update Available",
+            i18n.t("gui.dialogs.update_title"),
             f"Version v{latest_version} is available.\n\nDownload now?"
     ):
         return False

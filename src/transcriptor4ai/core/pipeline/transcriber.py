@@ -22,6 +22,8 @@ from transcriptor4ai.core.pipeline.filters import (
     load_gitignore_patterns,
     matches_any,
     matches_include,
+    is_resource_file,
+    is_test
 )
 from transcriptor4ai.core.pipeline.worker import process_file_task
 from transcriptor4ai.core.pipeline.writer import initialize_output_file
@@ -141,12 +143,36 @@ def transcribe_code(
             files.sort()
 
             for file_name in files:
-                if matches_any(file_name, exclude_rx) or not matches_include(file_name, include_rx):
+                # Global Filters
+                if matches_any(file_name, exclude_rx):
+                    results["skipped"] += 1
+                    continue
+
+                # Check inclusion pattern
+                if not matches_include(file_name, include_rx):
                     results["skipped"] += 1
                     continue
 
                 _, ext = os.path.splitext(file_name)
-                if ext not in extensions and file_name not in extensions:
+
+                # ------ INICIO DE MODIFICACIÓN: V2.0.0 Phase 8 Logic Fix ------
+                # Priority Logic: Check specialized types BEFORE generic extension filter
+                should_process = False
+
+                # 1. Is Resource?
+                if process_resources and is_resource_file(file_name):
+                    should_process = True
+
+                # 2. Is Test?
+                elif process_tests and is_test(file_name):
+                    should_process = True
+
+                # 3. Is Module/Code?
+                elif process_modules:
+                    if ext in extensions or file_name in extensions:
+                        should_process = True
+
+                if not should_process:
                     results["skipped"] += 1
                     continue
 

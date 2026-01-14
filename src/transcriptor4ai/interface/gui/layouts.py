@@ -17,8 +17,10 @@ import logging
 from typing import Dict, Any, List, Optional
 
 import customtkinter as ctk
+
 try:
     from tkinterdnd2 import TkinterDnD
+
     _DND_AVAILABLE = True
 except ImportError:
     _DND_AVAILABLE = False
@@ -37,6 +39,7 @@ class CtkDnDWrapper(ctk.CTk, TkinterDnD.DnDWrapper):
     Wrapper to mix CustomTkinter with TkinterDnD2.
     Allows the main window to accept Drag & Drop events.
     """
+
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self.TkdndVersion = TkinterDnD._require(self)
@@ -49,6 +52,7 @@ class SidebarFrame(ctk.CTkFrame):
     """
     Left navigation panel containing branding, menu buttons, and update badges.
     """
+
     def __init__(self, master: Any, nav_callback: Any, **kwargs: Any):
         super().__init__(master, width=200, corner_radius=0, **kwargs)
 
@@ -121,7 +125,8 @@ class SidebarFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
             fg_color="transparent",
             border_width=1,
-            height=25
+            height=25,
+            text_color=("gray10", "#DCE4EE")
         )
         self.btn_feedback.grid(row=6, column=0, padx=20, pady=(0, 10))
 
@@ -131,36 +136,61 @@ class SidebarFrame(ctk.CTkFrame):
 # =============================================================================
 class DashboardFrame(ctk.CTkFrame):
     """
-    Main workspace: IO paths, Stack selection, Action buttons.
+    Main workspace: IO paths, Action buttons.
+    Wrapped in ScrollableFrame for small screens (Fix #8).
     """
+
     def __init__(self, master: Any, config: Dict[str, Any], **kwargs: Any):
         super().__init__(master, corner_radius=10, fg_color="transparent", **kwargs)
-        self.grid_columnconfigure(1, weight=1)
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Main scroll container
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.grid(row=0, column=0, sticky="nsew")
+        self.scroll.grid_columnconfigure(0, weight=1)
 
         # --- Section 1: Input / Output ---
-        self.frame_io = ctk.CTkFrame(self)
-        self.frame_io.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        self.frame_io = ctk.CTkFrame(self.scroll)
+        self.frame_io.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         self.frame_io.grid_columnconfigure(1, weight=1)
 
-        # Input
-        ctk.CTkLabel(self.frame_io, text="Source Code:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
+        # Input Header
+        ctk.CTkLabel(
+            self.frame_io,
+            text="Source Directory Path",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("gray40", "gray60")
+        ).grid(row=0, column=0, columnspan=3, padx=10, pady=(10, 0), sticky="w")
+
+        # Input Controls
+        ctk.CTkLabel(self.frame_io, text="Path:").grid(row=1, column=0, padx=10, pady=10, sticky="w")
         self.entry_input = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/project")
         self.entry_input.insert(0, config.get("input_path", ""))
-        self.entry_input.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
+        self.entry_input.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
         self.btn_browse_in = ctk.CTkButton(self.frame_io, text="Browse", width=80)
-        self.btn_browse_in.grid(row=0, column=2, padx=10, pady=10)
+        self.btn_browse_in.grid(row=1, column=2, padx=10, pady=10)
 
-        # Output
-        ctk.CTkLabel(self.frame_io, text="Output Dir:").grid(row=1, column=0, padx=10, pady=10, sticky="w")
+        # Output Header
+        ctk.CTkLabel(
+            self.frame_io,
+            text="Destination Directory",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color=("gray40", "gray60")
+        ).grid(row=2, column=0, columnspan=3, padx=10, pady=(10, 0), sticky="w")
+
+        # Output Controls
+        ctk.CTkLabel(self.frame_io, text="Base Dir:").grid(row=3, column=0, padx=10, pady=10, sticky="w")
         self.entry_output = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/output")
         self.entry_output.insert(0, config.get("output_base_dir", ""))
-        self.entry_output.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
+        self.entry_output.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
         self.btn_browse_out = ctk.CTkButton(self.frame_io, text="Browse", width=80)
-        self.btn_browse_out.grid(row=1, column=2, padx=10, pady=10)
+        self.btn_browse_out.grid(row=3, column=2, padx=10, pady=10)
 
         # Subdir & Prefix
         self.frame_sub = ctk.CTkFrame(self.frame_io, fg_color="transparent")
-        self.frame_sub.grid(row=2, column=1, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+        self.frame_sub.grid(row=4, column=1, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
 
         self.entry_subdir = ctk.CTkEntry(self.frame_sub, width=150, placeholder_text="Subdir")
         self.entry_subdir.insert(0, config.get("output_subdir_name", ""))
@@ -171,8 +201,8 @@ class DashboardFrame(ctk.CTkFrame):
         self.entry_prefix.pack(side="left")
 
         # --- Section 2: Quick Toggles ---
-        self.frame_opts = ctk.CTkFrame(self)
-        self.frame_opts.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        self.frame_opts = ctk.CTkFrame(self.scroll)
+        self.frame_opts.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self.frame_opts.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.sw_modules = ctk.CTkSwitch(self.frame_opts, text="Modules (Source)")
@@ -191,30 +221,24 @@ class DashboardFrame(ctk.CTkFrame):
         if config.get("generate_tree"): self.sw_tree.select()
         self.sw_tree.grid(row=1, column=0, padx=20, pady=15, sticky="w")
 
-        self.combo_stack = ctk.CTkComboBox(
-            self.frame_opts,
-            values=["-- Select Stack --"] + sorted(list(cfg.DEFAULT_STACKS.keys())),
-            width=200
-        )
-        self.combo_stack.grid(row=1, column=1, columnspan=2, padx=20, pady=15, sticky="e")
-
         # --- Section 3: Action Bar ---
         self.btn_process = ctk.CTkButton(
-            self,
+            self.scroll,
             text="START PROCESSING",
             height=50,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#007ACC"
         )
-        self.btn_process.grid(row=3, column=0, columnspan=2, sticky="ew", pady=20)
+        self.btn_process.grid(row=2, column=0, sticky="ew", pady=20, padx=10)
 
         self.btn_simulate = ctk.CTkButton(
-            self,
+            self.scroll,
             text="Simulate (Dry Run)",
             fg_color="transparent",
-            border_width=1
+            border_width=1,
+            text_color=("gray10", "#DCE4EE")
         )
-        self.btn_simulate.grid(row=4, column=0, columnspan=2, sticky="ew")
+        self.btn_simulate.grid(row=3, column=0, sticky="ew", padx=10)
 
 
 # =============================================================================
@@ -223,15 +247,41 @@ class DashboardFrame(ctk.CTkFrame):
 class SettingsFrame(ctk.CTkFrame):
     """
     Advanced configuration: Profiles, Filters, Formatting.
+    Wrapped in ScrollableFrame for small screens (Fix #8).
     """
+
     def __init__(self, master: Any, config: Dict[str, Any], profile_names: List[str], **kwargs: Any):
         super().__init__(master, corner_radius=10, fg_color="transparent", **kwargs)
+
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
+        # Main scroll container
+        self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self.scroll.grid(row=0, column=0, sticky="nsew")
+        self.scroll.grid_columnconfigure(0, weight=1)
+
+        # 0. Quick Stack Presets
+        self.frame_stack = ctk.CTkFrame(self.scroll)
+        self.frame_stack.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        ctk.CTkLabel(
+            self.frame_stack,
+            text=i18n.t("gui.settings.stack_header"),
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=10, pady=5)
+
+        self.combo_stack = ctk.CTkComboBox(
+            self.frame_stack,
+            values=["-- Select Stack --"] + sorted(list(cfg.DEFAULT_STACKS.keys())),
+            width=300
+        )
+        self.combo_stack.pack(padx=10, pady=10, anchor="w")
 
         # 1. Profiles
-        self.frame_profiles = ctk.CTkFrame(self)
-        self.frame_profiles.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(self.frame_profiles, text="Profiles", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=5)
+        self.frame_profiles = ctk.CTkFrame(self.scroll)
+        self.frame_profiles.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        ctk.CTkLabel(self.frame_profiles, text="Profiles", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10,
+                                                                                                 pady=5)
 
         self.combo_profiles = ctk.CTkComboBox(self.frame_profiles, values=profile_names)
         self.combo_profiles.pack(side="left", padx=10, pady=10, fill="x", expand=True)
@@ -240,12 +290,13 @@ class SettingsFrame(ctk.CTkFrame):
         self.btn_load.pack(side="left", padx=5)
         self.btn_save = ctk.CTkButton(self.frame_profiles, text="Save", width=60)
         self.btn_save.pack(side="left", padx=5)
-        self.btn_del = ctk.CTkButton(self.frame_profiles, text="Del", width=60, fg_color="#D9534F", hover_color="#C9302C")
+        self.btn_del = ctk.CTkButton(self.frame_profiles, text="Del", width=60, fg_color="#D9534F",
+                                     hover_color="#C9302C")
         self.btn_del.pack(side="left", padx=5)
 
         # 2. Filters
-        self.frame_filters = ctk.CTkFrame(self)
-        self.frame_filters.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        self.frame_filters = ctk.CTkFrame(self.scroll)
+        self.frame_filters.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         self.frame_filters.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(self.frame_filters, text="Extensions:").grid(row=0, column=0, padx=10, pady=10, sticky="w")
@@ -268,10 +319,11 @@ class SettingsFrame(ctk.CTkFrame):
         self.sw_gitignore.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
 
         # 3. Formatting & Security
-        self.frame_fmt = ctk.CTkFrame(self)
-        self.frame_fmt.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.frame_fmt = ctk.CTkFrame(self.scroll)
+        self.frame_fmt.grid(row=3, column=0, sticky="ew", pady=(0, 10))
 
-        ctk.CTkLabel(self.frame_fmt, text="Output Strategy", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=5)
+        ctk.CTkLabel(self.frame_fmt, text="Output Strategy", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10,
+                                                                                                   pady=5)
 
         self.sw_individual = ctk.CTkSwitch(self.frame_fmt, text="Create Individual Files")
         if config.get("create_individual_files"): self.sw_individual.select()
@@ -281,7 +333,12 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("create_unified_file"): self.sw_unified.select()
         self.sw_unified.pack(anchor="w", padx=10, pady=5)
 
-        ctk.CTkLabel(self.frame_fmt, text="Security & Optimization", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(15, 5))
+        self.sw_overwrite = ctk.CTkSwitch(self.frame_fmt, text=i18n.t("gui.checkboxes.overwrite"))
+        self.sw_overwrite.pack(anchor="w", padx=10, pady=5)
+
+        ctk.CTkLabel(self.frame_fmt, text="Security & Optimization", font=ctk.CTkFont(weight="bold")).pack(anchor="w",
+                                                                                                           padx=10,
+                                                                                                           pady=(15, 5))
 
         self.sw_sanitizer = ctk.CTkSwitch(self.frame_fmt, text="Sanitize Secrets (Redact Keys/IPs)")
         if config.get("enable_sanitizer"): self.sw_sanitizer.select()
@@ -295,6 +352,21 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("minify_output"): self.sw_minify.select()
         self.sw_minify.pack(anchor="w", padx=10, pady=5)
 
+        # Restored: Save Error Log
+        self.sw_error_log = ctk.CTkSwitch(self.frame_fmt, text=i18n.t("gui.checkboxes.log_err"))
+        if config.get("save_error_log"): self.sw_error_log.select()
+        self.sw_error_log.pack(anchor="w", padx=10, pady=5)
+
+        # Restored: Reset Config Button
+        self.btn_reset = ctk.CTkButton(
+            self.scroll,
+            text=i18n.t("gui.buttons.reset"),
+            fg_color="transparent",
+            border_width=1,
+            text_color=("gray10", "#DCE4EE")
+        )
+        self.btn_reset.grid(row=4, column=0, pady=20, padx=10)
+
 
 # =============================================================================
 # Logs Console
@@ -303,6 +375,7 @@ class LogsFrame(ctk.CTkFrame):
     """
     Read-only console to display system logs in the UI.
     """
+
     def __init__(self, master: Any, **kwargs: Any):
         super().__init__(master, corner_radius=10, fg_color="transparent", **kwargs)
         self.grid_columnconfigure(0, weight=1)
@@ -353,7 +426,7 @@ def create_main_window(
         logger.warning("TkinterDnD not available. Drag & Drop disabled.")
 
     app.title(f"Transcriptor4AI - v{cfg.CURRENT_CONFIG_VERSION}")
-    app.geometry("1100x750")
+    app.geometry("1000x700")
 
     # Configure Grid Layout (1 Sidebar + 1 Content)
     app.grid_columnconfigure(1, weight=1)

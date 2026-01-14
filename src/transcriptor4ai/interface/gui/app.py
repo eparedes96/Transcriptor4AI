@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Main Entry Point for the Graphical User Interface (V2.0).
+Main Entry Point for the Graphical User Interface.
 
 This module orchestrates the application lifecycle using CustomTkinter:
 1. Initialization (Logging, State Load).
@@ -124,7 +124,8 @@ def main() -> None:
     settings_frame.btn_load.configure(command=controller.load_profile)
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
-
+    settings_frame.combo_stack.configure(command=controller.on_stack_selected)
+    settings_frame.btn_reset.configure(command=controller.reset_config)
     sidebar_frame.btn_feedback.configure(command=lambda: handlers.show_feedback_window(app))
 
     # -------------------------------------------------------------------------

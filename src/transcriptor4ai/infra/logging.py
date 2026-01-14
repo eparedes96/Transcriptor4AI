@@ -17,7 +17,7 @@ import sys
 import queue
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 
 from transcriptor4ai.infra.fs import get_user_data_dir
 
@@ -126,7 +126,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         console_formatter = logging.Formatter(cfg.console_fmt)
         file_formatter = logging.Formatter(cfg.file_fmt, datefmt=cfg.datefmt)
 
-        handlers_list = []
+        handlers_list: List[logging.Handler] = []
 
         # 1. Console Handler (Direct stderr)
         if cfg.console:
@@ -151,8 +151,9 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         if not handlers_list:
             return root
 
-        # 3. Thread-Safety: Setup QueueListener
-        log_queue = queue.Queue(-1)  # Unlimited size
+        # 3. Thread-Safety
+        log_queue: queue.Queue[logging.LogRecord] = queue.Queue(-1)  # Unlimited size
+
         queue_handler = QueueHandler(log_queue)
         _tag_handler(queue_handler)
 

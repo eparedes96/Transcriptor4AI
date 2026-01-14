@@ -15,7 +15,7 @@ import subprocess
 import threading
 import tkinter.messagebox as mb
 import webbrowser
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, cast
 
 import customtkinter as ctk
 
@@ -370,10 +370,10 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     btn_frame.pack(pady=20, fill="x", padx=20)
 
-    def _open():
+    def _open() -> None:
         open_file_explorer(result.final_output_path)
 
-    def _copy():
+    def _copy() -> None:
         if unified_path and os.path.exists(unified_path):
             try:
                 with open(unified_path, "r", encoding="utf-8") as f:
@@ -409,7 +409,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
     content_frame.pack(fill="x", padx=20)
 
     ctk.CTkLabel(content_frame, text=i18n.t("gui.feedback.type_label")).pack(anchor="w")
-    report_types = list(i18n.t("gui.feedback.types").values())
+    report_types = list(cast(Dict[str, str], i18n.t("gui.feedback.types")).values())
     report_type = ctk.CTkComboBox(content_frame, values=report_types, state="readonly")
     report_type.set(report_types[0])
     report_type.pack(fill="x", pady=(0, 10))
@@ -426,7 +426,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
     chk_logs.select()
     chk_logs.pack(anchor="w", pady=(0, 20))
 
-    def _send():
+    def _send() -> None:
         if not subject.get() or not msg.get("1.0", "end").strip():
             mb.showerror(i18n.t("gui.dialogs.error_title"), "Please fill all fields.")
             return
@@ -490,7 +490,7 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     textbox.configure(state="disabled")
     textbox.pack(fill="both", expand=True, padx=20, pady=10)
 
-    def _close():
+    def _close() -> None:
         toplevel.destroy()
         if is_root_created and parent:
             parent.destroy()

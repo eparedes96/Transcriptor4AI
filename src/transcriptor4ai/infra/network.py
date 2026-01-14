@@ -9,10 +9,16 @@ Handles external HTTP interactions including:
 - Secure transmission of telemetry and error reports.
 """
 
+import hashlib
 import logging
+import os
+import shutil
+from enum import Enum
 from typing import Any, Dict, Optional, Tuple, Callable
 
 import requests
+
+from transcriptor4ai.infra.fs import get_user_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +32,7 @@ GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/rel
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 
 TIMEOUT = 10
-USER_AGENT = "Transcriptor4AI-Client/1.6.0"
+USER_AGENT = "Transcriptor4AI-Client/2.0.0"
 CHUNK_SIZE = 8192
 
 
@@ -164,6 +170,92 @@ def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 # -----------------------------------------------------------------------------
+# V2.0.0 Update Manager (Silent OTA)
+# -----------------------------------------------------------------------------
+class UpdateStatus(Enum):
+    IDLE = "IDLE"
+    CHECKING = "CHECKING"
+    DOWNLOADING = "DOWNLOADING"
+    READY = "READY"
+    ERROR = "ERROR"
+
+
+class UpdateManager:
+    """
+    Manages the background update lifecycle: Check -> Download -> Verify -> Ready.
+    Designed to run in a daemon thread without blocking the UI.
+    """
+
+    def __init__(self) -> None:
+        self._status = UpdateStatus.IDLE
+        self._update_info: Dict[str, Any] = {}
+        self._temp_dir = os.path.join(get_user_data_dir(), "updates")
+        self._pending_binary_path: str = ""
+
+    @property
+    def status(self) -> UpdateStatus:
+        return self._status
+
+    @property
+    def update_info(self) -> Dict[str, Any]:
+        return self._update_info
+
+    @property
+    def pending_path(self) -> str:
+        return self._pending_binary_path
+
+    def run_silent_cycle(self, current_version: str) -> None:
+        """
+        Execute the full update check and download cycle silently.
+        """
+        self._status = UpdateStatus.CHECKING
+        try:
+            # 1. Prepare Staging Area
+            if os.path.exists(self._temp_dir):
+                try:
+                    shutil.rmtree(self._temp_dir)
+                except OSError:
+                    pass
+            os.makedirs(self._temp_dir, exist_ok=True)
+
+            # 2. Check
+            res = check_for_updates(current_version)
+            if not res.get("has_update") or not res.get("binary_url"):
+                self._status = UpdateStatus.IDLE
+                return
+
+            # 3. Download
+            self._status = UpdateStatus.DOWNLOADING
+            self._update_info = res
+            latest_version = res.get("latest_version", "unknown")
+            dest_path = os.path.join(self._temp_dir, f"transcriptor4ai_v{latest_version}.exe")
+
+            success, msg = download_binary_stream(res["binary_url"], dest_path)
+            if not success:
+                logger.error(f"Silent download failed: {msg}")
+                self._status = UpdateStatus.ERROR
+                return
+
+            # 4. Integrity Verification
+            expected_sha = res.get("sha256")
+            if expected_sha:
+                actual_sha = _calculate_sha256(dest_path)
+                if actual_sha.lower() != expected_sha.lower():
+                    logger.error("Silent update checksum mismatch. Discarding.")
+                    self._status = UpdateStatus.ERROR
+                    return
+
+            # 5. Ready
+            self._pending_binary_path = dest_path
+            self._status = UpdateStatus.READY
+            logger.info("Silent update ready for install.")
+
+        except Exception as e:
+            logger.error(f"Update cycle crashed: {e}")
+            self._status = UpdateStatus.ERROR
+
+
+# -----------------------------------------------------------------------------
 # Private Helpers
 # -----------------------------------------------------------------------------
 def _is_newer(current: str, latest: str) -> bool:
@@ -202,3 +294,15 @@ def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, st
         return False, f"Server rejected request ({response.status_code})"
     except requests.exceptions.RequestException as e:
         return False, str(e)
+
+
+def _calculate_sha256(file_path: str) -> str:
+    """Calculate SHA-256 hash of a file for integrity check."""
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception:
+        return ""

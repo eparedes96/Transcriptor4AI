@@ -75,7 +75,8 @@ def build() -> None:
         f'--paths={src_dir}',
         '--clean',
         '--collect-submodules=requests',
-        '--collect-submodules=PySimpleGUI',
+        '--collect-all=customtkinter',
+        '--collect-all=tkinterdnd2',
     ]
 
     # Add data resources

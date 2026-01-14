@@ -139,6 +139,7 @@ class AppController:
         self.settings_view.entry_exc.delete(0, "end")
         self.settings_view.entry_exc.insert(0, ",".join(self.config.get("exclude_patterns", [])))
 
+        self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
         self.settings_view.combo_stack.set("-- Select Stack --")
         self._set_switch(self.settings_view.sw_gitignore, "respect_gitignore")
         self._set_switch(self.settings_view.sw_individual, "create_individual_files")

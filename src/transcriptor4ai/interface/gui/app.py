@@ -114,6 +114,9 @@ def main() -> None:
     dashboard_frame.btn_process.configure(command=lambda: controller.start_processing(dry_run=False))
     dashboard_frame.btn_simulate.configure(command=lambda: controller.start_processing(dry_run=True))
 
+    # Link dynamic Tree Switch
+    dashboard_frame.sw_tree.configure(command=controller.on_tree_toggled)
+
     dashboard_frame.btn_browse_in.configure(
         command=lambda: _browse_folder(app, dashboard_frame.entry_input)
     )

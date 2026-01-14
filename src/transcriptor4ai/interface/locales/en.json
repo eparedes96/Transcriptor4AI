@@ -55,6 +55,8 @@
       "actions": "Actions:"
     },
     "labels": {
+      "subdir": "Output Subdirectory",
+      "prefix": "Filename Prefix",
       "extensions": "Extensions (comma-separated):",
       "include": "Include Patterns (Regex):",
       "exclude": "Exclude Patterns (Regex):",

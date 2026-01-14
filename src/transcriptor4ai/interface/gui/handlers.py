@@ -123,6 +123,14 @@ class AppController:
         self._set_switch(self.dashboard_view.sw_resources, "process_resources")
         self._set_switch(self.dashboard_view.sw_tree, "generate_tree")
 
+        # AST State Check
+        self.on_tree_toggled()
+
+        # AST Checkboxes
+        self._set_checkbox(self.dashboard_view.chk_func, "show_functions")
+        self._set_checkbox(self.dashboard_view.chk_class, "show_classes")
+        self._set_checkbox(self.dashboard_view.chk_meth, "show_methods")
+
         # Settings
         self.settings_view.entry_ext.delete(0, "end")
         self.settings_view.entry_ext.insert(0, ",".join(self.config.get("extensions", [])))
@@ -135,7 +143,6 @@ class AppController:
         self._set_switch(self.settings_view.sw_gitignore, "respect_gitignore")
         self._set_switch(self.settings_view.sw_individual, "create_individual_files")
         self._set_switch(self.settings_view.sw_unified, "create_unified_file")
-        self._set_switch(self.settings_view.sw_overwrite, "overwrite")
         self._set_switch(self.settings_view.sw_sanitizer, "enable_sanitizer")
         self._set_switch(self.settings_view.sw_mask, "mask_user_paths")
         self._set_switch(self.settings_view.sw_minify, "minify_output")
@@ -146,6 +153,12 @@ class AppController:
             switch.select()
         else:
             switch.deselect()
+
+    def _set_checkbox(self, chk: ctk.CTkCheckBox, key: str) -> None:
+        if self.config.get(key):
+            chk.select()
+        else:
+            chk.deselect()
 
     def sync_config_from_view(self) -> None:
         """Scrape values from UI widgets into self.config."""
@@ -162,6 +175,11 @@ class AppController:
         self.config["process_resources"] = bool(self.dashboard_view.sw_resources.get())
         self.config["generate_tree"] = bool(self.dashboard_view.sw_tree.get())
 
+        # AST
+        self.config["show_functions"] = bool(self.dashboard_view.chk_func.get())
+        self.config["show_classes"] = bool(self.dashboard_view.chk_class.get())
+        self.config["show_methods"] = bool(self.dashboard_view.chk_meth.get())
+
         # Settings
         self.config["extensions"] = parse_list_from_string(self.settings_view.entry_ext.get())
         self.config["include_patterns"] = parse_list_from_string(self.settings_view.entry_inc.get())
@@ -170,14 +188,13 @@ class AppController:
         self.config["respect_gitignore"] = bool(self.settings_view.sw_gitignore.get())
         self.config["create_individual_files"] = bool(self.settings_view.sw_individual.get())
         self.config["create_unified_file"] = bool(self.settings_view.sw_unified.get())
-        self.config["overwrite"] = bool(self.settings_view.sw_overwrite.get())
         self.config["enable_sanitizer"] = bool(self.settings_view.sw_sanitizer.get())
         self.config["mask_user_paths"] = bool(self.settings_view.sw_mask.get())
         self.config["minify_output"] = bool(self.settings_view.sw_minify.get())
         self.config["save_error_log"] = bool(self.settings_view.sw_error_log.get())
 
     # --- Actions ---
-    def start_processing(self, dry_run: bool = False) -> None:
+    def start_processing(self, dry_run: bool = False, overwrite: bool = False) -> None:
         self.sync_config_from_view()
 
         if not os.path.isdir(self.config["input_path"]):
@@ -190,12 +207,10 @@ class AppController:
 
         self._cancellation_event.clear()
 
-        overwrite_flag = bool(self.config.get("overwrite", False))
-
-        # Start thread
+        # Start thread with explicit overwrite flag (from logic flow, not UI switch)
         threading.Thread(
             target=threads.run_pipeline_task,
-            args=(self.config, overwrite_flag, dry_run, self._on_process_complete, self._cancellation_event),
+            args=(self.config, overwrite, dry_run, self._on_process_complete, self._cancellation_event),
             daemon=True
         ).start()
 
@@ -204,6 +219,13 @@ class AppController:
         self.app.after(0, lambda: self._handle_process_result(result))
 
     def _handle_process_result(self, result: Any) -> None:
+        if isinstance(result, PipelineResult) and not result.ok:
+            if result.existing_files:
+                msg = i18n.t("gui.popups.overwrite_msg", files="\n".join(result.existing_files))
+                if mb.askyesno(i18n.t("gui.popups.overwrite_title"), msg):
+                    self.start_processing(dry_run=False, overwrite=True)
+                    return
+
         self._toggle_ui(disabled=False)
         self.dashboard_view.btn_process.configure(text="START PROCESSING", fg_color="#007ACC")
 
@@ -228,13 +250,19 @@ class AppController:
             self.settings_view.entry_ext.insert(0, ",".join(extensions))
             self.config["extensions"] = extensions
 
+    def on_tree_toggled(self) -> None:
+        """Show/Hide AST options based on Tree Switch state (Fix #1)."""
+        if self.dashboard_view.sw_tree.get():
+            self.dashboard_view.frame_ast.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        else:
+            self.dashboard_view.frame_ast.grid_forget()
+
     def reset_config(self) -> None:
         """Reset the current configuration to factory defaults."""
         if mb.askyesno("Confirm Reset", "Are you sure you want to reset all settings to their defaults?"):
             self.config = cfg.get_default_config()
             self.sync_view_from_config()
             mb.showinfo("Success", "Settings have been reset to default.")
-
 
     # --- Profile Management ---
     def load_profile(self) -> None:
@@ -247,9 +275,7 @@ class AppController:
             temp.update(profiles[name])
             self.config.update(temp)
             self.sync_view_from_config()
-            # ------ INICIO DE MODIFICACIÓN: V2.0.0 UAT Stack Reset Fix ------
             self.settings_view.combo_stack.set("-- Select Stack --")
-            # ------ FIN DE MODIFICACIÓN: V2.0.0 UAT Stack Reset Fix ------
             mb.showinfo("Success", f"Profile '{name}' loaded.")
 
     def save_profile(self) -> None:
@@ -395,7 +421,6 @@ def show_feedback_window(parent: ctk.CTk) -> None:
     chk_logs = ctk.CTkCheckBox(content_frame, text="Include recent logs", onvalue=True, offvalue=False)
     chk_logs.select()
     chk_logs.pack(anchor="w", pady=(0, 20))
-
 
     def _send():
         if not subject.get() or not msg.get("1.0", "end").strip():

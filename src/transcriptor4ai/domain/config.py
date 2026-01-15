@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
 DEFAULT_OUTPUT_PREFIX = "transcription"
-CURRENT_CONFIG_VERSION = "1.6.0"
+CURRENT_CONFIG_VERSION = "2.0.0"
 
 # Immutable default extension stacks for quick selection
 DEFAULT_STACKS: Dict[str, List[str]] = {
@@ -40,6 +40,20 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
     ],
     "Documentation": [".md", ".rst", ".txt", ".pdf"],
 }
+
+AI_MODELS: Dict[str, Dict[str, str]] = {
+    "ChatGPT 4o": {"id": "chatgpt-4o-latest", "provider": "OPENAI"},
+    "ChatGPT 5.2 (Preview)": {"id": "gpt-5.2-chat-latest", "provider": "OPENAI"},
+    "Claude 3.5 Sonnet": {"id": "claude-3-5-sonnet-20240620", "provider": "ANTHROPIC"},
+    "Gemini 1.5 Pro": {"id": "gemini-1.5-pro", "provider": "GOOGLE"},
+    "Gemini 1.5 Flash": {"id": "gemini-1.5-flash", "provider": "GOOGLE"},
+    "Llama 3 70B": {"id": "meta-llama/Meta-Llama-3-70B", "provider": "HF_LOCAL"},
+    "Mistral Large": {"id": "mistral-large-latest", "provider": "MISTRAL"},
+    "Mistral OCR": {"id": "mistral-ocr", "provider": "MISTRAL_VISION"},
+    "DeepSeek V2": {"id": "deepseek-chat", "provider": "HF_LOCAL"},
+}
+
+DEFAULT_MODEL_KEY = "ChatGPT 4o"
 
 
 # -----------------------------------------------------------------------------
@@ -80,7 +94,7 @@ def get_default_config() -> Dict[str, Any]:
             r"^\."
         ],
         "respect_gitignore": False,
-        "target_model": "GPT-4o / GPT-5",
+        "target_model": DEFAULT_MODEL_KEY,
 
         # Analysis (Tree/AST)
         "generate_tree": True,

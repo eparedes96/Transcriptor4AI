@@ -131,7 +131,7 @@ class SidebarFrame(ctk.CTkFrame):
         self.btn_feedback.grid(row=6, column=0, padx=20, pady=(0, 10))
 
 
-# =============================================================================
+## =============================================================================
 # Dashboard (Main Operations)
 # =============================================================================
 class DashboardFrame(ctk.CTkFrame):
@@ -167,6 +167,7 @@ class DashboardFrame(ctk.CTkFrame):
         # Input Controls
         self.entry_input = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/project")
         self.entry_input.insert(0, config.get("input_path", ""))
+        self.entry_input.configure(state="readonly")  # Fix #11.2 Input Safety
         self.entry_input.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
 
         self.btn_browse_in = ctk.CTkButton(
@@ -187,6 +188,7 @@ class DashboardFrame(ctk.CTkFrame):
         # Output Controls
         self.entry_output = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/output")
         self.entry_output.insert(0, config.get("output_base_dir", ""))
+        self.entry_output.configure(state="readonly")  # Fix #11.2 Input Safety
         self.entry_output.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
 
         self.btn_browse_out = ctk.CTkButton(
@@ -344,9 +346,27 @@ class SettingsFrame(ctk.CTkFrame):
         )
         self.combo_stack.pack(padx=10, pady=10, anchor="w")
 
-        # 3. Filters
+        # 3. Model Selector
+        self.frame_model = ctk.CTkFrame(self.scroll)
+        self.frame_model.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        ctk.CTkLabel(
+            self.frame_model,
+            text=i18n.t("gui.settings.model_label"),  #
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=10, pady=5)
+
+        self.combo_model = ctk.CTkComboBox(
+            self.frame_model,
+            values=sorted(list(cfg.AI_MODELS.keys())),
+            width=300,
+            state="readonly"
+        )
+        self.combo_model.set(config.get("target_model", cfg.DEFAULT_MODEL_KEY))
+        self.combo_model.pack(padx=10, pady=10, anchor="w")
+
+        # 4. Filters
         self.frame_filters = ctk.CTkFrame(self.scroll)
-        self.frame_filters.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.frame_filters.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         self.frame_filters.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(self.frame_filters, text=i18n.t("gui.labels.extensions")).grid(row=0, column=0, padx=10, pady=10,
@@ -371,9 +391,9 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("respect_gitignore"): self.sw_gitignore.select()
         self.sw_gitignore.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
 
-        # 4. Formatting & Security
+        # 5. Formatting & Security
         self.frame_fmt = ctk.CTkFrame(self.scroll)
-        self.frame_fmt.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self.frame_fmt.grid(row=4, column=0, sticky="ew", pady=(0, 10))
 
         ctk.CTkLabel(
             self.frame_fmt,
@@ -421,7 +441,7 @@ class SettingsFrame(ctk.CTkFrame):
             border_width=1,
             text_color=("gray10", "#DCE4EE")
         )
-        self.btn_reset.grid(row=4, column=0, pady=20, padx=10)
+        self.btn_reset.grid(row=5, column=0, pady=20, padx=10)
 
 
 # =============================================================================

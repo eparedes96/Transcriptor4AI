@@ -117,6 +117,20 @@ def main() -> None:
     # Link dynamic Tree Switch
     dashboard_frame.sw_tree.configure(command=controller.on_tree_toggled)
 
+    # Configure input field for DnD
+    dashboard_frame.entry_input.drop_target_register("DND_Files")
+    dashboard_frame.entry_input.dnd_bind(
+        "<<Drop>>",
+        lambda e: controller.handle_path_drop(dashboard_frame.entry_input, e.data)
+    )
+
+    # Configure output field for DnD
+    dashboard_frame.entry_output.drop_target_register("DND_Files")
+    dashboard_frame.entry_output.dnd_bind(
+        "<<Drop>>",
+        lambda e: controller.handle_path_drop(dashboard_frame.entry_output, e.data)
+    )
+
     dashboard_frame.btn_browse_in.configure(
         command=lambda: _browse_folder(app, dashboard_frame.entry_input)
     )
@@ -128,6 +142,8 @@ def main() -> None:
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
     settings_frame.combo_stack.configure(command=controller.on_stack_selected)
+    settings_frame.combo_model.configure(command=controller.on_model_selected)
+
     settings_frame.btn_reset.configure(command=controller.reset_config)
     sidebar_frame.btn_feedback.configure(command=lambda: handlers.show_feedback_window(app))
 
@@ -200,8 +216,10 @@ def _browse_folder(app: ctk.CTk, entry_widget: ctk.CTkEntry) -> None:
     """Helper for folder selection dialog."""
     path = ctk.filedialog.askdirectory(parent=app, title="Select Directory")
     if path:
+        entry_widget.configure(state="normal")
         entry_widget.delete(0, "end")
         entry_widget.insert(0, path)
+        entry_widget.configure(state="readonly")
 
 
 if __name__ == "__main__":

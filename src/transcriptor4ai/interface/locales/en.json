@@ -128,7 +128,8 @@
     "settings": {
       "stack_header": "Quick Stack Presets",
       "output_strat": "Output Strategy",
-      "security": "Security & Optimization"
+      "security": "Security & Optimization",
+      "model_label": "Target AI Model"
     },
     "combos": {
       "select_stack": "-- Select Stack --",
@@ -194,6 +195,10 @@
       "btn_copy": "Copy Unified Output",
       "btn_close": "Close",
       "copied_msg": "Copied to clipboard!"
+    },
+    "errors": {
+      "tokenizer_api": "Tokenizer API Error (using estimate)",
+      "dnd_invalid": "Invalid path dropped"
     }
   }
 }

@@ -29,6 +29,10 @@ dependencies = [
     "ruff>=0.1.13",
     "pre-commit>=3.6.0",
     "python-semantic-release>=9.0.0",
+    "google-generativeai>=0.8.0",
+    "anthropic>=0.30.0",
+    "transformers>=4.40.0",
+    "mistral-common>=1.0.0",
 ]
 
 [project.urls]
@@ -71,6 +75,22 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "requests"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "google.generativeai"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "anthropic"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "transformers"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "mistral_common.*"
 ignore_missing_imports = true
 
 # =============================================================================

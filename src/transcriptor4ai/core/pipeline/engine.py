@@ -230,6 +230,7 @@ def run_pipeline(
                 target_model = cfg.get("target_model", "GPT-4o / GPT-5")
                 with open(path_unified, "r", encoding="utf-8") as f:
                     full_text = f.read()
+
                     final_token_count = count_tokens(full_text, model=target_model)
                     logger.info(f"Estimated token count ({target_model}): {final_token_count}")
             except Exception as e:
@@ -284,11 +285,11 @@ def run_pipeline(
         "unified_generated": unified_created,
         "dry_run": dry_run,
         "will_generate": list(files_to_check) if dry_run else [],
-        "V1.5_performance": {
+        "V2.0_performance": {
             "sanitizer": bool(cfg.get("enable_sanitizer")),
             "mask_paths": bool(cfg.get("mask_user_paths")),
             "minifier": bool(cfg.get("minify_output")),
-            "parallel_engine": True
+            "hybrid_tokenizer": True
         }
     }
 

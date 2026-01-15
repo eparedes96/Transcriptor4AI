@@ -14,7 +14,7 @@ import logging
 import queue
 import threading
 from logging.handlers import QueueHandler
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import customtkinter as ctk
 
@@ -117,23 +117,15 @@ def main() -> None:
     # Link dynamic Tree Switch
     dashboard_frame.sw_tree.configure(command=controller.on_tree_toggled)
 
-    # Configure input field for DnD
-    dashboard_frame.entry_input.drop_target_register("DND_Files")
-    dashboard_frame.entry_input.dnd_bind(
-        "<<Drop>>",
-        lambda e: controller.handle_path_drop(dashboard_frame.entry_input, e.data)
-    )
-
-    # Configure output field for DnD
-    dashboard_frame.entry_output.drop_target_register("DND_Files")
-    dashboard_frame.entry_output.dnd_bind(
-        "<<Drop>>",
-        lambda e: controller.handle_path_drop(dashboard_frame.entry_output, e.data)
-    )
-
+    # Update Input
     dashboard_frame.btn_browse_in.configure(
-        command=lambda: _browse_folder(app, dashboard_frame.entry_input)
+        command=lambda: _browse_folder(
+            app,
+            dashboard_frame.entry_input,
+            linked_entry=dashboard_frame.entry_output
+        )
     )
+    # Update Output
     dashboard_frame.btn_browse_out.configure(
         command=lambda: _browse_folder(app, dashboard_frame.entry_output)
     )
@@ -212,14 +204,26 @@ def main() -> None:
     app.mainloop()
 
 
-def _browse_folder(app: ctk.CTk, entry_widget: ctk.CTkEntry) -> None:
+def _browse_folder(
+        app: ctk.CTk,
+        entry_widget: ctk.CTkEntry,
+        linked_entry: Optional[ctk.CTkEntry] = None
+) -> None:
     """Helper for folder selection dialog."""
     path = ctk.filedialog.askdirectory(parent=app, title="Select Directory")
     if path:
+        # Update primary entry
         entry_widget.configure(state="normal")
         entry_widget.delete(0, "end")
         entry_widget.insert(0, path)
         entry_widget.configure(state="readonly")
+
+        # Automatically sync linked entry to the same path
+        if linked_entry:
+            linked_entry.configure(state="normal")
+            linked_entry.delete(0, "end")
+            linked_entry.insert(0, path)
+            linked_entry.configure(state="readonly")
 
 
 if __name__ == "__main__":

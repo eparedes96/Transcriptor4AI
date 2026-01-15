@@ -42,6 +42,7 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
 }
 
 AI_MODELS: Dict[str, Dict[str, str]] = {
+    "- Default Model -": {"id": "gpt-4o", "provider": "OPENAI"},
     "ChatGPT 4o": {"id": "chatgpt-4o-latest", "provider": "OPENAI"},
     "ChatGPT 5.2 (Preview)": {"id": "gpt-5.2-chat-latest", "provider": "OPENAI"},
     "Claude 3.5 Sonnet": {"id": "claude-3-5-sonnet-20240620", "provider": "ANTHROPIC"},
@@ -53,7 +54,7 @@ AI_MODELS: Dict[str, Dict[str, str]] = {
     "DeepSeek V2": {"id": "deepseek-chat", "provider": "HF_LOCAL"},
 }
 
-DEFAULT_MODEL_KEY = "ChatGPT 4o"
+DEFAULT_MODEL_KEY = "- Default Model -"
 
 
 # -----------------------------------------------------------------------------

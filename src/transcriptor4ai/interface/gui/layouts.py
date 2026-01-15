@@ -14,35 +14,14 @@ Components:
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 import customtkinter as ctk
-
-try:
-    from tkinterdnd2 import TkinterDnD
-
-    _DND_AVAILABLE = True
-except ImportError:
-    _DND_AVAILABLE = False
 
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.utils.i18n import i18n
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# CustomTkinter Base Setup
-# =============================================================================
-class CtkDnDWrapper(ctk.CTk, TkinterDnD.DnDWrapper):
-    """
-    Wrapper to mix CustomTkinter with TkinterDnD2.
-    Allows the main window to accept Drag & Drop events.
-    """
-
-    def __init__(self, *args: Any, **kwargs: Any):
-        super().__init__(*args, **kwargs)
-        self.TkdndVersion = TkinterDnD._require(self)
 
 
 # =============================================================================
@@ -110,7 +89,7 @@ class SidebarFrame(ctk.CTkFrame):
             self,
             text=i18n.t("gui.sidebar.update"),
             fg_color="#2CC985",
-            hover_color="#229A65",
+            hover_color="#229965",
             state="disabled",
             text_color="white"
         )
@@ -167,7 +146,7 @@ class DashboardFrame(ctk.CTkFrame):
         # Input Controls
         self.entry_input = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/project")
         self.entry_input.insert(0, config.get("input_path", ""))
-        self.entry_input.configure(state="readonly")  # Fix #11.2 Input Safety
+        self.entry_input.configure(state="readonly")
         self.entry_input.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
 
         self.btn_browse_in = ctk.CTkButton(
@@ -188,7 +167,7 @@ class DashboardFrame(ctk.CTkFrame):
         # Output Controls
         self.entry_output = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/output")
         self.entry_output.insert(0, config.get("output_base_dir", ""))
-        self.entry_output.configure(state="readonly")  # Fix #11.2 Input Safety
+        self.entry_output.configure(state="readonly")
         self.entry_output.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
 
         self.btn_browse_out = ctk.CTkButton(
@@ -329,9 +308,14 @@ class SettingsFrame(ctk.CTkFrame):
                                      fg_color="#D9534F", hover_color="#C9302C")
         self.btn_del.pack(side="left", padx=5)
 
-        # 2. Quick Stack Presets
-        self.frame_stack = ctk.CTkFrame(self.scroll)
-        self.frame_stack.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        # 2. Selection Container
+        self.frame_selection = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        self.frame_selection.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        self.frame_selection.grid_columnconfigure((0, 1), weight=1)
+
+        # 2a. Quick Stack Presets
+        self.frame_stack = ctk.CTkFrame(self.frame_selection)
+        self.frame_stack.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
         ctk.CTkLabel(
             self.frame_stack,
             text=i18n.t("gui.settings.stack_header"),
@@ -341,32 +325,32 @@ class SettingsFrame(ctk.CTkFrame):
         self.combo_stack = ctk.CTkComboBox(
             self.frame_stack,
             values=[i18n.t("gui.combos.select_stack")] + sorted(list(cfg.DEFAULT_STACKS.keys())),
-            width=300,
+            width=250,
             state="readonly"
         )
-        self.combo_stack.pack(padx=10, pady=10, anchor="w")
+        self.combo_stack.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # 3. Model Selector
-        self.frame_model = ctk.CTkFrame(self.scroll)
-        self.frame_model.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        # 2b. Model Selector
+        self.frame_model = ctk.CTkFrame(self.frame_selection)
+        self.frame_model.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         ctk.CTkLabel(
             self.frame_model,
-            text=i18n.t("gui.settings.model_label"),  #
+            text=i18n.t("gui.settings.model_label"),
             font=ctk.CTkFont(weight="bold")
         ).pack(anchor="w", padx=10, pady=5)
 
         self.combo_model = ctk.CTkComboBox(
             self.frame_model,
             values=sorted(list(cfg.AI_MODELS.keys())),
-            width=300,
+            width=250,
             state="readonly"
         )
         self.combo_model.set(config.get("target_model", cfg.DEFAULT_MODEL_KEY))
-        self.combo_model.pack(padx=10, pady=10, anchor="w")
+        self.combo_model.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # 4. Filters
+        # 3. Filters
         self.frame_filters = ctk.CTkFrame(self.scroll)
-        self.frame_filters.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self.frame_filters.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         self.frame_filters.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(self.frame_filters, text=i18n.t("gui.labels.extensions")).grid(row=0, column=0, padx=10, pady=10,
@@ -391,9 +375,9 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("respect_gitignore"): self.sw_gitignore.select()
         self.sw_gitignore.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
 
-        # 5. Formatting & Security
+        # 4. Formatting & Security
         self.frame_fmt = ctk.CTkFrame(self.scroll)
-        self.frame_fmt.grid(row=4, column=0, sticky="ew", pady=(0, 10))
+        self.frame_fmt.grid(row=3, column=0, sticky="ew", pady=(0, 10))
 
         ctk.CTkLabel(
             self.frame_fmt,
@@ -441,7 +425,7 @@ class SettingsFrame(ctk.CTkFrame):
             border_width=1,
             text_color=("gray10", "#DCE4EE")
         )
-        self.btn_reset.grid(row=5, column=0, pady=20, padx=10)
+        self.btn_reset.grid(row=4, column=0, pady=20, padx=10)
 
 
 # =============================================================================
@@ -499,11 +483,7 @@ def create_main_window(
     ctk.set_appearance_mode("System")
     ctk.set_default_color_theme("blue")
 
-    if _DND_AVAILABLE:
-        app = CtkDnDWrapper()
-    else:
-        app = ctk.CTk()
-        logger.warning("TkinterDnD not available. Drag & Drop disabled.")
+    app = ctk.CTk()
 
     app.title(f"Transcriptor4AI - v{cfg.CURRENT_CONFIG_VERSION}")
     app.geometry("1000x700")

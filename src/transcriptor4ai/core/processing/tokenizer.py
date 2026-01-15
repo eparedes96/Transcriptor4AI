@@ -69,7 +69,7 @@ except ImportError:
 # Constants & Fallbacks
 # -----------------------------------------------------------------------------
 CHARS_PER_TOKEN_AVG = 4
-DEFAULT_MODEL = "GPT-4o / GPT-5"
+DEFAULT_MODEL = "- Default Model -"
 
 # Global Cache for Transformers/Local Tokenizers to avoid reload latency
 _TOKENIZER_CACHE: Dict[str, Any] = {}
@@ -233,6 +233,14 @@ class TokenizerService:
         """
         if not text:
             return 0
+
+        if "- default model -" in model.lower():
+            strategy = TiktokenStrategy()
+            try:
+                return strategy.count(text, "gpt-4o")
+            except Exception as e:
+                logger.warning(f"Default tokenizer failed: {e}. Using heuristic.")
+                return self.heuristic.count(text, model)
 
         model_lower = model.lower()
         strategy: TokenizerStrategy

@@ -23,7 +23,6 @@ classifiers = [
 ]
 dependencies = [
     "customtkinter>=5.2.2",
-    "tkinterdnd2>=0.3.0",
     "tiktoken>=0.7.0",
     "requests>=2.31.0",
     "ruff>=0.1.13",

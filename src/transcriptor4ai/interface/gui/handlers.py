@@ -109,9 +109,15 @@ class AppController:
         """Populate UI widgets with values from self.config."""
         if not self.dashboard_view: return
 
-        # Dashboard
-        self._safe_entry_update(self.dashboard_view.entry_input, self.config.get("input_path", ""))
-        self._safe_entry_update(self.dashboard_view.entry_output, self.config.get("output_base_dir", ""))
+        input_path = self.config.get("input_path", "")
+        output_path = self.config.get("output_base_dir", "")
+
+        # If output path is undefined in config, default to input path
+        if not output_path:
+            output_path = input_path
+
+        self._safe_entry_update(self.dashboard_view.entry_input, input_path)
+        self._safe_entry_update(self.dashboard_view.entry_output, output_path)
 
         self.dashboard_view.entry_subdir.delete(0, "end")
         self.dashboard_view.entry_subdir.insert(0, self.config.get("output_subdir_name", ""))
@@ -287,6 +293,10 @@ class AppController:
     def on_model_selected(self, model_name: str) -> None:
         """Update config and check for API keys (Phase 12.2)."""
         self.config["target_model"] = model_name
+
+        if model_name == cfg.DEFAULT_MODEL_KEY:
+            return
+
         model_info = cfg.AI_MODELS.get(model_name, {})
         provider = model_info.get("provider", "")
 
@@ -305,28 +315,7 @@ class AppController:
                 "Missing API Key for accurate token count.\nUsing heuristic fallback."
             )
 
-    def on_drop(self, event: Any) -> None:
-        """
-        Handle Drag & Drop events for path inputs (Phase 11.3).
-        Clean curly braces from Windows D&D format.
-        """
-        raw_path = event.data
-        if not raw_path:
-            return
 
-        clean_path = raw_path.replace("{", "").replace("}", "").strip()
-
-        pass
-
-    def handle_path_drop(self, entry_widget: ctk.CTkEntry, path_data: str) -> None:
-        """Specific handler for dropping paths into an entry widget."""
-        clean_path = path_data.replace("{", "").replace("}", "").strip()
-        if os.path.exists(clean_path):
-            self._safe_entry_update(entry_widget, clean_path)
-        else:
-            logger.warning(f"Dropped invalid path: {clean_path}")
-
-    # --- Profile Management ---
     def load_profile(self) -> None:
         name = self.settings_view.combo_profiles.get()
         if name == i18n.t("gui.profiles.no_selection"): return
@@ -384,7 +373,6 @@ class AppController:
 # -----------------------------------------------------------------------------
 # Modal Dialogs
 # -----------------------------------------------------------------------------
-
 def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
     """Display execution results in a Toplevel window."""
     toplevel = ctk.CTkToplevel(parent)
@@ -395,7 +383,7 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
     summary = result.summary or {}
     dry_run = summary.get("dry_run", False)
     header = i18n.t("gui.results_window.dry_run_header") if dry_run else i18n.t("gui.results_window.success_header")
-    color = "#007ACC" if dry_run else "#2CC985"
+    color = "#F0AD4E" if dry_run else "#2CC985"
 
     # Header
     ctk.CTkLabel(
@@ -557,7 +545,7 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     btn_frame.pack(fill="x", padx=20, pady=20)
 
-    ctk.CTkButton(btn_frame, text="Close", fg_color="#D9534F", command=_close).pack(expand=True)
+    ctk.CTkButton(btn_frame, text="Close", fg_color="#D9534F", command=_close).pack(side="right")
 
     # If we created the root, we must start the loop
     if is_root_created:

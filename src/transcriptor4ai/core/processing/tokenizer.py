@@ -160,7 +160,15 @@ class AnthropicApiStrategy(TokenizerStrategy):
 
         # Mapping known display names to API IDs
         api_model = "claude-3-5-sonnet-20240620"
-        if "3.5" in model_id:
+
+        if "4.5" in model_id:
+            if "haiku" in model_id:
+                api_model = "claude-haiku-4-5-20251001"
+            elif "opus" in model_id:
+                api_model = "claude-opus-4-5-20251101"
+            else:
+                api_model = "claude-sonnet-4-5-20250929"
+        elif "3.5" in model_id:
             api_model = "claude-3-5-sonnet-20240620"
         elif "3" in model_id and "opus" in model_id:
             api_model = "claude-3-opus-20240229"
@@ -185,7 +193,7 @@ class TransformersStrategy(TokenizerStrategy):
 
         if "llama" in lower_id:
             hf_id = "meta-llama/Meta-Llama-3-8B"
-        elif "qwen" in lower_id:
+        elif "qwen" in lower_id or "qwq" in lower_id:
             hf_id = "Qwen/Qwen2.5-7B-Instruct"
         elif "deepseek" in lower_id:
             hf_id = "deepseek-ai/deepseek-coder-33b-instruct"
@@ -251,15 +259,20 @@ class TokenizerService:
             return 0
 
         # 2. Select Provider Strategy
-        if "gpt" in model_lower or "o1" in model_lower or "o3" in model_lower:
+        # OpenAI
+        if "gpt" in model_lower or "o1" in model_lower or "o3" in model_lower or "o4" in model_lower:
             strategy = TiktokenStrategy()
+        # Gemini
         elif "gemini" in model_lower:
             strategy = GoogleApiStrategy()
+        # Claude
         elif "claude" in model_lower:
             strategy = AnthropicApiStrategy()
-        elif "mistral" in model_lower:
+        # Mistral family
+        elif "mistral" in model_lower or "magistral" in model_lower or "codestral" in model_lower or "devstral" in model_lower:
             strategy = MistralStrategy()
-        elif any(x in model_lower for x in ["llama", "qwen", "deepseek", "falcon"]):
+        # Transformers family
+        elif any(x in model_lower for x in ["llama", "qwen", "qwq", "deepseek", "falcon"]):
             strategy = TransformersStrategy()
         else:
             strategy = TiktokenStrategy() if TIKTOKEN_AVAILABLE else self.heuristic

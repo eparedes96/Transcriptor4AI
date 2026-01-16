@@ -42,16 +42,61 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
 }
 
 AI_MODELS: Dict[str, Dict[str, str]] = {
+    # Default System
     "- Default Model -": {"id": "gpt-4o", "provider": "OPENAI"},
-    "ChatGPT 4o": {"id": "chatgpt-4o-latest", "provider": "OPENAI"},
+
+    # OpenAI
     "ChatGPT 5.2 (Preview)": {"id": "gpt-5.2-chat-latest", "provider": "OPENAI"},
+    "ChatGPT 4o": {"id": "chatgpt-4o-latest", "provider": "OPENAI"},
+    "GPT-5.2 (API)": {"id": "gpt-5.2", "provider": "OPENAI"},
+    "GPT-5.2 Codex": {"id": "gpt-5.2-codex", "provider": "OPENAI"},
+    "OpenAI o3": {"id": "o3", "provider": "OPENAI"},
+    "OpenAI o4-mini": {"id": "o4-mini", "provider": "OPENAI"},
+    "OpenAI o3 Deep Research": {"id": "o3-deep-research", "provider": "OPENAI"},
+    "OpenAI o4-mini Deep Research": {"id": "o4-mini-deep-research", "provider": "OPENAI"},
+
+    # Anthropic
+    "Claude 4.5 Sonnet": {"id": "claude-sonnet-4-5-20250929", "provider": "ANTHROPIC"},
+    "Claude 4.5 Haiku": {"id": "claude-haiku-4-5-20251001", "provider": "ANTHROPIC"},
+    "Claude 4.5 Opus": {"id": "claude-opus-4-5-20251101", "provider": "ANTHROPIC"},
     "Claude 3.5 Sonnet": {"id": "claude-3-5-sonnet-20240620", "provider": "ANTHROPIC"},
-    "Gemini 1.5 Pro": {"id": "gemini-1.5-pro", "provider": "GOOGLE"},
-    "Gemini 1.5 Flash": {"id": "gemini-1.5-flash", "provider": "GOOGLE"},
+
+    # Google
+    "Gemini 3 Pro (Preview)": {"id": "gemini-3-pro-preview", "provider": "GOOGLE"},
+    "Gemini 3 Flash (Preview)": {"id": "gemini-3-flash-preview", "provider": "GOOGLE"},
+    "Gemini 2.5 Pro": {"id": "gemini-2.5-pro", "provider": "GOOGLE"},
+    "Gemini 2.5 Flash": {"id": "gemini-2.5-flash", "provider": "GOOGLE"},
+    "Gemini 2.5 Flash-Lite": {"id": "gemini-2.5-flash-lite", "provider": "GOOGLE"},
+
+    # Mistral
+    "Mistral Large 3 (2512)": {"id": "mistral-large-2512", "provider": "MISTRAL"},
+    "Mistral Medium 3.1 (2508)": {"id": "mistral-medium-2508", "provider": "MISTRAL"},
+    "Mistral Small 3.2 (2506)": {"id": "mistral-small-2506", "provider": "MISTRAL"},
+    "Magistral Medium (Reasoning)": {"id": "magistral-medium-2509", "provider": "MISTRAL"},
+    "Magistral Small (Reasoning)": {"id": "magistral-small-2509", "provider": "MISTRAL"},
+    "Mistral OCR": {"id": "mistral-ocr-2512", "provider": "MISTRAL_VISION"},
+    "Codestral (2508)": {"id": "codestral-2508", "provider": "MISTRAL"},
+    "Devstral (Agents)": {"id": "devstral-2512", "provider": "MISTRAL"},
+    "Devstral Medium": {"id": "devstral-medium-2507", "provider": "MISTRAL"},
+    "Devstral Small": {"id": "devstral-small-2507", "provider": "MISTRAL"},
+    "Devstral Small (Labs)": {"id": "labs-devstral-small-2512", "provider": "MISTRAL"},
+
+    # DeepSeek
+    "DeepSeek Chat V3.2": {"id": "deepseek-chat", "provider": "HF_LOCAL"},
+    "DeepSeek Reasoner (Thinking)": {"id": "deepseek-reasoner", "provider": "HF_LOCAL"},
+
+    # Qwen
+    "Qwen3 Instruct (235B)": {"id": "Qwen/Qwen3-235B-A22B-Instruct-2507", "provider": "HF_LOCAL"},
+    "Qwen3 Thinking (235B)": {"id": "Qwen/Qwen3-235B-A22B-Thinking-2507", "provider": "HF_LOCAL"},
+    "Qwen3-Next Instruct (80B)": {"id": "Qwen/Qwen3-Next-80B-A3B-Instruct", "provider": "HF_LOCAL"},
+    "Qwen3-Next Thinking (80B)": {"id": "Qwen/Qwen3-Next-80B-A3B-Thinking", "provider": "HF_LOCAL"},
+    "QwQ-32b (Legacy Reasoning)": {"id": "qwq-32b", "provider": "HF_LOCAL"},
+    "Qwen3 Coder (480B)": {"id": "Qwen/Qwen3-Coder-480B-A35B-Instruct", "provider": "HF_LOCAL"},
+    "Qwen3 Coder Small (30B)": {"id": "qwen3-coder-30b-a3b-instruct", "provider": "HF_LOCAL"},
+    "Qwen2.5 Coder (32B)": {"id": "Qwen/Qwen2.5-Coder-32B-Instruct", "provider": "HF_LOCAL"},
+
+    # Other Open Source
     "Llama 3 70B": {"id": "meta-llama/Meta-Llama-3-70B", "provider": "HF_LOCAL"},
-    "Mistral Large": {"id": "mistral-large-latest", "provider": "MISTRAL"},
-    "Mistral OCR": {"id": "mistral-ocr", "provider": "MISTRAL_VISION"},
-    "DeepSeek V2": {"id": "deepseek-chat", "provider": "HF_LOCAL"},
 }
 
 DEFAULT_MODEL_KEY = "- Default Model -"

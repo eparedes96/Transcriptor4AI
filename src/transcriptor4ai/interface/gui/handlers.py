@@ -308,6 +308,9 @@ class AppController:
         elif provider == "ANTHROPIC" and not os.environ.get("ANTHROPIC_API_KEY"):
             missing_key = True
             logger.warning(f"Selected {model_name} but ANTHROPIC_API_KEY is missing.")
+        elif (provider == "MISTRAL" or provider == "MISTRAL_VISION") and not os.environ.get("MISTRAL_API_KEY"):
+            missing_key = True
+            logger.warning(f"Selected {model_name} but MISTRAL_API_KEY is missing.")
 
         if missing_key:
             mb.showwarning(

@@ -60,7 +60,7 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
     # 2. GUI Mode (No arguments)
     else:
         try:
-            from transcriptor4ai.interface.gui.handlers import show_crash_modal
+            from transcriptor4ai.interface.gui.dialogs.crash_modal import show_crash_modal
             show_crash_modal(error_msg, stack_trace)
         except Exception as e:
             logger.error(f"Custom crash modal failed: {e}. Falling back to system native alert.")

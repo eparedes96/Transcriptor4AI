@@ -13,11 +13,8 @@ import os
 from unittest.mock import MagicMock, patch
 import pytest
 
-from transcriptor4ai.interface.gui.handlers import (
-    AppController,
-    parse_list_from_string,
-    open_file_explorer
-)
+from transcriptor4ai.interface.gui.controllers.main_controller import AppController
+from transcriptor4ai.interface.gui.utils.tk_helpers import open_file_explorer, parse_list_from_string
 
 
 def test_parse_list_from_string_gui():

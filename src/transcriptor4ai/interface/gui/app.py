@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+import transcriptor4ai.interface.gui.components.dashboard
+import transcriptor4ai.interface.gui.components.logs_console
+import transcriptor4ai.interface.gui.components.main_window
+import transcriptor4ai.interface.gui.components.settings
+import transcriptor4ai.interface.gui.components.sidebar
+import transcriptor4ai.interface.gui.controllers.main_controller
+import transcriptor4ai.interface.gui.dialogs.feedback_modal
+import transcriptor4ai.interface.gui.dialogs.update_modal
+
 """
 Main Entry Point for the Graphical User Interface.
 
@@ -15,7 +24,7 @@ import queue
 import threading
 from logging.handlers import QueueHandler
 from typing import Dict, Any, Optional
-
+import tkinter.messagebox as mb
 import customtkinter as ctk
 
 from transcriptor4ai.domain import config as cfg
@@ -24,14 +33,14 @@ from transcriptor4ai.infra.logging import (
     LoggingConfig,
     get_default_gui_log_path
 )
-from transcriptor4ai.interface.gui import layouts, handlers, threads
+from transcriptor4ai.interface.gui import threads
 
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
     """
-    Main GUI Application loop (V2.0 Architecture).
+    Main GUI Application loop.
     """
     # -------------------------------------------------------------------------
     # 1. System Initialization
@@ -64,7 +73,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # 3. View Construction (Wireframe)
     # -------------------------------------------------------------------------
-    app = layouts.create_main_window(profile_names, config)
+    app = transcriptor4ai.interface.gui.components.main_window.create_main_window(profile_names, config)
 
     # Define Navigation Logic
     def show_frame(name: str) -> None:
@@ -91,12 +100,12 @@ def main() -> None:
             sidebar_frame.btn_logs.configure(fg_color=("gray75", "gray25"))
 
     # Instantiate Frames
-    sidebar_frame = layouts.SidebarFrame(app, nav_callback=show_frame)
+    sidebar_frame = transcriptor4ai.interface.gui.components.sidebar.SidebarFrame(app, nav_callback=show_frame)
     sidebar_frame.grid(row=0, column=0, sticky="nsew")
 
-    dashboard_frame = layouts.DashboardFrame(app, config)
-    settings_frame = layouts.SettingsFrame(app, config, profile_names)
-    logs_frame = layouts.LogsFrame(app)
+    dashboard_frame = transcriptor4ai.interface.gui.components.dashboard.DashboardFrame(app, config)
+    settings_frame = transcriptor4ai.interface.gui.components.settings.SettingsFrame(app, config, profile_names)
+    logs_frame = transcriptor4ai.interface.gui.components.logs_console.LogsFrame(app)
 
     # Default View
     show_frame("dashboard")
@@ -104,7 +113,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # 4. Logic Integration (Controller)
     # -------------------------------------------------------------------------
-    controller = handlers.AppController(app, config, app_state)
+    controller = transcriptor4ai.interface.gui.controllers.main_controller.AppController(app, config, app_state)
     controller.register_views(dashboard_frame, settings_frame, logs_frame, sidebar_frame)
 
     # Sync initial state to widgets
@@ -138,7 +147,7 @@ def main() -> None:
     settings_frame.combo_model.configure(command=controller.on_model_selected)
 
     settings_frame.btn_reset.configure(command=controller.reset_config)
-    sidebar_frame.btn_feedback.configure(command=lambda: handlers.show_feedback_window(app))
+    sidebar_frame.btn_feedback.configure(command=lambda: transcriptor4ai.interface.gui.dialogs.feedback_modal.show_feedback_window(app))
 
     # -------------------------------------------------------------------------
     # 5. Background Tasks & Polling
@@ -169,12 +178,12 @@ def main() -> None:
 
             # If manual check, show prompt immediately
             if is_manual:
-                handlers.show_update_prompt_modal(
+                transcriptor4ai.interface.gui.dialogs.update_modal.show_update_prompt_modal(
                     app, version, result.get("changelog", ""),
                     result.get("binary_url", ""), "", result.get("download_url", "")
                 )
         elif is_manual:
-            handlers.mb.showinfo("Update Check", "App is up to date.")
+            mb.showinfo("Update Check", "App is up to date.")
 
     if app_state["app_settings"].get("auto_check_updates"):
         threading.Thread(

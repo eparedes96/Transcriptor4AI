@@ -129,6 +129,7 @@
       "stack_header": "Quick Stack Presets",
       "output_strat": "Output Strategy",
       "security": "Security & Optimization",
+      "provider_label": "AI Provider",
       "model_label": "Target AI Model"
     },
     "combos": {

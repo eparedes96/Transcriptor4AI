@@ -134,6 +134,7 @@ def main() -> None:
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
     settings_frame.combo_stack.configure(command=controller.on_stack_selected)
+    settings_frame.combo_provider.configure(command=controller.on_provider_selected)
     settings_frame.combo_model.configure(command=controller.on_model_selected)
 
     settings_frame.btn_reset.configure(command=controller.reset_config)

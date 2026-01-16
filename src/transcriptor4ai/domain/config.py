@@ -42,8 +42,7 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
 }
 
 AI_MODELS: Dict[str, Dict[str, str]] = {
-    # Default System
-    "- Default Model -": {"id": "gpt-4o", "provider": "OPENAI"},
+    "- Default Model -": {"id": "gpt-4o", "provider": "- Default -"},
 
     # OpenAI
     "ChatGPT 5.2 (Preview)": {"id": "gpt-5.2-chat-latest", "provider": "OPENAI"},

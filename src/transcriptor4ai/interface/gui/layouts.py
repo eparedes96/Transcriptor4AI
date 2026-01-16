@@ -308,14 +308,9 @@ class SettingsFrame(ctk.CTkFrame):
                                      fg_color="#D9534F", hover_color="#C9302C")
         self.btn_del.pack(side="left", padx=5)
 
-        # 2. Selection Container
-        self.frame_selection = ctk.CTkFrame(self.scroll, fg_color="transparent")
-        self.frame_selection.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        self.frame_selection.grid_columnconfigure((0, 1), weight=1)
-
-        # 2a. Quick Stack Presets
-        self.frame_stack = ctk.CTkFrame(self.frame_selection)
-        self.frame_stack.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        # 2. Quick Stack Presets
+        self.frame_stack = ctk.CTkFrame(self.scroll)
+        self.frame_stack.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         ctk.CTkLabel(
             self.frame_stack,
             text=i18n.t("gui.settings.stack_header"),
@@ -325,13 +320,35 @@ class SettingsFrame(ctk.CTkFrame):
         self.combo_stack = ctk.CTkComboBox(
             self.frame_stack,
             values=[i18n.t("gui.combos.select_stack")] + sorted(list(cfg.DEFAULT_STACKS.keys())),
-            width=250,
+            width=300,
             state="readonly"
         )
         self.combo_stack.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # 2b. Model Selector
-        self.frame_model = ctk.CTkFrame(self.frame_selection)
+        # 3. AI Selection
+        self.frame_ai = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        self.frame_ai.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.frame_ai.grid_columnconfigure((0, 1), weight=1)
+
+        # 3a. Provider
+        self.frame_provider = ctk.CTkFrame(self.frame_ai)
+        self.frame_provider.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
+        ctk.CTkLabel(
+            self.frame_provider,
+            text=i18n.t("gui.settings.provider_label", default="AI Provider"),
+            font=ctk.CTkFont(weight="bold")
+        ).pack(anchor="w", padx=10, pady=5)
+
+        self.combo_provider = ctk.CTkComboBox(
+            self.frame_provider,
+            values=[],
+            width=200,
+            state="readonly"
+        )
+        self.combo_provider.pack(padx=10, pady=10, anchor="w", fill="x")
+
+        # 3b. Model
+        self.frame_model = ctk.CTkFrame(self.frame_ai)
         self.frame_model.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
         ctk.CTkLabel(
             self.frame_model,
@@ -341,16 +358,16 @@ class SettingsFrame(ctk.CTkFrame):
 
         self.combo_model = ctk.CTkComboBox(
             self.frame_model,
-            values=sorted(list(cfg.AI_MODELS.keys())),
-            width=250,
+            values=[],
+            width=200,
             state="readonly"
         )
         self.combo_model.set(config.get("target_model", cfg.DEFAULT_MODEL_KEY))
         self.combo_model.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # 3. Filters
+        # 4. Filters
         self.frame_filters = ctk.CTkFrame(self.scroll)
-        self.frame_filters.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.frame_filters.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         self.frame_filters.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(self.frame_filters, text=i18n.t("gui.labels.extensions")).grid(row=0, column=0, padx=10, pady=10,
@@ -375,9 +392,9 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("respect_gitignore"): self.sw_gitignore.select()
         self.sw_gitignore.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
 
-        # 4. Formatting & Security
+        # 5. Formatting & Security
         self.frame_fmt = ctk.CTkFrame(self.scroll)
-        self.frame_fmt.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        self.frame_fmt.grid(row=4, column=0, sticky="ew", pady=(0, 10))
 
         ctk.CTkLabel(
             self.frame_fmt,
@@ -417,7 +434,7 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("save_error_log"): self.sw_error_log.select()
         self.sw_error_log.pack(anchor="w", padx=10, pady=5)
 
-        # Reset Config Button
+        # Reset
         self.btn_reset = ctk.CTkButton(
             self.scroll,
             text=i18n.t("gui.buttons.reset"),
@@ -425,7 +442,7 @@ class SettingsFrame(ctk.CTkFrame):
             border_width=1,
             text_color=("gray10", "#DCE4EE")
         )
-        self.btn_reset.grid(row=4, column=0, pady=20, padx=10)
+        self.btn_reset.grid(row=5, column=0, pady=20, padx=10)
 
 
 # =============================================================================

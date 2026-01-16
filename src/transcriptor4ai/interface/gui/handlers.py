@@ -148,8 +148,20 @@ class AppController:
         self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
         self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
 
-        # Model Selector
-        self.settings_view.combo_model.set(self.config.get("target_model", cfg.DEFAULT_MODEL_KEY))
+        target_model = self.config.get("target_model", cfg.DEFAULT_MODEL_KEY)
+
+        # 1. Determine Provider from Model
+        current_provider = "OPENAI"
+        if target_model in cfg.AI_MODELS:
+            current_provider = cfg.AI_MODELS[target_model].get("provider", "OPENAI")
+
+        # 2. Populate Provider Combo
+        providers = sorted(list(set(m["provider"] for m in cfg.AI_MODELS.values())))
+        self.settings_view.combo_provider.configure(values=providers)
+        self.settings_view.combo_provider.set(current_provider)
+
+        # 3. Populate Model Combo based on Provider
+        self._filter_models_by_provider(current_provider, preserve_selection=target_model)
 
         self._set_switch(self.settings_view.sw_gitignore, "respect_gitignore")
         self._set_switch(self.settings_view.sw_individual, "create_individual_files")
@@ -158,6 +170,34 @@ class AppController:
         self._set_switch(self.settings_view.sw_mask, "mask_user_paths")
         self._set_switch(self.settings_view.sw_minify, "minify_output")
         self._set_switch(self.settings_view.sw_error_log, "save_error_log")
+
+    def on_provider_selected(self, provider: str) -> None:
+        """Callback triggered when the Provider Combobox changes."""
+        self._filter_models_by_provider(provider)
+
+        # Automatically select the first model available for this provider
+        new_model = self.settings_view.combo_model.get()
+        self.config["target_model"] = new_model
+        self.on_model_selected(new_model)
+
+    def _filter_models_by_provider(self, provider: str, preserve_selection: Optional[str] = None) -> None:
+        """
+        Update the Model Combobox values based on the selected provider.
+        """
+        # Filter models belonging to this provider
+        models = sorted([name for name, data in cfg.AI_MODELS.items() if data.get("provider") == provider])
+
+        if not models:
+            models = ["-- No Models --"]
+
+        self.settings_view.combo_model.configure(values=models)
+
+        # Logic to set the current selection
+        if preserve_selection and preserve_selection in models:
+            self.settings_view.combo_model.set(preserve_selection)
+        else:
+            self.settings_view.combo_model.set(models[0])
+            self.config["target_model"] = models[0]
 
     def _safe_entry_update(self, entry: ctk.CTkEntry, text: str) -> None:
         """Helper to update readonly entries."""

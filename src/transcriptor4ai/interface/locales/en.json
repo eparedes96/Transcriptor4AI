@@ -137,7 +137,8 @@
       "no_profile": "-- No Profile --"
     },
     "logs": {
-      "copy": "Copy Logs"
+      "copy": "Copy Logs",
+      "api_warning": "Model '{model}' selected. Note: API inference is not active; performing Token Estimation only."
     },
     "feedback": {
       "type_label": "Report Type:",

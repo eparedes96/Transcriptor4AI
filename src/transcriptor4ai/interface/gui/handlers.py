@@ -337,6 +337,9 @@ class AppController:
         if model_name == cfg.DEFAULT_MODEL_KEY:
             return
 
+        # Inform user that actual inference is not active, only estimation
+        logger.info(i18n.t("gui.logs.api_warning", model=model_name))
+
         model_info = cfg.AI_MODELS.get(model_name, {})
         provider = model_info.get("provider", "")
 
@@ -357,7 +360,6 @@ class AppController:
                 i18n.t("gui.dialogs.warning_title"),
                 "Missing API Key for accurate token count.\nUsing heuristic fallback."
             )
-
 
     def load_profile(self) -> None:
         name = self.settings_view.combo_profiles.get()

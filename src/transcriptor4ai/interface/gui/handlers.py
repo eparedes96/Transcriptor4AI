@@ -445,80 +445,122 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
                   command=toplevel.destroy).pack(side="left", expand=True, padx=5)
 
 
+# -----------------------------------------------------------------------------
+# Feedback & Crash Reporting
+# -----------------------------------------------------------------------------
 def show_feedback_window(parent: ctk.CTk) -> None:
     """Display the Feedback Hub modal window."""
     toplevel = ctk.CTkToplevel(parent)
     toplevel.title("Feedback Hub")
-    toplevel.geometry("500x450")
+    toplevel.geometry("500x550")
+    toplevel.resizable(False, False)
     toplevel.grab_set()
 
-    ctk.CTkLabel(toplevel, text="Send Feedback", font=ctk.CTkFont(size=18, weight="bold")).pack(pady=20)
-    ctk.CTkLabel(toplevel, text="Help us improve Transcriptor4AI.").pack(pady=(0, 20))
+    # Header
+    ctk.CTkLabel(
+        toplevel,
+        text="Send Feedback",
+        font=ctk.CTkFont(size=20, weight="bold")
+    ).pack(pady=(20, 5))
+
+    ctk.CTkLabel(
+        toplevel,
+        text="Help us improve Transcriptor4AI.",
+        text_color="gray"
+    ).pack(pady=(0, 20))
 
     content_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     content_frame.pack(fill="x", padx=20)
 
-    ctk.CTkLabel(content_frame, text=i18n.t("gui.feedback.type_label")).pack(anchor="w")
-    report_types = list(cast(Dict[str, str], i18n.t("gui.feedback.types")).values())
+    # Type Selector
+    ctk.CTkLabel(content_frame, text=i18n.t("gui.feedback.type_label"), anchor="w").pack(fill="x")
+    report_types = ["Bug Report", "Feature Request", "Other"]
     report_type = ctk.CTkComboBox(content_frame, values=report_types, state="readonly")
     report_type.set(report_types[0])
     report_type.pack(fill="x", pady=(0, 10))
 
-    ctk.CTkLabel(content_frame, text="Subject:").pack(anchor="w")
+    # Subject
+    ctk.CTkLabel(content_frame, text="Subject:", anchor="w").pack(fill="x")
     subject = ctk.CTkEntry(content_frame)
     subject.pack(fill="x", pady=(0, 10))
 
-    ctk.CTkLabel(content_frame, text="Message:").pack(anchor="w")
-    msg = ctk.CTkTextbox(content_frame, height=120)
-    msg.pack(fill="x", expand=True, pady=(0, 10))
+    # Message
+    ctk.CTkLabel(content_frame, text="Message:", anchor="w").pack(fill="x")
+    msg = ctk.CTkTextbox(content_frame, height=150)
+    msg.pack(fill="x", pady=(0, 10))
 
+    # Logs Checkbox
     chk_logs = ctk.CTkCheckBox(content_frame, text="Include recent logs", onvalue=True, offvalue=False)
     chk_logs.select()
     chk_logs.pack(anchor="w", pady=(0, 20))
 
+    # Status Label
+    status_lbl = ctk.CTkLabel(toplevel, text="", text_color="gray")
+    status_lbl.pack(pady=(0, 5))
+
+    def _on_sent(result: Tuple[bool, str]) -> None:
+        success, message = result
+        btn_send.configure(state="normal")
+
+        if success:
+            mb.showinfo(i18n.t("gui.dialogs.success_title"), "Thank you! Your feedback has been sent.")
+            toplevel.destroy()
+        else:
+            status_lbl.configure(text=f"Error: {message}", text_color="#D9534F")
+            mb.showerror(i18n.t("gui.dialogs.error_title"), f"Failed to send feedback:\n{message}")
+
     def _send() -> None:
-        if not subject.get() or not msg.get("1.0", "end").strip():
-            mb.showerror(i18n.t("gui.dialogs.error_title"), "Please fill all fields.")
+        if not subject.get().strip() or not msg.get("1.0", "end").strip():
+            mb.showerror(i18n.t("gui.dialogs.error_title"), "Please fill in Subject and Message.")
             return
 
-        # Prepare payload
+        btn_send.configure(state="disabled")
+        status_lbl.configure(text="Sending feedback...", text_color="#007ACC")
+
         payload = {
             "type": report_type.get(),
             "subject": subject.get(),
             "message": msg.get("1.0", "end"),
-            "logs": get_recent_logs(50) if chk_logs.get() else ""
+            "version": cfg.CURRENT_CONFIG_VERSION,
+            "os": platform.system(),
+            "logs": get_recent_logs(100) if chk_logs.get() else ""
         }
 
         # Background submission
         threading.Thread(
             target=threads.submit_feedback_task,
-            args=(payload, lambda res: _on_sent(res)),
+            args=(payload, lambda res: parent.after(0, lambda: _on_sent(res))),
             daemon=True
         ).start()
 
-        toplevel.destroy()
-        mb.showinfo("Feedback", i18n.t("gui.dialogs.sending_feedback"))
-
-    def _on_sent(result: Tuple[bool, str]) -> None:
-        pass
-
+    # Footer Actions
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
-    btn_frame.pack(pady=10, fill="x", padx=20)
-    ctk.CTkButton(btn_frame, text="Send Feedback", command=_send).pack(expand=True)
+    btn_frame.pack(fill="x", padx=20, pady=10)
+
+    btn_cancel = ctk.CTkButton(
+        btn_frame,
+        text="Cancel",
+        fg_color="transparent",
+        border_width=1,
+        text_color=("gray10", "#DCE4EE"),
+        command=toplevel.destroy
+    )
+    btn_cancel.pack(side="left", expand=True, padx=5)
+
+    btn_send = ctk.CTkButton(
+        btn_frame,
+        text="Send Feedback",
+        fg_color="#007ACC",
+        command=_send
+    )
+    btn_send.pack(side="left", expand=True, padx=5)
 
 
 def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk] = None) -> None:
     """
-    Display critical error details.
-
-    Args:
-        error_msg: The exception message.
-        stack_trace: Full traceback string.
-        parent: The parent window. If None (Global Handler), a temporary root is created.
+    Display critical error details with reporting capability.
     """
     is_root_created = False
-
-    # Emergency fallback if no root exists
     if parent is None:
         parent = ctk.CTk()
         parent.withdraw()
@@ -526,31 +568,98 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
 
     toplevel = ctk.CTkToplevel(parent)
     toplevel.title(i18n.t("gui.crash.title"))
-    toplevel.geometry("700x500")
+    toplevel.geometry("700x600")
     toplevel.grab_set()
 
     ctk.CTkLabel(
-        toplevel, text=i18n.t("gui.crash.header"),
-        font=ctk.CTkFont(size=16, weight="bold"),
+        toplevel,
+        text=i18n.t("gui.crash.header"),
+        font=ctk.CTkFont(size=18, weight="bold"),
         text_color="#D9534F"
-    ).pack(pady=20)
+    ).pack(pady=(20, 10))
 
-    textbox = ctk.CTkTextbox(toplevel, font=("Consolas", 10))
+    ctk.CTkLabel(toplevel, text="The application has encountered an unexpected problem.").pack()
+
+    # Traceback Area
+    textbox = ctk.CTkTextbox(toplevel, font=("Consolas", 10), height=200)
     textbox.insert("1.0", f"Error: {error_msg}\n\n{stack_trace}")
     textbox.configure(state="disabled")
     textbox.pack(fill="both", expand=True, padx=20, pady=10)
 
-    def _close() -> None:
-        toplevel.destroy()
-        if is_root_created and parent:
-            parent.destroy()
+    # User Context
+    ctk.CTkLabel(toplevel, text="What were you doing? (Optional):", anchor="w").pack(fill="x", padx=20)
+    user_comment = ctk.CTkTextbox(toplevel, height=60)
+    user_comment.pack(fill="x", padx=20, pady=(0, 10))
 
+    status_lbl = ctk.CTkLabel(toplevel, text="", text_color="gray", font=("Any", 10))
+    status_lbl.pack(pady=(0, 5))
+
+    def _on_reported(result: Tuple[bool, str]) -> None:
+        success, message = result
+        btn_report.configure(state="normal")
+        if success:
+            status_lbl.configure(text="Report sent successfully. Thank you.", text_color="green")
+            mb.showinfo("Report Sent", "Error report submitted. We will investigate this issue.")
+            if is_root_created:
+                parent.destroy()
+            else:
+                toplevel.destroy()
+        else:
+            status_lbl.configure(text="Failed to send report.", text_color="red")
+            mb.showerror("Submission Error", f"Could not send report:\n{message}")
+
+    def _send_report() -> None:
+        btn_report.configure(state="disabled")
+        status_lbl.configure(text="Sending report...", text_color="#007ACC")
+
+        payload = {
+            "error": error_msg,
+            "stack_trace": stack_trace,
+            "user_comment": user_comment.get("1.0", "end"),
+            "app_version": cfg.CURRENT_CONFIG_VERSION,
+            "os": platform.system(),
+            "logs": get_recent_logs(150)
+        }
+
+        threading.Thread(
+            target=threads.submit_error_report_task,
+            args=(payload, lambda res: parent.after(0, lambda: _on_reported(res))),
+            daemon=True
+        ).start()
+
+    def _close() -> None:
+        if is_root_created:
+            parent.destroy()
+        else:
+            toplevel.destroy()
+
+    # Buttons
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     btn_frame.pack(fill="x", padx=20, pady=20)
 
-    ctk.CTkButton(btn_frame, text="Close", fg_color="#D9534F", command=_close).pack(side="right")
+    ctk.CTkButton(
+        btn_frame,
+        text="Copy Error",
+        command=lambda: parent.clipboard_append(f"Error: {error_msg}\n\n{stack_trace}")
+    ).pack(side="left", padx=5)
 
-    # If we created the root, we must start the loop
+    btn_report = ctk.CTkButton(
+        btn_frame,
+        text="Send Error Report",
+        fg_color="#2CC985",
+        hover_color="#229965",
+        command=_send_report
+    )
+    btn_report.pack(side="left", padx=5, expand=True)
+
+    ctk.CTkButton(
+        btn_frame,
+        text="Close",
+        fg_color="#D9534F",
+        hover_color="#C9302C",
+        command=_close
+    ).pack(side="right", padx=5)
+
     if is_root_created:
         parent.mainloop()
 

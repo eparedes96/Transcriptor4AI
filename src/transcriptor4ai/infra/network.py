@@ -170,7 +170,7 @@ def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 # -----------------------------------------------------------------------------
-# V2.0.0 Update Manager (Silent OTA)
+# Update Manager
 # -----------------------------------------------------------------------------
 class UpdateStatus(Enum):
     IDLE = "IDLE"
@@ -293,6 +293,7 @@ def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, st
             return True, "Success"
         return False, f"Server rejected request ({response.status_code})"
     except requests.exceptions.RequestException as e:
+        logger.error(f"Network error sending {context}: {e}")
         return False, str(e)
 
 

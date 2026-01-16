@@ -243,9 +243,9 @@ class TokenizerService:
             return 0
 
         if "- default model -" in model.lower():
-            strategy = TiktokenStrategy()
+            def_strategy = TiktokenStrategy()
             try:
-                return strategy.count(text, "gpt-4o")
+                return def_strategy.count(text, "gpt-4o")
             except Exception as e:
                 logger.warning(f"Default tokenizer failed: {e}. Using heuristic.")
                 return self.heuristic.count(text, model)

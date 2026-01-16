@@ -65,10 +65,6 @@ module = "customtkinter"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "tkinterdnd2"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = "tiktoken"
 ignore_missing_imports = true
 
@@ -77,7 +73,7 @@ module = "requests"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "google.generativeai"
+module = "google.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -101,7 +97,7 @@ python_files = "test_*.py"
 addopts = "-v --strict-markers"
 
 # =============================================================================
-# RUFF CONFIGURATION (V2.0.0 Standard)
+# RUFF CONFIGURATION
 # =============================================================================
 [tool.ruff]
 line-length = 100

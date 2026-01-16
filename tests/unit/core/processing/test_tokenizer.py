@@ -6,12 +6,11 @@ Unit tests for the Token Counter utility.
 Verifies:
 1. Heuristic fallback logic (when tiktoken is missing).
 2. Tiktoken integration (when available).
-3. Model-specific adjustments (e.g., Claude multipliers).
 """
 
 from unittest.mock import patch
 import pytest
-from transcriptor4ai.core.processing.tokenizer import count_tokens, _count_heuristic
+from transcriptor4ai.core.processing.tokenizer import count_tokens, HeuristicStrategy
 
 
 def test_token_counter_empty():
@@ -19,15 +18,16 @@ def test_token_counter_empty():
     assert count_tokens("") == 0
 
 
-
 def test_token_counter_heuristic_math():
     """
     Verify strict math of heuristic (ceil(chars/4)).
     Used as fallback when dependencies are missing.
     """
-    assert _count_heuristic("abcd") == 1
-    assert _count_heuristic("abcde") == 2
-    assert _count_heuristic("1234567890") == 3
+    strategy = HeuristicStrategy()
+    # Model ID arg is unused in heuristic but required by interface
+    assert strategy.count("abcd", "mock_model") == 1
+    assert strategy.count("abcde", "mock_model") == 2
+    assert strategy.count("1234567890", "mock_model") == 3
 
 
 def test_fallback_when_tiktoken_missing():
@@ -54,17 +54,3 @@ def test_tiktoken_integration_gpt():
 
     assert count > 0
     assert isinstance(count, int)
-
-
-def test_token_counter_claude_multiplier():
-    """
-    Verify that selecting a Claude model applies the safety multiplier.
-    We mock _count_with_encoding to return a fixed value.
-    """
-    with patch("transcriptor4ai.core.processing.tokenizer.TIKTOKEN_AVAILABLE", True):
-        with patch("transcriptor4ai.core.processing.tokenizer._count_with_encoding", return_value=100):
-            gpt_count = count_tokens("text", model="GPT-4")
-            assert gpt_count == 100
-
-            claude_count = count_tokens("text", model="Claude 3.5")
-            assert claude_count == 105

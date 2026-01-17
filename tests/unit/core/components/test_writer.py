@@ -6,7 +6,7 @@ Unit tests for the File Writer module.
 Verifies:
 1. Physical file creation and appending.
 2. Correct formatting (Separator + Relative Path + Content).
-3. Integration of the transformation pipeline (Minify/Sanitize).
+3. Integration of the transformation components (Minify/Sanitize).
 """
 
 from transcriptor4ai.core.pipeline.components.writer import append_entry, initialize_output_file

@@ -31,7 +31,7 @@ def mock_config_dict() -> Dict[str, Any]:
     Return a valid, complete configuration dictionary for testing.
 
     Reflects the structure defined in 'transcriptor4ai.domain.config',
-    ensuring all keys expected by the pipeline are present.
+    ensuring all keys expected by the components are present.
 
     Returns:
         Dict[str, Any]: A sample configuration dictionary.

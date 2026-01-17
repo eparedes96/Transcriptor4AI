@@ -3,30 +3,32 @@ from __future__ import annotations
 """
 Unit tests for GUI Handlers (Controller Logic).
 
-Verifies:
-1. Synchronization of GUI form values to Config dict via AppController.
-2. String parsing utilities specific to GUI inputs.
-3. System interaction calls (mocked).
+Verifies the integration between CustomTkinter views and the AppController,
+ensuring data flows correctly from widgets to the internal configuration model.
+Includes OS-specific interaction tests for system explorers.
 """
 
 import os
+import platform
+import subprocess
 from unittest.mock import MagicMock, patch
+from pathlib import Path
+
 import pytest
 
 from transcriptor4ai.interface.gui.controllers.main_controller import AppController
 from transcriptor4ai.interface.gui.utils.tk_helpers import open_file_explorer, parse_list_from_string
 
-
-def test_parse_list_from_string_gui():
-    """Verify helper splits CSV strings from GUI inputs."""
+@pytest.mark.gui
+def test_parse_list_from_string_gui() -> None:
+    """Verify helper splits CSV strings from GUI inputs into clean lists."""
     assert parse_list_from_string(".py, .js") == [".py", ".js"]
     assert parse_list_from_string("  val1  , val2 ") == ["val1", "val2"]
     assert parse_list_from_string("") == []
     assert parse_list_from_string(None) == []
 
-
-# ------ INICIO DE MODIFICACIÓN: V2.0.0 Controller Test ------
-def test_controller_sync_config_from_view(mock_config_dict):
+@pytest.mark.gui
+def test_controller_sync_config_from_view(mock_config_dict: dict) -> None:
     """
     Verify that the AppController correctly scrapes values from
     CustomTkinter widgets and updates the config dictionary.
@@ -99,8 +101,8 @@ def test_controller_sync_config_from_view(mock_config_dict):
     assert controller.config["enable_sanitizer"] is True
     assert controller.config["minify_output"] is True
 
-
-def test_open_file_explorer_calls_system(tmp_path):
+@pytest.mark.gui
+def test_open_file_explorer_calls_system(tmp_path: Path) -> None:
     """Verify that the correct OS command is called based on platform."""
 
     target_dir = tmp_path / "target"
@@ -120,8 +122,9 @@ def test_open_file_explorer_calls_system(tmp_path):
             mock_popen.assert_called_with(["xdg-open", path_str])
 
 
-def test_open_file_explorer_handles_invalid_path():
-    """It should verify path existence before calling system."""
+@pytest.mark.gui
+def test_open_file_explorer_handles_invalid_path() -> None:
+    """It should verify path existence before calling system to avoid crashes."""
 
     # Mock showerror to avoid UI popup during test
     with patch("tkinter.messagebox.showerror") as mock_alert:

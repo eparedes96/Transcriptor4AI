@@ -5,10 +5,11 @@ Configuration Validator.
 
 Acts as a gatekeeper to ensure that the configuration dictionary passed
 to the pipeline contains valid types and normalized values.
+Uses a schema-driven approach to minimize boilerplate.
 """
 
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Callable
 
 from transcriptor4ai.core.pipeline.filters import (
     default_extensions,
@@ -29,12 +30,11 @@ def validate_config(
     Validate and normalize the configuration dictionary.
 
     Ensures types are correct (converting strings to bools/lists if needed)
-    and fills in missing values with defaults.
+    and fills in missing values with defaults using a declarative schema.
 
     Args:
         config: The raw configuration dictionary (or untrusted input).
         strict: If True, raises TypeError/ValueError on invalid data.
-                If False, falls back to defaults and logs warnings.
 
     Returns:
         Tuple[Dict, List[str]]: (Normalized Config, List of Warnings).
@@ -55,18 +55,12 @@ def validate_config(
     merged: Dict[str, Any] = dict(defaults)
     merged.update(config)
 
-    # 1. String Fields
-    for field in ["input_path", "output_base_dir", "output_subdir_name",
-                  "output_prefix", "target_model"]:
-        merged[field] = _as_str(
-            merged.get(field),
-            defaults.get(field, ""),
-            field,
-            warnings,
-            strict
-        )
+    # Declarative Schema Definition
+    string_fields = [
+        "input_path", "output_base_dir", "output_subdir_name",
+        "output_prefix", "target_model"
+    ]
 
-    # 2. Boolean Fields
     bool_fields = [
         "process_modules", "process_tests", "process_resources",
         "create_individual_files", "create_unified_file",
@@ -74,46 +68,37 @@ def validate_config(
         "generate_tree", "print_tree", "save_error_log", "respect_gitignore",
         "enable_sanitizer", "mask_user_paths", "minify_output"
     ]
-    for field in bool_fields:
-        merged[field] = _as_bool(
-            merged.get(field),
-            defaults.get(field, False),
-            field,
-            warnings,
-            strict
+
+    list_fields_map = {
+        "extensions": default_extensions(),
+        "include_patterns": default_include_patterns(),
+        "exclude_patterns": default_exclude_patterns(),
+    }
+
+    # Process String Fields
+    for field in string_fields:
+        merged[field] = _as_str(
+            merged.get(field), defaults.get(field, ""), field, warnings, strict
         )
 
-    # 3. List Fields
-    merged["extensions"] = _as_list_str(
-        merged.get("extensions"),
-        default_extensions(),
-        "extensions",
-        warnings,
-        strict,
-    )
-    merged["extensions"] = _normalize_extensions(merged["extensions"], warnings, strict)
+    # Process Boolean Fields
+    for field in bool_fields:
+        merged[field] = _as_bool(
+            merged.get(field), defaults.get(field, False), field, warnings, strict
+        )
 
-    merged["include_patterns"] = _as_list_str(
-        merged.get("include_patterns"),
-        default_include_patterns(),
-        "include_patterns",
-        warnings,
-        strict,
-    )
-    merged["exclude_patterns"] = _as_list_str(
-        merged.get("exclude_patterns"),
-        default_exclude_patterns(),
-        "exclude_patterns",
-        warnings,
-        strict,
-    )
+    # Process List Fields
+    for field, fallback in list_fields_map.items():
+        merged[field] = _as_list_str(
+            merged.get(field), fallback, field, warnings, strict
+        )
+
+    # Post-processing normalization
+    merged["extensions"] = _normalize_extensions(merged["extensions"], warnings, strict)
 
     return merged, warnings
 
 
-# -----------------------------------------------------------------------------
-# Internal Helpers
-# -----------------------------------------------------------------------------
 def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: bool) -> str:
     """Ensure value is a string."""
     if value is None:

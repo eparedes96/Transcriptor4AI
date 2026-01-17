@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 import tkinter.messagebox as mb
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Tuple
 
 import customtkinter as ctk
 
@@ -68,46 +68,72 @@ class AppController:
         self.logs_view = logs
         self.sidebar_view = sidebar
 
+    def _get_ui_mapping(self) -> Dict[str, List[Tuple[str, Any]]]:
+        """
+        Returns a declarative mapping of config keys to UI components.
+        Organized by component type to simplify iteration.
+        """
+        if not self.dashboard_view or not self.settings_view:
+            return {}
+
+        return {
+            "switches": [
+                ("process_modules", self.dashboard_view.sw_modules),
+                ("process_tests", self.dashboard_view.sw_tests),
+                ("process_resources", self.dashboard_view.sw_resources),
+                ("generate_tree", self.dashboard_view.sw_tree),
+                ("respect_gitignore", self.settings_view.sw_gitignore),
+                ("create_individual_files", self.settings_view.sw_individual),
+                ("create_unified_file", self.settings_view.sw_unified),
+                ("enable_sanitizer", self.settings_view.sw_sanitizer),
+                ("mask_user_paths", self.settings_view.sw_mask),
+                ("minify_output", self.settings_view.sw_minify),
+                ("save_error_log", self.settings_view.sw_error_log),
+            ],
+            "checkboxes": [
+                ("show_functions", self.dashboard_view.chk_func),
+                ("show_classes", self.dashboard_view.chk_class),
+                ("show_methods", self.dashboard_view.chk_meth),
+            ],
+            "entries": [
+                ("output_subdir_name", self.dashboard_view.entry_subdir),
+                ("output_prefix", self.dashboard_view.entry_prefix),
+            ]
+        }
+
     def sync_view_from_config(self) -> None:
-        """Populate UI widgets with values from self.config."""
-        if not self.dashboard_view: return
+        """Populate UI widgets with values from self.config using declarative mapping."""
+        if not self.dashboard_view:
+            return
 
+        # 1. Rutas (Lógica especial por ser ReadOnly)
         input_path = self.config.get("input_path", "")
-        output_path = self.config.get("output_base_dir", "")
-
-        # If output path is undefined in config, default to input path
-        if not output_path:
-            output_path = input_path
-
+        output_path = self.config.get("output_base_dir", "") or input_path
         self._safe_entry_update(self.dashboard_view.entry_input, input_path)
         self._safe_entry_update(self.dashboard_view.entry_output, output_path)
 
-        self.dashboard_view.entry_subdir.delete(0, "end")
-        self.dashboard_view.entry_subdir.insert(0, self.config.get("output_subdir_name", ""))
-        self.dashboard_view.entry_prefix.delete(0, "end")
-        self.dashboard_view.entry_prefix.insert(0, self.config.get("output_prefix", ""))
+        # 2. Mapeo genérico
+        mapping = self._get_ui_mapping()
 
-        self._set_switch(self.dashboard_view.sw_modules, "process_modules")
-        self._set_switch(self.dashboard_view.sw_tests, "process_tests")
-        self._set_switch(self.dashboard_view.sw_resources, "process_resources")
-        self._set_switch(self.dashboard_view.sw_tree, "generate_tree")
+        for key, widget in mapping.get("switches", []):
+            self._set_switch(widget, key)
 
-        # AST State Check
+        for key, widget in mapping.get("checkboxes", []):
+            self._set_checkbox(widget, key)
+
+        for key, widget in mapping.get("entries", []):
+            widget.delete(0, "end")
+            widget.insert(0, str(self.config.get(key, "")))
+
+        # 3. Campos de lista (Settings)
+        for key, widget in [("extensions", self.settings_view.entry_ext),
+                            ("include_patterns", self.settings_view.entry_inc),
+                            ("exclude_patterns", self.settings_view.entry_exc)]:
+            widget.delete(0, "end")
+            widget.insert(0, ",".join(self.config.get(key, [])))
+
+        # 4. Combos y estados visuales
         self.on_tree_toggled()
-
-        # AST Checkboxes
-        self._set_checkbox(self.dashboard_view.chk_func, "show_functions")
-        self._set_checkbox(self.dashboard_view.chk_class, "show_classes")
-        self._set_checkbox(self.dashboard_view.chk_meth, "show_methods")
-
-        # Settings
-        self.settings_view.entry_ext.delete(0, "end")
-        self.settings_view.entry_ext.insert(0, ",".join(self.config.get("extensions", [])))
-        self.settings_view.entry_inc.delete(0, "end")
-        self.settings_view.entry_inc.insert(0, ",".join(self.config.get("include_patterns", [])))
-        self.settings_view.entry_exc.delete(0, "end")
-        self.settings_view.entry_exc.insert(0, ",".join(self.config.get("exclude_patterns", [])))
-
         self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
         self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
 
@@ -126,13 +152,34 @@ class AppController:
         # 3. Populate Model Combo based on Provider
         self._filter_models_by_provider(current_provider, preserve_selection=target_model)
 
-        self._set_switch(self.settings_view.sw_gitignore, "respect_gitignore")
-        self._set_switch(self.settings_view.sw_individual, "create_individual_files")
-        self._set_switch(self.settings_view.sw_unified, "create_unified_file")
-        self._set_switch(self.settings_view.sw_sanitizer, "enable_sanitizer")
-        self._set_switch(self.settings_view.sw_mask, "mask_user_paths")
-        self._set_switch(self.settings_view.sw_minify, "minify_output")
-        self._set_switch(self.settings_view.sw_error_log, "save_error_log")
+    def sync_config_from_view(self) -> None:
+        """Scrape values from UI widgets into self.config using declarative mapping."""
+        if not self.dashboard_view:
+            return
+
+        # 1. Rutas y campos básicos
+        self.config["input_path"] = self.dashboard_view.entry_input.get().strip()
+        self.config["output_base_dir"] = self.dashboard_view.entry_output.get().strip()
+
+        # 2. Mapeo genérico
+        mapping = self._get_ui_mapping()
+
+        for key, widget in mapping.get("switches", []):
+            self.config[key] = bool(widget.get())
+
+        for key, widget in mapping.get("checkboxes", []):
+            self.config[key] = bool(widget.get())
+
+        for key, widget in mapping.get("entries", []):
+            self.config[key] = widget.get().strip()
+
+        # 3. Listas
+        self.config["extensions"] = tk_helpers.parse_list_from_string(self.settings_view.entry_ext.get())
+        self.config["include_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_inc.get())
+        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_exc.get())
+
+        # 4. Otros
+        self.config["target_model"] = self.settings_view.combo_model.get()
 
     def on_provider_selected(self, provider: str) -> None:
         """Callback triggered when the Provider Combobox changes."""
@@ -180,44 +227,6 @@ class AppController:
         else:
             chk.deselect()
 
-    def sync_config_from_view(self) -> None:
-        """Scrape values from UI widgets into self.config."""
-        if not self.dashboard_view: return
-
-        # Dashboard
-        self.config["input_path"] = self.dashboard_view.entry_input.get().strip()
-        self.config["output_base_dir"] = self.dashboard_view.entry_output.get().strip()
-        self.config["output_subdir_name"] = self.dashboard_view.entry_subdir.get().strip()
-        self.config["output_prefix"] = self.dashboard_view.entry_prefix.get().strip()
-
-        self.config["process_modules"] = bool(self.dashboard_view.sw_modules.get())
-        self.config["process_tests"] = bool(self.dashboard_view.sw_tests.get())
-        self.config["process_resources"] = bool(self.dashboard_view.sw_resources.get())
-        self.config["generate_tree"] = bool(self.dashboard_view.sw_tree.get())
-
-        # AST
-        self.config["show_functions"] = bool(self.dashboard_view.chk_func.get())
-        self.config["show_classes"] = bool(self.dashboard_view.chk_class.get())
-        self.config["show_methods"] = bool(self.dashboard_view.chk_meth.get())
-
-        self.config["extensions"] = tk_helpers.parse_list_from_string(self.settings_view.entry_ext.get())
-        self.config["include_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_inc.get())
-        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_exc.get())
-
-        # Model Selector
-        self.config["target_model"] = self.settings_view.combo_model.get()
-
-        self.config["respect_gitignore"] = bool(self.settings_view.sw_gitignore.get())
-        self.config["create_individual_files"] = bool(self.settings_view.sw_individual.get())
-        self.config["create_unified_file"] = bool(self.settings_view.sw_unified.get())
-        self.config["enable_sanitizer"] = bool(self.settings_view.sw_sanitizer.get())
-        self.config["mask_user_paths"] = bool(self.settings_view.sw_mask.get())
-        self.config["minify_output"] = bool(self.settings_view.sw_minify.get())
-        self.config["save_error_log"] = bool(self.settings_view.sw_error_log.get())
-
-    # -------------------------------------------------------------------------
-    # Core Pipeline Execution
-    # -------------------------------------------------------------------------
     def start_processing(self, dry_run: bool = False, overwrite: bool = False) -> None:
         self.sync_config_from_view()
 
@@ -249,13 +258,13 @@ class AppController:
     def _handle_process_result(self, result: Any) -> None:
         if isinstance(result, PipelineResult) and not result.ok:
             if result.existing_files:
-                msg = i18n.t("gui.popups.overwrite_msg", files="\n".join(result.existing_files))
+                msg = i18n.t("gui.popups.overwrite_msg", files="/n".join(result.existing_files))
                 if mb.askyesno(i18n.t("gui.popups.overwrite_title"), msg):
                     self.start_processing(dry_run=False, overwrite=True)
                     return
 
         self._toggle_ui(disabled=False)
-        self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#3B8ED0")
+        self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#1f538d")
 
         if isinstance(result, PipelineResult):
             if result.ok:

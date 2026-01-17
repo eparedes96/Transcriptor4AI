@@ -5,22 +5,21 @@ Security and Privacy Sanitizer.
 
 Provides high-performance redaction of secrets (API Keys, IPs, Emails)
 and anonymizes local system paths using stream processing.
+Optimized with memoization for OS-level info lookups.
 """
 
 import logging
 import os
 import re
+import functools
 from pathlib import Path
 from typing import Final, Iterator, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------------------------
-# Redaction Constants (Regex Patterns)
-# -----------------------------------------------------------------------------
 _GENERIC_SECRET_PATTERN: Final[str] = (
     r"(?i)(?:key|password|secret|token|auth|api|pwd)[-_]?(?:key|password|secret|token|auth|api|pwd)?\s*"
-    r"[:=]\s*[\"']([^\"']{8,})[\"']"
+    r"[:=]\s*['\"]([^'\"]{8,})['\"]"
 )
 
 _OPENAI_KEY_PATTERN: Final[str] = r"sk-[a-zA-Z0-9-]{32,}"
@@ -38,14 +37,11 @@ _COMPILED_SECRETS: Final[list[re.Pattern]] = [
 
 _COMPILED_ASSIGNMENTS: Final[re.Pattern] = re.compile(_GENERIC_SECRET_PATTERN)
 
-
-# -----------------------------------------------------------------------------
-# Private Helpers
-# -----------------------------------------------------------------------------
+@functools.lru_cache(maxsize=1)
 def _get_user_info() -> Tuple[Optional[str], Optional[str]]:
     """
-    Retrieve OS-level user info for path masking.
-    Handles potential OS errors in restricted environments (CI/Docker).
+    Retrieve OS-level user info for path masking with memoization.
+    This avoids expensive OS/Environment calls during high-volume processing.
 
     Returns:
         Tuple[Optional[str], Optional[str]]: (Username, HomeDirectory).
@@ -69,10 +65,6 @@ def _get_user_info() -> Tuple[Optional[str], Optional[str]]:
 
     return user_name, home_dir
 
-
-# -----------------------------------------------------------------------------
-# Public API
-# -----------------------------------------------------------------------------
 def sanitize_text(text: str) -> str:
     """
     Sanitize a full string in memory.
@@ -87,7 +79,6 @@ def sanitize_text(text: str) -> str:
     if not text:
         return ""
     return "".join(list(sanitize_text_stream(iter(text.splitlines(keepends=True)))))
-
 
 def sanitize_text_stream(lines: Iterator[str]) -> Iterator[str]:
     """
@@ -106,17 +97,15 @@ def sanitize_text_stream(lines: Iterator[str]) -> Iterator[str]:
             continue
 
         processed = line
-        # 1. Redact specific provider keys and network info
+
         for pattern in _COMPILED_SECRETS:
             processed = pattern.sub("[[REDACTED_SENSITIVE]]", processed)
 
-        # 2. Redact generic assignments
         processed = _COMPILED_ASSIGNMENTS.sub(
             lambda m: m.group(0).replace(m.group(1), "[[REDACTED_SECRET]]"),
             processed
         )
         yield processed
-
 
 def mask_local_paths(text: str) -> str:
     """
@@ -132,11 +121,12 @@ def mask_local_paths(text: str) -> str:
         return ""
     return "".join(list(mask_local_paths_stream(iter(text.splitlines(keepends=True)))))
 
-
 def mask_local_paths_stream(lines: Iterator[str]) -> Iterator[str]:
     """
     Anonymize local paths line-by-line.
     Replaces the current user's home directory and username with placeholders.
+
+    Optimized: Pre-compiles regex patterns once before stream iteration.
 
     Args:
         lines: An iterator yielding lines of text.
@@ -146,22 +136,17 @@ def mask_local_paths_stream(lines: Iterator[str]) -> Iterator[str]:
     """
     user_name, home_dir = _get_user_info()
 
-    # Pre-compile patterns if info is available to optimize the stream
-    home_pattern = None
-    user_pattern = None
-
+    patterns = []
     if home_dir:
-        home_pattern = re.compile(re.escape(home_dir), re.IGNORECASE)
+        patterns.append((re.compile(re.escape(home_dir), re.IGNORECASE), "<USER_HOME>"))
     if user_name:
-        user_pattern = re.compile(rf"([\\/]){re.escape(user_name)}([\\/])")
+        # Matches username between path separators
+        patterns.append((re.compile(rf"([\\/]){re.escape(user_name)}([\\/])"), r"\1<USER>\2"))
 
     for line in lines:
         processed = line.replace("\\", "/")
 
-        if home_pattern:
-            processed = home_pattern.sub("<USER_HOME>", processed)
-
-        if user_pattern:
-            processed = user_pattern.sub(r"\1<USER>\2", processed)
+        for pattern, replacement in patterns:
+            processed = pattern.sub(replacement, processed)
 
         yield processed

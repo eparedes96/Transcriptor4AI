@@ -232,46 +232,57 @@ class TokenizerService:
 
     def __init__(self) -> None:
         self.heuristic = HeuristicStrategy()
+        # Mapeo de prefijos de modelos a estrategias para búsqueda O(1)
+        self._strategy_map: Dict[str, TokenizerStrategy] = {
+            "gpt": TiktokenStrategy(),
+            "o1": TiktokenStrategy(),
+            "o3": TiktokenStrategy(),
+            "o4": TiktokenStrategy(),
+            "gemini": GoogleApiStrategy(),
+            "claude": AnthropicApiStrategy(),
+            "mistral": MistralStrategy(),
+            "magistral": MistralStrategy(),
+            "codestral": MistralStrategy(),
+            "devstral": MistralStrategy(),
+            "llama": TransformersStrategy(),
+            "qwen": TransformersStrategy(),
+            "qwq": TransformersStrategy(),
+            "deepseek": TransformersStrategy(),
+            "falcon": TransformersStrategy(),
+        }
 
     def count(self, text: str, model: str) -> int:
         """
-        Main entry point. Determines strategy based on model name.
+        Main entry point. Determines strategy based on model mapping.
         Handles errors gracefully by falling back to heuristic.
         """
         if not text:
             return 0
 
-        if "- default model -" in model.lower():
-            def_strategy = TiktokenStrategy()
-            try:
-                return def_strategy.count(text, "gpt-4o")
-            except Exception as e:
-                logger.warning(f"Default tokenizer failed: {e}. Using heuristic.")
-                return self.heuristic.count(text, model)
-
         model_lower = model.lower()
-        strategy: TokenizerStrategy
 
-        # 1. Special Case: OCR / Vision
         if "ocr" in model_lower or "vision" in model_lower:
             logger.info("OCR model selected. Token counting skipped (Vision-based).")
             return 0
 
-        # 2. Select Provider Strategy
-        if "gpt" in model_lower or "o1" in model_lower or "o3" in model_lower or "o4" in model_lower:
-            strategy = TiktokenStrategy()
-        elif "gemini" in model_lower:
-            strategy = GoogleApiStrategy()
-        elif "claude" in model_lower:
-            strategy = AnthropicApiStrategy()
-        elif "mistral" in model_lower or "magistral" in model_lower or "codestral" in model_lower or "devstral" in model_lower:
-            strategy = MistralStrategy()
-        elif any(x in model_lower for x in ["llama", "qwen", "qwq", "deepseek", "falcon"]):
-            strategy = TransformersStrategy()
-        else:
-            strategy = TiktokenStrategy() if TIKTOKEN_AVAILABLE else self.heuristic
+        if "- default model -" in model_lower:
+            try:
+                return TiktokenStrategy().count(text, "gpt-4o")
+            except Exception as e:
+                logger.warning(f"Default tokenizer failed: {e}. Using heuristic.")
+                return self.heuristic.count(text, model)
 
-        # 3. Execute with Safety Net
+        # Selección de estrategia optimizada
+        strategy: TokenizerStrategy = self.heuristic
+        for prefix, strat in self._strategy_map.items():
+            if prefix in model_lower:
+                strategy = strat
+                break
+
+        # Fallback si no hay match en el mapa pero es un modelo conocido
+        if strategy == self.heuristic and TIKTOKEN_AVAILABLE:
+            strategy = TiktokenStrategy()
+
         try:
             return strategy.count(text, model)
         except Exception as e:

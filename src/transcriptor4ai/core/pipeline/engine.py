@@ -18,15 +18,15 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree
-from transcriptor4ai.core.pipeline.transcriber import transcribe_code
-from transcriptor4ai.core.pipeline.validator import validate_config
+from transcriptor4ai.core.pipeline.stages.transcriber import transcribe_code
+from transcriptor4ai.core.pipeline.stages.validator import validate_config
 from transcriptor4ai.domain.pipeline_models import (
     PipelineResult,
     create_error_result
 )
 
-from transcriptor4ai.core.pipeline.setup import prepare_environment
-from transcriptor4ai.core.pipeline.assembler import assemble_and_finalize
+from transcriptor4ai.core.pipeline.stages.setup import prepare_environment
+from transcriptor4ai.core.pipeline.stages.assembler import assemble_and_finalize
 
 logger = logging.getLogger(__name__)
 

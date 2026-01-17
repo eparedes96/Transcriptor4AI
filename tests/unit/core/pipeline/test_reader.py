@@ -9,7 +9,7 @@ Verifies:
 """
 
 import pytest
-from transcriptor4ai.core.pipeline.reader import stream_file_content
+from transcriptor4ai.core.pipeline.components.reader import stream_file_content
 
 
 def test_stream_file_content_normal(tmp_path):

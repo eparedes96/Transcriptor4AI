@@ -10,7 +10,7 @@ Verifies:
 """
 
 import pytest
-from transcriptor4ai.core.pipeline.validator import validate_config
+from transcriptor4ai.core.pipeline.stages.validator import validate_config
 
 
 def test_validate_none_returns_defaults():

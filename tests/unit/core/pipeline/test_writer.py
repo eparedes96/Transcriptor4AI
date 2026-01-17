@@ -9,8 +9,7 @@ Verifies:
 3. Integration of the transformation pipeline (Minify/Sanitize).
 """
 
-import pytest
-from transcriptor4ai.core.pipeline.writer import append_entry, initialize_output_file
+from transcriptor4ai.core.pipeline.components.writer import append_entry, initialize_output_file
 
 
 def test_initialize_output_file_creates_header(tmp_path):

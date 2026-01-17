@@ -10,12 +10,11 @@ Verifies the decision-making process of `process_file_task`:
 4. Error handling and result dictionary formation.
 """
 
-import threading
 from typing import Dict
 from unittest.mock import MagicMock, patch
 import pytest
 
-from transcriptor4ai.core.pipeline.worker import process_file_task
+from transcriptor4ai.core.pipeline.stages.worker import process_file_task
 
 
 @pytest.fixture

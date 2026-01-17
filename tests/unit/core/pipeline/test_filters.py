@@ -10,8 +10,7 @@ Verifies:
 """
 
 import re
-import pytest
-from transcriptor4ai.core.pipeline.filters import (
+from transcriptor4ai.core.pipeline.components.filters import (
     compile_patterns,
     matches_any,
     matches_include,

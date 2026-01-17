@@ -14,7 +14,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
-from transcriptor4ai.core.pipeline.filters import (
+from transcriptor4ai.core.pipeline.components.filters import (
     compile_patterns,
     default_extensions,
     default_exclude_patterns,
@@ -25,8 +25,8 @@ from transcriptor4ai.core.pipeline.filters import (
     is_resource_file,
     is_test
 )
-from transcriptor4ai.core.pipeline.worker import process_file_task
-from transcriptor4ai.core.pipeline.writer import initialize_output_file
+from transcriptor4ai.core.pipeline.stages.worker import process_file_task
+from transcriptor4ai.core.pipeline.components.writer import initialize_output_file
 from transcriptor4ai.domain.transcription_models import TranscriptionError
 from transcriptor4ai.infra.fs import safe_mkdir
 

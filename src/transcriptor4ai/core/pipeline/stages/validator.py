@@ -9,9 +9,9 @@ Uses a schema-driven approach to minimize boilerplate.
 """
 
 import logging
-from typing import Any, Dict, List, Tuple, Callable
+from typing import Any, Dict, List, Tuple
 
-from transcriptor4ai.core.pipeline.filters import (
+from transcriptor4ai.core.pipeline.components.filters import (
     default_extensions,
     default_include_patterns,
     default_exclude_patterns,

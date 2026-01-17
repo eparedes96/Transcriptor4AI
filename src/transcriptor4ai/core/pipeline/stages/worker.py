@@ -11,9 +11,9 @@ operation to the writer module.
 import threading
 from typing import Dict, Any
 
-from transcriptor4ai.core.pipeline.filters import is_test, is_resource_file
-from transcriptor4ai.core.pipeline.reader import stream_file_content
-from transcriptor4ai.core.pipeline.writer import append_entry
+from transcriptor4ai.core.pipeline.components.filters import is_test, is_resource_file
+from transcriptor4ai.core.pipeline.components.reader import stream_file_content
+from transcriptor4ai.core.pipeline.components.writer import append_entry
 
 
 def process_file_task(

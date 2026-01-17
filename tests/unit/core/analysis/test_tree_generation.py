@@ -9,7 +9,7 @@ and the integration of AST symbols in the output.
 
 import pytest
 from transcriptor4ai.core.analysis.tree_generator import generate_directory_tree, _build_structure
-from transcriptor4ai.core.pipeline.filters import compile_patterns, is_test
+from transcriptor4ai.core.pipeline.components.filters import compile_patterns, is_test
 from transcriptor4ai.domain.tree_models import FileNode
 
 

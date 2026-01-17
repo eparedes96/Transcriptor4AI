@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 """
-Parallel Transcription Manager.
+Parallel Transcription Orchestrator.
 
-This module orchestrates the multi-threaded scanning and transcription process.
-It initializes worker threads, manages file locks, and aggregates the results
-into a structured report.
+Manages the multi-threaded scanning and transcription lifecycle. It coordinates
+filesystem traversal, pattern-based filtering, thread-safe concurrent writing 
+to shared output files, and error aggregation.
 """
 
 import logging
@@ -32,6 +32,9 @@ from transcriptor4ai.infra.fs import safe_mkdir
 
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# PUBLIC API
+# -----------------------------------------------------------------------------
 
 def transcribe_code(
         input_path: str,
@@ -52,42 +55,47 @@ def transcribe_code(
         minify_output: bool = False,
 ) -> Dict[str, Any]:
     """
-    Consolidate source code and resources into specific text files using parallel workers.
+    Execute parallel transcription of project files into categorized text files.
+
+    This function acts as the high-level orchestrator for the transcription stage.
+    It prepares filtering rules, initializes the thread-safe environment,
+    dispatches tasks to a worker pool, and finalizes the execution report.
 
     Args:
         input_path: Source directory to scan.
-        modules_output_path: Destination path for source code (scripts).
-        tests_output_path: Destination path for test code.
-        resources_output_path: Destination path for resources (docs/config).
-        error_output_path: Destination path for error log.
-        process_modules: If True, extract source code files.
-        process_tests: If True, extract test files.
-        process_resources: If True, extract resource files.
-        extensions: List of allowed file extensions.
+        modules_output_path: Target path for source logic transcription.
+        tests_output_path: Target path for test suites transcription.
+        resources_output_path: Target path for configuration/documentation files.
+        error_output_path: Target path for the operation error log.
+        process_modules: Enable source code processing.
+        process_tests: Enable test file processing.
+        process_resources: Enable resource file processing.
+        extensions: Filter by specific file extensions.
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
-        respect_gitignore: If True, parse .gitignore.
-        save_error_log: Whether to write the error log file.
-        enable_sanitizer: If True, redact secrets from the output.
-        mask_user_paths: If True, anonymize local user paths.
-        minify_output: If True, remove redundant code comments.
+        respect_gitignore: Enable automatic .gitignore parsing.
+        save_error_log: Enable error persistence to disk.
+        enable_sanitizer: Enable secret redaction.
+        mask_user_paths: Enable local path anonymization.
+        minify_output: Enable code minification.
 
     Returns:
-        Dict[str, Any]: A dictionary containing counters, paths, and execution status.
+        Dict[str, Any]: Execution summary containing status, generated paths, and counters.
     """
     logger.info(f"Starting parallel transcription scan in: {input_path}")
 
-    # 1. Preparar parámetros y reglas de filtrado
+    # 1. Compile and aggregate filtering rules
     include_rx, exclude_rx = _prepare_filtering_rules(
         input_path, include_patterns, exclude_patterns, respect_gitignore
     )
 
-    # 2. Inicializar archivos y entorno de hilos
+    # 2. Setup output files and thread synchronization locks
     locks, output_paths = _initialize_execution_environment(
         modules_output_path, tests_output_path, resources_output_path,
         error_output_path, process_modules, process_tests, process_resources
     )
 
+    # Initialize results container
     results: Dict[str, Any] = {
         "processed": 0,
         "skipped": 0,
@@ -97,7 +105,7 @@ def transcribe_code(
         "errors": []
     }
 
-    # 3. Ejecutar escaneo y procesamiento en paralelo
+    # 3. Perform concurrent filesystem traversal and processing
     _execute_parallel_transcription(
         input_path, extensions or default_extensions(), include_rx, exclude_rx,
         process_modules, process_tests, process_resources,
@@ -105,12 +113,15 @@ def transcribe_code(
         locks, output_paths, results
     )
 
-    # 4. Finalizar reportes y construir respuesta
+    # 4. Persistence of errors and final summary building
     actual_error_path = _finalize_error_reporting(
         save_error_log, error_output_path, results["errors"]
     )
 
-    logger.info(f"Parallel Transcription finished. Processed: {results['processed']}. Errors: {len(results['errors'])}")
+    logger.info(
+        f"Parallel Transcription finished. Processed: {results['processed']}. "
+        f"Errors: {len(results['errors'])}"
+    )
 
     return {
         "ok": True,
@@ -131,9 +142,8 @@ def transcribe_code(
         },
     }
 
-
 # -----------------------------------------------------------------------------
-# HELPERS PRIVADOS DE TRANSCRIPCIÓN
+# INTERNAL HELPERS: PREPARATION
 # -----------------------------------------------------------------------------
 
 def _prepare_filtering_rules(
@@ -142,7 +152,9 @@ def _prepare_filtering_rules(
         exclude_patterns: Optional[List[str]],
         respect_gitignore: bool
 ) -> Tuple[List[Any], List[Any]]:
-    """Compile and merge all inclusion/exclusion regex patterns."""
+    """
+    Compile and aggregate all patterns into actionable regex objects.
+    """
     input_path_abs = os.path.abspath(input_path)
 
     final_includes = include_patterns if include_patterns is not None else default_include_patterns()
@@ -166,10 +178,13 @@ def _initialize_execution_environment(
         process_tests: bool,
         process_resources: bool
 ) -> Tuple[Dict[str, threading.Lock], Dict[str, str]]:
-    """Prepare output directories, initialize files and create thread locks."""
+    """
+    Initialize output directory structure, file headers, and synchronization locks.
+    """
     for p in [modules_path, tests_path, resources_path, error_path]:
         safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
+    # Thread locks ensure that multiple workers don't corrupt the shared output files
     locks = {
         "module": threading.Lock(),
         "test": threading.Lock(),
@@ -184,6 +199,7 @@ def _initialize_execution_environment(
         "error": error_path
     }
 
+    # Prepare files with their respective domain headers
     if process_modules:
         initialize_output_file(modules_path, "SCRIPTS/MODULES:")
     if process_tests:
@@ -193,6 +209,9 @@ def _initialize_execution_environment(
 
     return locks, output_paths
 
+# -----------------------------------------------------------------------------
+# INTERNAL HELPERS: TASK DISPATCHING
+# -----------------------------------------------------------------------------
 
 def _execute_parallel_transcription(
         input_path: str,
@@ -209,10 +228,13 @@ def _execute_parallel_transcription(
         output_paths: Dict[str, str],
         results: Dict[str, Any]
 ) -> None:
-    """Walk the filesystem and dispatch tasks to the thread pool."""
+    """
+    Walk the filesystem and dispatch transcription tasks to the ThreadPoolExecutor.
+    """
     input_path_abs = os.path.abspath(input_path)
     tasks = []
 
+    # Prune directories in-place for os.walk efficiency
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
         for root, dirs, files in os.walk(input_path_abs):
             dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
@@ -220,10 +242,12 @@ def _execute_parallel_transcription(
             files.sort()
 
             for file_name in files:
+                # 1. Global Exclusion check
                 if matches_any(file_name, exclude_rx):
                     results["skipped"] += 1
                     continue
 
+                # 2. Inclusion whitelist check
                 if not matches_include(file_name, include_rx):
                     results["skipped"] += 1
                     continue
@@ -231,6 +255,7 @@ def _execute_parallel_transcription(
                 _, ext = os.path.splitext(file_name)
                 should_process = False
 
+                # 3. Mode-based classification check
                 if process_resources and is_resource_file(file_name):
                     should_process = True
                 elif process_tests and is_test(file_name):
@@ -246,6 +271,7 @@ def _execute_parallel_transcription(
                 file_path = os.path.join(root, file_name)
                 rel_path = os.path.relpath(file_path, input_path_abs)
 
+                # Dispatch atomic file processing to worker threads
                 tasks.append(executor.submit(
                     process_file_task,
                     file_path=file_path,
@@ -262,6 +288,7 @@ def _execute_parallel_transcription(
                     output_paths=output_paths
                 ))
 
+        # Collect and aggregate results as they complete
         for future in as_completed(tasks):
             worker_res = future.result()
             if worker_res["ok"]:
@@ -279,13 +306,18 @@ def _execute_parallel_transcription(
                     error=worker_res["error"]
                 ))
 
+# -----------------------------------------------------------------------------
+# INTERNAL HELPERS: FINALIZATION
+# -----------------------------------------------------------------------------
 
 def _finalize_error_reporting(
         save_error_log: bool,
         error_output_path: str,
         errors: List[TranscriptionError]
 ) -> str:
-    """Write the error log file if necessary and return its path."""
+    """
+    Persist collected execution errors to a dedicated log file.
+    """
     actual_error_path = ""
     if save_error_log and errors:
         try:

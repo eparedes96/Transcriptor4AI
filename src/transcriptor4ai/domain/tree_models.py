@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 """
-Tree Structure Data Models.
+Directory Tree Structure Data Models.
 
-Defines the recursive types used to represent the directory structure
-analysis results.
+Provides the recursive type definitions and structural nodes used by 
+the static analysis subsystem to build hierarchical project maps.
 """
 
 from dataclasses import dataclass
 from typing import Dict, Union
 
+# -----------------------------------------------------------------------------
+# STRUCTURAL COMPONENTS
+# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class FileNode:
     """
-    Represents a leaf node (file) in the directory tree structure.
+    Represents a leaf entry (file) in the directory tree.
 
     Attributes:
-        path: Absolute path to the file on the filesystem.
+        path: Absolute filesystem path to the file.
     """
     path: str
 
-
-# Recursive type alias for the directory tree structure
 Tree = Dict[str, Union["Tree", FileNode]]

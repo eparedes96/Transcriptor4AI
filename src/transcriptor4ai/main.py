@@ -3,10 +3,9 @@ from __future__ import annotations
 """
 Main Entry Point and Global Supervisor.
 
-This module acts as the application's smart router and safety net. It:
-1. Configures the Python path to ensure module visibility.
-2. Registers a global exception handler to catch crashes.
-3. Dispatches execution to either the CLI or GUI based on arguments.
+Orchestrates application startup, execution routing (CLI/GUI), 
+and implements a robust global exception handling mechanism to 
+ensure fatal crashes are captured and reported across all interfaces.
 """
 
 import os
@@ -16,9 +15,10 @@ import logging
 from typing import Any
 
 # -----------------------------------------------------------------------------
-# Path Configuration (Anti-Shadowing Logic)
+# ENVIRONMENT INITIALIZATION
 # -----------------------------------------------------------------------------
-# Calculate base directory relative to this file
+
+# Anti-shadowing and path visibility logic
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if not getattr(sys, 'frozen', False):
     SRC_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
@@ -27,29 +27,30 @@ if not getattr(sys, 'frozen', False):
 
 
 # -----------------------------------------------------------------------------
-# Global Exception Handling (Smart Error Reporter)
+# GLOBAL SUPERVISOR (EXCEPTION HANDLING)
 # -----------------------------------------------------------------------------
+
 def global_exception_handler(exctype: type[BaseException], value: BaseException, tb: Any) -> None:
     """
-    Catch any unhandled exception and route it to the appropriate
-    reporting mechanism (CLI stderr or GUI Modal).
+    Trap unhandled exceptions and route them to interface-appropriate reporters.
 
-    Includes a robust fallback for GUI crashes where the main event loop
-    might be frozen.
+    Captures the full stack trace and delegates reporting to terminal
+    (CLI) or custom crash modals (GUI). Implements an emergency fallback
+    using native Tkinter if the application state is corrupted.
 
     Args:
-        exctype: The exception class.
-        value: The exception instance.
-        tb: The traceback object.
+        exctype: Exception class.
+        value: Exception instance.
+        tb: Traceback object.
     """
     stack_trace = "".join(traceback.format_exception(exctype, value, tb))
     error_msg = str(value)
 
-    # Internal logger (Ensure critical trace is always recorded)
+    # Ensure the crash is persisted in logs
     logger = logging.getLogger("transcriptor4ai.supervisor")
     logger.critical(f"FATAL EXCEPTION DETECTED: {error_msg}\n{stack_trace}")
 
-    # 1. CLI Mode (Arguments provided)
+    # CLI Fallback: Detailed trace to stderr
     if len(sys.argv) > 1:
         print("\n" + "=" * 80, file=sys.stderr)
         print("CRITICAL ERROR (TRANSCRIPTOR4AI CLI)", file=sys.stderr)
@@ -57,13 +58,13 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
         print(stack_trace, file=sys.stderr)
         sys.exit(1)
 
-    # 2. GUI Mode (No arguments)
+    # GUI Fallback: UI-driven reporting
     else:
         try:
             from transcriptor4ai.interface.gui.dialogs.crash_modal import show_crash_modal
             show_crash_modal(error_msg, stack_trace)
         except Exception as e:
-            logger.error(f"Custom crash modal failed: {e}. Falling back to system native alert.")
+            logger.error(f"Custom crash modal failed: {e}. Falling back to system alert.")
             try:
                 import tkinter.messagebox as mb
                 from tkinter import Tk
@@ -81,28 +82,30 @@ def global_exception_handler(exctype: type[BaseException], value: BaseException,
         sys.exit(1)
 
 
-# Register the supervisor immediately at start
+# Hook into the Python interpreter exception flow
 sys.excepthook = global_exception_handler
 
 
 # -----------------------------------------------------------------------------
-# Entrypoint Router
+# EXECUTION ROUTING
 # -----------------------------------------------------------------------------
+
 def main() -> int:
     """
-    Smart router logic to detect execution context.
-    Delegates to CLI or GUI application controllers.
+    Detect execution context and delegate to the specific interface controller.
+
+    Routes execution based on command line arguments presence.
 
     Returns:
-        int: Exit code (0 for success, non-zero for failure).
+        int: Standard process exit code (0: Success, 1: Error).
     """
     try:
-        # CLI Mode
+        # Detect CLI mode by argument presence
         if len(sys.argv) > 1:
             from transcriptor4ai.interface.cli.app import main as cli_main
             return cli_main()
 
-        # GUI Mode
+        # Default to GUI mode
         else:
             from transcriptor4ai.interface.gui.app import main as gui_main
             gui_main()

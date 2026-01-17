@@ -3,8 +3,9 @@ from __future__ import annotations
 """
 FileSystem Infrastructure Layer.
 
-Provides cross-platform path manipulation, directory creation, and file checking utilities.
-Acts as an abstraction layer over the 'os' module to ensure consistent behavior across OSs.
+Provides cross-platform path manipulation, directory synchronization, and 
+filesystem validation utilities. Acts as an abstraction over the 'os' and 
+'platform' modules to ensure uniform behavior across Windows and Unix-like systems.
 """
 
 import os
@@ -12,31 +13,32 @@ import platform
 from typing import List, Optional, Tuple
 
 # -----------------------------------------------------------------------------
-# Constants
+# GLOBAL CONSTANTS
 # -----------------------------------------------------------------------------
+
 DEFAULT_OUTPUT_SUBDIR = "transcript"
 APP_DIR_NAME = "Transcriptor4AI"
 UNIX_APP_DIR_NAME = ".transcriptor4ai"
 
+# -----------------------------------------------------------------------------
+# PATH RESOLUTION API
+# -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Path Helpers
-# -----------------------------------------------------------------------------
 def get_user_data_dir() -> str:
     """
-    Get the standard OS-specific user data directory for the application.
-    Automatically creates the directory if it does not exist.
+    Resolve the standard OS-specific directory for persistent application data.
 
-    Path Standards:
+    Automatically creates the hierarchy if it does not exist.
+    Standards:
     - Windows: %LOCALAPPDATA%/Transcriptor4AI
     - Linux/Mac: ~/.transcriptor4ai
 
     Returns:
-        str: Absolute path to the user data directory.
+        str: Absolute path to the application data directory.
     """
     path: str = ""
 
-    # Windows Logic
+    # Windows specific resolution
     if os.name == "nt":
         try:
             base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
@@ -45,7 +47,7 @@ def get_user_data_dir() -> str:
         except Exception:
             pass
 
-    # Fallback or Non-Windows (Linux/Mac)
+    # Posix fallback (Linux/Mac)
     if not path:
         try:
             home = os.path.expanduser("~")
@@ -53,7 +55,7 @@ def get_user_data_dir() -> str:
         except Exception:
             path = os.path.abspath(UNIX_APP_DIR_NAME)
 
-    # Ensure directory exists
+    # Idempotent directory creation
     try:
         os.makedirs(path, exist_ok=True)
     except OSError:
@@ -64,18 +66,17 @@ def get_user_data_dir() -> str:
 
 def normalize_path(path: Optional[str], fallback: str) -> str:
     """
-    Normalize a directory path string.
+    Normalize a directory path string into an absolute filesystem path.
 
-    - Handles None/Empty inputs by returning the fallback.
-    - Expands user (~/) and environment variables ($VAR/%VAR%).
-    - Returns an absolute path.
+    Handles environment variable expansion ($VAR/%VAR%) and user home
+    shortcuts (~/). Reverts to fallback if the input is empty or malformed.
 
     Args:
-        path: The input path string (can be None).
-        fallback: The default path to use if input is invalid.
+        path: Raw input path string.
+        fallback: Default path to use if resolution fails.
 
     Returns:
-        str: The normalized, absolute path.
+        str: Normalized absolute path.
     """
     p = (path or "").strip()
     if not p:
@@ -89,19 +90,21 @@ def normalize_path(path: Optional[str], fallback: str) -> str:
 
 def get_real_output_path(output_base_dir: str, output_subdir_name: str) -> str:
     """
-    Construct the final output path combining base and subdirectory.
-    Defaults to 'transcript' if subdir is missing.
+    Calculate the final artifact destination by joining base and subdirectory.
 
     Args:
-        output_base_dir: The parent directory.
-        output_subdir_name: The name of the subdirectory.
+        output_base_dir: Parent output directory.
+        output_subdir_name: Target subdirectory name.
 
     Returns:
-        str: The joined path.
+        str: Resolved absolute output path.
     """
     sub = (output_subdir_name or "").strip() or DEFAULT_OUTPUT_SUBDIR
     return os.path.join(output_base_dir, sub)
 
+# -----------------------------------------------------------------------------
+# FILESYSTEM VALIDATION API
+# -----------------------------------------------------------------------------
 
 def get_destination_filenames(
         prefix: str,
@@ -110,17 +113,18 @@ def get_destination_filenames(
         include_resources: bool = False
 ) -> List[str]:
     """
-    Generate a list of potential output filenames based on configuration flags.
-    Used for checking overwrite conflicts.
+    Predict the generated filenames based on current configuration flags.
+
+    Primarily used for pre-flight collision checks.
 
     Args:
-        prefix: The filename prefix (e.g., 'project_v1').
-        mode: Processing mode ('all', 'modules_only', 'tests_only').
-        include_tree: Whether tree file is expected.
-        include_resources: Whether resource file is expected.
+        prefix: Filename prefix identifier.
+        mode: Processing mode selector.
+        include_tree: Whether tree generation is active.
+        include_resources: Whether resource processing is active.
 
     Returns:
-        List[str]: List of expected filenames.
+        List[str]: List of relative filenames expected to be created.
     """
     files: List[str] = []
 
@@ -141,14 +145,14 @@ def get_destination_filenames(
 
 def check_existing_output_files(output_dir: str, names: List[str]) -> List[str]:
     """
-    Check which files from a list already exist in the target directory.
+    Identify naming collisions in the target output directory.
 
     Args:
-        output_dir: The directory to check within.
-        names: List of filenames to check.
+        output_dir: Directory to inspect.
+        names: List of filenames to check for existence.
 
     Returns:
-        List[str]: A list of full paths for files that already exist.
+        List[str]: Absolute paths of files that already exist.
     """
     existing: List[str] = []
     for n in names:
@@ -160,13 +164,13 @@ def check_existing_output_files(output_dir: str, names: List[str]) -> List[str]:
 
 def safe_mkdir(path: str) -> Tuple[bool, Optional[str]]:
     """
-    Attempt to create a directory structure recursively (idempotent).
+    Attempt to recursively create a directory structure safely.
 
     Args:
-        path: The directory path to create.
+        path: Target directory path.
 
     Returns:
-        Tuple[bool, Optional[str]]: (Success, Error Message).
+        Tuple[bool, Optional[str]]: (Success flag, Error message if applicable).
     """
     try:
         os.makedirs(path, exist_ok=True)

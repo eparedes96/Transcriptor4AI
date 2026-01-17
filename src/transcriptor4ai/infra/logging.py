@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 """
-Logging Infrastructure.
+Logging Infrastructure and Configuration Engine.
 
-Implements an idempotent, fail-safe logging configuration system.
-It supports:
-- Console output (stderr) for CLI feedback.
-- Rotating file logging for persistent diagnostics.
-- Thread-safe handler management to avoid duplication.
+Implements a non-blocking, idempotent logging system designed for high-concurrency 
+environments. Utilizes a Queue-based architecture to decouple logging I/O from 
+the main execution thread, ensuring GUI responsiveness. Supports automatic 
+log rotation, multi-handler synchronization, and persistent diagnostics.
 """
 
 import atexit
@@ -22,8 +21,9 @@ from typing import Optional, Dict, List
 from transcriptor4ai.infra.fs import get_user_data_dir
 
 # -----------------------------------------------------------------------------
-# Constants
+# INTERNAL METADATA AND MAPPINGS
 # -----------------------------------------------------------------------------
+
 _CONFIGURED_FLAG_ATTR: str = "_transcriptor4ai_configured"
 _HANDLER_TAG_ATTR: str = "_transcriptor4ai_handler"
 _QUEUE_LISTENER_ATTR: str = "_transcriptor4ai_queue_listener"
@@ -37,55 +37,53 @@ _LEVEL_MAP: Dict[str, int] = {
     "CRITICAL": logging.CRITICAL,
 }
 
-
-# =============================================================================
-# Configuration Model
-# =============================================================================
+# -----------------------------------------------------------------------------
+# CONFIGURATION MODELS
+# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class LoggingConfig:
     """
-    Immutable logging configuration parameters.
+    Immutable specification for the logging subsystem initialization.
 
     Attributes:
-        level: Logging level string ("DEBUG", "INFO", etc.).
-        console: Whether to enable console (stderr) logging.
-        log_file: Optional path to a log file. Enables rotation if set.
-        max_bytes: Max size in bytes before log rotation (default 2MB).
-        backup_count: Number of backup log files to keep.
-        console_fmt: Format string for console output.
-        file_fmt: Format string for file output.
-        datefmt: Date format string.
+        level: Minimum severity level to capture.
+        console: Flag to enable stderr stream output.
+        log_file: Optional absolute path for persistent file storage.
+        max_bytes: Maximum size per log segment before rotation.
+        backup_count: Number of historical log segments to preserve.
+        console_fmt: Structural format for terminal output.
+        file_fmt: Structural format for file entries.
+        datefmt: Chronological format for timestamp generation.
     """
     level: str = "INFO"
     console: bool = True
     log_file: Optional[str] = None
 
-    max_bytes: int = 2 * 1024 * 1024  # 2 MB
+    max_bytes: int = 2 * 1024 * 1024  # Default: 2MB
     backup_count: int = 3
 
     console_fmt: str = "%(levelname)s | %(message)s"
     file_fmt: str = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
     datefmt: str = "%Y-%m-%d %H:%M:%S"
 
-
-# =============================================================================
-# Public API
-# =============================================================================
+# -----------------------------------------------------------------------------
+# PUBLIC API: CONFIGURATION AND ACCESS
+# -----------------------------------------------------------------------------
 
 def get_default_gui_log_path(
         app_name: str = "Transcriptor4AI",
         file_name: str = "transcriptor4ai.log",
 ) -> str:
     """
-    Calculate the standard OS-specific log path using the user data directory.
+    Resolve the standard diagnostic log path within the user data directory.
 
     Args:
-        app_name: Name of the application (used for folder structure).
-        file_name: Name of the log file itself.
+        app_name: Target application identifier.
+        file_name: Target log filename.
 
     Returns:
-        str: Absolute path to the log file.
+        str: Absolute path to the persistent log file.
     """
     base_dir = get_user_data_dir()
     return os.path.join(base_dir, "logs", file_name)
@@ -93,24 +91,23 @@ def get_default_gui_log_path(
 
 def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Logger:
     """
-    Configure the root logger with the provided settings using QueueHandler.
+    Execute idempotent configuration of the root logger using non-blocking I/O.
 
-    This function is idempotent: it checks if logging has already been configured
-    by this module to prevent duplicate handlers, unless `force=True`.
-
-    This uses a non-blocking QueueHandler to decouple logging I/O
-    from the main application thread (crucial for GUI responsiveness).
+    Implements a QueueListener architecture to prevent main thread blocking during
+    file writes. Checks internal flags to avoid redundant handler attachments
+    unless explicit re-configuration is requested.
 
     Args:
-        cfg: Configuration object.
-        force: If True, re-configure even if already setup.
+        cfg: Structural configuration for the logging system.
+        force: If True, bypass idempotency checks and re-initialize handlers.
 
     Returns:
-        logging.Logger: The configured root logger instance.
+        logging.Logger: The initialized root logger instance.
     """
     root = logging.getLogger()
 
     try:
+        # 1. Idempotency Check
         already_configured = bool(getattr(root, _CONFIGURED_FLAG_ATTR, False))
         if already_configured and not force:
             return root
@@ -118,17 +115,16 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         level_int = _parse_level(cfg.level)
         root.setLevel(level_int)
 
-        # Cleanup previous handlers and listeners
+        # Cleanup existing infrastructure to prevent handler leakage
         _remove_our_handlers(root)
         _stop_existing_listener(root)
 
-        # Formatters
+        # 2. Handler Definition
         console_formatter = logging.Formatter(cfg.console_fmt)
         file_formatter = logging.Formatter(cfg.file_fmt, datefmt=cfg.datefmt)
 
         handlers_list: List[logging.Handler] = []
 
-        # 1. Console Handler (Direct stderr)
         if cfg.console:
             sh = logging.StreamHandler(sys.stderr)
             sh.setLevel(level_int)
@@ -136,7 +132,6 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
             _tag_handler(sh)
             handlers_list.append(sh)
 
-        # 2. File Handler (Rotating)
         if cfg.log_file:
             fh = _create_rotating_file_handler(
                 cfg.log_file,
@@ -151,8 +146,8 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         if not handlers_list:
             return root
 
-        # 3. Thread-Safety
-        log_queue: queue.Queue[logging.LogRecord] = queue.Queue(-1)  # Unlimited size
+        # 3. Queue-Based Orchestration (Non-blocking I/O)
+        log_queue: queue.Queue[logging.LogRecord] = queue.Queue(-1)
 
         queue_handler = QueueHandler(log_queue)
         _tag_handler(queue_handler)
@@ -160,18 +155,19 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         listener = QueueListener(log_queue, *handlers_list, respect_handler_level=True)
         listener.start()
 
-        # Attach QueueHandler to root
+        # Attach single QueueHandler to the root to intercept all logs
         root.addHandler(queue_handler)
 
-        # Store reference to listener to stop it later
+        # Persistence of listener state for future lifecycle management
         setattr(root, _QUEUE_LISTENER_ATTR, listener)
         setattr(root, _CONFIGURED_FLAG_ATTR, True)
 
-        # Ensure listener stops at exit
+        # Register cleanup to ensure logs are flushed on shutdown
         atexit.register(listener.stop)
 
         return root
 
+    # Fallback to emergency console logging if the infrastructure fails
     except Exception:
         try:
             fallback = logging.getLogger()
@@ -184,7 +180,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
             _tag_handler(sh)
             fallback.addHandler(sh)
 
-            fallback.warning("Logging configuration failed entirely. Using emergency console.")
+            fallback.warning("Diagnostic infrastructure failed. Switched to emergency console.")
             return fallback
         except Exception:
             return root
@@ -192,32 +188,34 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
 
 def get_logger(name: str) -> logging.Logger:
     """
-    Get a named logger instance.
+    Acquire a named logger instance compliant with the global configuration.
 
     Args:
-        name: The name of the logger (typically __name__).
+        name: Hierarchical name for the logger (usually __name__).
 
     Returns:
-        logging.Logger: The logger instance.
+        logging.Logger: The requested logger instance.
     """
     return logging.getLogger(name)
 
 
 def get_recent_logs(n_lines: int = 100) -> str:
     """
-    Retrieve the tail of the active application log file.
-    Used for creating crash reports and feedback attachments.
+    Extract the terminal tail of the persistent log file for diagnostics.
+
+    Used by feedback and crash reporting modules to attach execution context.
 
     Args:
-        n_lines: Number of lines to retrieve from the end.
+        n_lines: Maximum number of lines to retrieve from the file end.
 
     Returns:
-        str: The last N lines of the log as a single string.
+        str: Consolidated log tail content.
     """
     log_path = get_default_gui_log_path()
     if not os.path.exists(log_path):
         return "Log file not found."
 
+    # Use errors='replace' to avoid crashes on partially corrupted log files
     try:
         with open(log_path, "r", encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
@@ -225,27 +223,26 @@ def get_recent_logs(n_lines: int = 100) -> str:
     except Exception as e:
         return f"Error retrieving logs: {e}"
 
-
-# =============================================================================
-# Private Helpers
-# =============================================================================
+# -----------------------------------------------------------------------------
+# PRIVATE HELPERS: STATE AND INFRASTRUCTURE
+# -----------------------------------------------------------------------------
 
 def _parse_level(level: str) -> int:
-    """Convert a string level name to its logging integer constant."""
+    """Convert a string-based logging level to its numeric constant."""
     if not level:
         return logging.INFO
     return _LEVEL_MAP.get(str(level).strip().upper(), logging.INFO)
 
 
 def _ensure_parent_dir(path: str) -> None:
-    """Recursively create the directory structure for a file path."""
+    """Safely create the parent directory hierarchy for a target file."""
     parent = os.path.dirname(os.path.abspath(path))
     if parent and not os.path.exists(parent):
         os.makedirs(parent, exist_ok=True)
 
 
 def _tag_handler(handler: logging.Handler) -> None:
-    """Tag a handler instance as 'owned' by Transcriptor4AI."""
+    """Mark a handler as an internally-managed application handler."""
     try:
         setattr(handler, _HANDLER_TAG_ATTR, True)
     except Exception:
@@ -253,12 +250,12 @@ def _tag_handler(handler: logging.Handler) -> None:
 
 
 def _is_our_handler(handler: logging.Handler) -> bool:
-    """Check if a handler instance was created by this module."""
+    """Verify if a handler was initialized by this diagnostic module."""
     return bool(getattr(handler, _HANDLER_TAG_ATTR, False))
 
 
 def _remove_our_handlers(root: logging.Logger) -> None:
-    """Remove only the handlers tagged as ours from the logger."""
+    """Identify and detach all internally-managed handlers from the root."""
     for h in list(root.handlers):
         if _is_our_handler(h):
             root.removeHandler(h)
@@ -269,7 +266,7 @@ def _remove_our_handlers(root: logging.Logger) -> None:
 
 
 def _stop_existing_listener(root: logging.Logger) -> None:
-    """Stop and cleanup any existing QueueListener attached to root."""
+    """Terminate and release the existing QueueListener to reset state."""
     listener = getattr(root, _QUEUE_LISTENER_ATTR, None)
     if listener and isinstance(listener, QueueListener):
         listener.stop()
@@ -284,8 +281,7 @@ def _create_rotating_file_handler(
         backup_count: int,
 ) -> Optional[RotatingFileHandler]:
     """
-    Attempt to create a RotatingFileHandler safely.
-    Returns None if file access fails.
+    Initialize a RotatingFileHandler with robust error handling.
     """
     try:
         _ensure_parent_dir(log_file)
@@ -300,5 +296,5 @@ def _create_rotating_file_handler(
         _tag_handler(fh)
         return fh
     except Exception as e:
-        sys.stderr.write(f"WARNING: Failed to initialize file logging at '{log_file}': {e}\n")
+        sys.stderr.write(f"WARNING: Diagnostic persistence failure at '{log_file}': {e}\n")
         return None

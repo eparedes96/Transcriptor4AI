@@ -3,10 +3,9 @@ from __future__ import annotations
 """
 Network Communication Infrastructure.
 
-Handles external HTTP interactions including:
-- Version checking via GitHub API.
-- Seamless OTA binary downloading.
-- Secure transmission of telemetry and error reports.
+Orchestrates external HTTP interactions, including remote version 
+synchronization via GitHub API, binary stream acquisition for OTA 
+updates, and secure transmission of telemetry and crash reports.
 """
 
 import hashlib
@@ -18,7 +17,10 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Constants
+# -----------------------------------------------------------------------------
+# NETWORK CONSTANTS
+# -----------------------------------------------------------------------------
+
 GITHUB_OWNER = "eparedes96"
 GITHUB_REPO = "Transcriptor4AI"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
@@ -27,14 +29,20 @@ TIMEOUT = 10
 USER_AGENT = "Transcriptor4AI-Client/2.0.0"
 CHUNK_SIZE = 8192
 
-
 # -----------------------------------------------------------------------------
-# PUBLIC API
+# PUBLIC API: REMOTE SYNCHRONIZATION
 # -----------------------------------------------------------------------------
 
 def check_for_updates(current_version: str) -> Dict[str, Any]:
     """
-    Check GitHub for a newer release compared to the current version.
+    Query the GitHub API to detect newer application releases.
+
+    Args:
+        current_version: Local application version string.
+
+    Returns:
+        Dict[str, Any]: Metadata containing update status, binary URLs,
+                        and cryptographic checksums.
     """
     result: Dict[str, Any] = {
         "has_update": False,
@@ -47,7 +55,7 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
     }
 
     headers = {"User-Agent": USER_AGENT}
-    logger.info(f"Checking for updates... (Local version: v{current_version})")
+    logger.info(f"Checking for remote updates... (Current: v{current_version})")
 
     try:
         response = requests.get(GITHUB_API_URL, headers=headers, timeout=TIMEOUT)
@@ -64,6 +72,7 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
                 "changelog": data.get("body", "No changelog provided.")
             })
 
+            # Resolve binary asset and checksum
             for asset in data.get("assets", []):
                 asset_name = asset.get("name", "").lower()
                 download_url = asset.get("browser_download_url")
@@ -73,10 +82,10 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
                 elif asset_name.endswith(".sha256"):
                     _fetch_checksum(download_url, headers, result)
         else:
-            logger.info("Status: Application is up to date.")
+            logger.info("Application is currently up to date.")
 
     except requests.exceptions.RequestException as e:
-        msg = f"GitHub API update check failed: {e}"
+        msg = f"GitHub API communication failure: {e}"
         logger.error(msg)
         result["error"] = msg
 
@@ -88,7 +97,17 @@ def download_binary_stream(
         dest_path: str,
         progress_callback: Optional[Callable[[float], None]] = None
 ) -> Tuple[bool, str]:
-    """Stream a file download to disk with progress reporting."""
+    """
+    Acquire a remote binary using buffered streaming.
+
+    Args:
+        url: Direct download URL.
+        dest_path: Local path to persist the binary.
+        progress_callback: Optional hook for percentage reporting.
+
+    Returns:
+        Tuple[bool, str]: (Success flag, Status message).
+    """
     headers = {"User-Agent": USER_AGENT}
     try:
         with requests.get(url, headers=headers, stream=True, timeout=TIMEOUT) as response:
@@ -103,32 +122,45 @@ def download_binary_stream(
                         downloaded_size += len(chunk)
                         if progress_callback and total_size > 0:
                             progress_callback((downloaded_size / total_size) * 100)
-        return True, "Download complete"
+        return True, "Download completed successfully."
     except Exception as e:
         return False, str(e)
 
+# -----------------------------------------------------------------------------
+# PUBLIC API: TELEMETRY & FEEDBACK
+# -----------------------------------------------------------------------------
 
 def submit_feedback(payload: Dict[str, Any]) -> Tuple[bool, str]:
-    """Submit user feedback via secure POST."""
+    """
+    Transmit user feedback to the centralized collection endpoint.
+
+    Args:
+        payload: Metadata and feedback content.
+
+    Returns:
+        Tuple[bool, str]: Operation result status.
+    """
     return _secure_post(FORMSPREE_ENDPOINT, payload, "Feedback")
 
 
 def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
-    """Submit crash report via secure POST."""
-    return _secure_post(FORMSPREE_ENDPOINT, payload, "Error Report")
+    """
+    Transmit critical crash data for diagnostic analysis.
 
+    Args:
+        payload: Stack trace and environment metadata.
+
+    Returns:
+        Tuple[bool, str]: Operation result status.
+    """
+    return _secure_post(FORMSPREE_ENDPOINT, payload, "Error Report")
 
 # -----------------------------------------------------------------------------
 # PRIVATE HELPERS
 # -----------------------------------------------------------------------------
 
-# ------ INICIO DE MODIFICACIÓN: EXTRACCIÓN DE LOGICA DE MANAGER ------
-# Se han eliminado las clases UpdateStatus y UpdateManager de este archivo.
-# Se mantienen los helpers de bajo nivel para uso interno.
-# ------ FIN DE MODIFICACIÓN: EXTRACCIÓN DE LOGICA DE MANAGER ------
-
 def _is_newer(current: str, latest: str) -> bool:
-    """Compare two semantic version strings."""
+    """Perform semantic version comparison."""
     try:
         def parse(v: str) -> Tuple[int, ...]:
             return tuple(int("".join(filter(str.isdigit, p)) or 0) for p in v.split("."))
@@ -139,7 +171,7 @@ def _is_newer(current: str, latest: str) -> bool:
 
 
 def _fetch_checksum(url: str, headers: Dict[str, str], result_dict: Dict[str, Any]) -> None:
-    """Helper to fetch and store SHA256 checksum."""
+    """Acquire and extract SHA256 string from a remote sidecar file."""
     try:
         resp = requests.get(url, headers=headers, timeout=5)
         if resp.status_code == 200:
@@ -149,7 +181,7 @@ def _fetch_checksum(url: str, headers: Dict[str, str], result_dict: Dict[str, An
 
 
 def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, str]:
-    """Execute a POST request with error handling."""
+    """Execute a secure JSON POST request with robust exception handling."""
     headers = {"User-Agent": USER_AGENT}
     try:
         response = requests.post(url, json=data, headers=headers, timeout=TIMEOUT)
@@ -159,7 +191,7 @@ def _secure_post(url: str, data: Dict[str, Any], context: str) -> Tuple[bool, st
 
 
 def _calculate_sha256(file_path: str) -> str:
-    """Calculate SHA-256 hash of a file for integrity check."""
+    """Compute SHA-256 digest for local file integrity verification."""
     sha256_hash = hashlib.sha256()
     try:
         with open(file_path, "rb") as f:

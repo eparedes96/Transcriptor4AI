@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 """
-Background workers for the GUI.
+Background Worker Threads for GUI Operations.
 
-This module handles long-running tasks (pipeline execution, networking)
-to prevent the UI from freezing. It communicates results back to the
-main window via generic callbacks (CustomTkinter compatible).
+Orchestrates long-running tasks such as pipeline execution, update checks, 
+and remote telemetry submission. Prevents the graphical user interface from 
+freezing by delegating CPU-bound and I/O-bound operations to separate daemon 
+threads while maintaining communication via thread-safe callbacks.
 """
 
 import logging
@@ -20,10 +21,10 @@ from transcriptor4ai.infra import network
 
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# PIPELINE EXECUTION WORKERS
+# -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Pipeline Workers
-# -----------------------------------------------------------------------------
 def run_pipeline_task(
         config: Dict[str, Any],
         overwrite: bool,
@@ -32,52 +33,57 @@ def run_pipeline_task(
         cancellation_event: Optional[threading.Event] = None
 ) -> None:
     """
-    Execute the transcription pipeline in a background thread.
+    Execute the transcription pipeline in a dedicated background thread.
+
+    Manages the full transcription lifecycle. Checks for cancellation signals
+    before and after execution to ensure responsive thread termination.
 
     Args:
-        config: The configuration dictionary for the pipeline.
-        overwrite: Whether to overwrite existing files.
-        dry_run: Whether to simulate the process.
-        on_complete: Callback function to receive the result (PipelineResult or Exception).
-        cancellation_event: Optional event to signal cancellation request.
+        config: Full configuration dictionary for the session.
+        overwrite: Permission to replace existing output files.
+        dry_run: Flag to enable simulation mode.
+        on_complete: Callback function to marshal results back to the GUI.
+        cancellation_event: Event flag used to abort execution.
     """
     try:
         if cancellation_event and cancellation_event.is_set():
-            logger.info("Pipeline task cancelled before start.")
+            logger.info("Pipeline Thread: Aborted by user before start.")
             return
 
+        # Trigger core engine orchestration
         result = run_pipeline(config, overwrite=overwrite, dry_run=dry_run)
 
         if cancellation_event and cancellation_event.is_set():
-            logger.info("Pipeline task cancelled after execution (result discarded).")
+            logger.info("Pipeline Thread: Execution completed but results discarded due to cancellation.")
             return
 
+        # Synchronize results with the UI controller
         on_complete(result)
 
     except Exception as e:
-        logger.critical(f"Critical failure in pipeline thread: {e}", exc_info=True)
+        logger.critical(f"Pipeline Thread: Critical failure detected: {e}", exc_info=True)
         on_complete(e)
 
+# -----------------------------------------------------------------------------
+# NETWORK AND UPDATE WORKERS
+# -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Network Workers
-# -----------------------------------------------------------------------------
 def check_updates_task(
         on_complete: Callable[[Any, bool], None],
         is_manual: bool = False
 ) -> None:
     """
-    Check for application updates in a background thread.
+    Execute a remote release synchronization task.
 
     Args:
-        on_complete: Callback accepting (ResultDict, IsManualBool).
-        is_manual: Whether the check was triggered by user action.
+        on_complete: Callback to handle release metadata.
+        is_manual: Whether the check was explicitly triggered by the user.
     """
     try:
         res = network.check_for_updates(const.CURRENT_CONFIG_VERSION)
         on_complete(res, is_manual)
     except Exception as e:
-        logger.error(f"Update check failed in thread: {e}")
+        logger.error(f"Update Task: Check failed during network call: {e}")
         on_complete({"has_update": False, "error": str(e)}, is_manual)
 
 
@@ -88,33 +94,37 @@ def download_update_task(
         on_complete: Callable[[Tuple[bool, str]], None]
 ) -> None:
     """
-    Download the new binary in a background thread with progress reporting.
-    Handles extraction if the downloaded file is a ZIP archive.
+    Acquire and unpack a remote binary package in the background.
+
+    Handles the full binary acquisition lifecycle, including streaming
+    download, progress reporting, and ZIP extraction for portable bundles.
 
     Args:
-        binary_url: URL of the file to download.
-        dest_path: Local path to save the file.
-        on_progress: Callback accepting a float (0-100) for progress.
-        on_complete: Callback accepting (SuccessBool, MessageStr).
+        binary_url: Remote source URL.
+        dest_path: Local target path for binary storage.
+        on_progress: Callback to update UI progress bars (0.0 - 100.0).
+        on_complete: Callback to report final task status.
     """
     success, msg = network.download_binary_stream(binary_url, dest_path, on_progress)
 
+    # Secondary lifecycle: Extraction if the asset is a compressed archive
     if success and dest_path.lower().endswith(".zip"):
         try:
-            logger.info(f"Unpacking update package: {dest_path}")
+            logger.info(f"Update Task: Unpacking compressed archive: {dest_path}")
             base_dir = os.path.dirname(dest_path)
 
+            # Resolve the executable artifact inside the archive
             with zipfile.ZipFile(dest_path, 'r') as zf:
                 exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
                 if not exe_files:
-                    raise ValueError("No executable (.exe) found in update package.")
+                    raise ValueError("Malformed update package: Executable missing.")
 
                 target_exe = next((f for f in exe_files if "transcriptor" in f.lower()), exe_files[0])
 
                 zf.extract(target_exe, base_dir)
                 extracted_full_path = os.path.join(base_dir, target_exe)
 
-            # Clean up the .zip file
+            # Cleanup download artifact and perform atomic rotation
             os.remove(dest_path)
             final_exe_path = dest_path[:-4] + ".exe"
 
@@ -125,27 +135,26 @@ def download_update_task(
                     pass
 
             os.rename(extracted_full_path, final_exe_path)
-            msg = "Update extracted and ready."
-            logger.info(f"Update extracted to: {final_exe_path}")
+            msg = "Binary extraction successful."
+            logger.info(f"Update Task: Binary deployed to: {final_exe_path}")
 
         except Exception as e:
-            logger.error(f"Failed to unpack update: {e}")
+            logger.error(f"Update Task: Failed to unpack binary package: {e}")
             success = False
-            msg = f"Failed to unpack update: {e}"
+            msg = f"Extraction failure: {e}"
 
     on_complete((success, msg))
 
+# -----------------------------------------------------------------------------
+# TELEMETRY AND REPORTING WORKERS
+# -----------------------------------------------------------------------------
 
 def submit_feedback_task(
         payload: Dict[str, Any],
         on_complete: Callable[[Tuple[bool, str]], None]
 ) -> None:
     """
-    Submit user feedback in a background thread.
-
-    Args:
-        payload: The feedback data dictionary.
-        on_complete: Callback accepting (SuccessBool, MessageStr).
+    Dispatch user feedback to the remote collection endpoint.
     """
     success, msg = network.submit_feedback(payload)
     on_complete((success, msg))
@@ -156,11 +165,7 @@ def submit_error_report_task(
         on_complete: Callable[[Tuple[bool, str]], None]
 ) -> None:
     """
-    Submit a technical crash report in a background thread.
-
-    Args:
-        payload: The error report data.
-        on_complete: Callback accepting (SuccessBool, MessageStr).
+    Dispatch diagnostic crash metadata to the remote collection endpoint.
     """
     success, msg = network.submit_error_report(payload)
     on_complete((success, msg))

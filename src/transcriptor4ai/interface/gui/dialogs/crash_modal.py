@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 """
-Crash Reporting Modal.
+Critical Crash Reporting Dialog.
 
-Displays critical errors and allows sending logs to the developer.
+Constructs a high-priority modal window to intercept and display unhandled 
+exceptions. Provides diagnostic information including stack traces and local 
+logs, allowing the user to submit detailed bug reports to the development team 
+via an asynchronous background task.
 """
 
 import logging
@@ -22,9 +25,21 @@ from transcriptor4ai.utils.i18n import i18n
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# PUBLIC DIALOG API
+# -----------------------------------------------------------------------------
+
 def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk] = None) -> None:
     """
-    Display critical error details with reporting capability.
+    Instantiate and display the crash reporting interface.
+
+    If no parent window is provided, it initializes a hidden root to maintain
+    event loop stability. Handles asynchronous report submission.
+
+    Args:
+        error_msg: The primary exception message.
+        stack_trace: Full Python traceback string.
+        parent: Optional reference to the main application window.
     """
     is_root_created = False
     if parent is None:
@@ -37,6 +52,11 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     toplevel.geometry("700x600")
     toplevel.grab_set()
 
+    # -----------------------------------------------------------------------------
+    # UI COMPONENT HIERARCHY
+    # -----------------------------------------------------------------------------
+
+    # Header Section
     ctk.CTkLabel(
         toplevel,
         text=i18n.t("gui.crash.header"),
@@ -46,13 +66,13 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
 
     ctk.CTkLabel(toplevel, text="The application has encountered an unexpected problem.").pack()
 
-    # Traceback Area
+    # Diagnostic Traceback Area
     textbox = ctk.CTkTextbox(toplevel, font=("Consolas", 10), height=200)
     textbox.insert("1.0", f"Error: {error_msg}\n\n{stack_trace}")
     textbox.configure(state="disabled")
     textbox.pack(fill="both", expand=True, padx=20, pady=10)
 
-    # User Context
+    # User Qualitative Context
     ctk.CTkLabel(toplevel, text="What were you doing? (Optional):", anchor="w").pack(fill="x", padx=20)
     user_comment = ctk.CTkTextbox(toplevel, height=60)
     user_comment.pack(fill="x", padx=20, pady=(0, 10))
@@ -60,7 +80,12 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     status_lbl = ctk.CTkLabel(toplevel, text="", text_color="gray", font=("Any", 10))
     status_lbl.pack(pady=(0, 5))
 
+    # -----------------------------------------------------------------------------
+    # INTERNAL EVENT LOGIC
+    # -----------------------------------------------------------------------------
+
     def _on_reported(result: Tuple[bool, str]) -> None:
+        """Callback for asynchronous report completion."""
         success, message = result
         btn_report.configure(state="normal")
         if success:
@@ -75,9 +100,11 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
             mb.showerror("Submission Error", f"Could not send report:\n{message}")
 
     def _send_report() -> None:
+        """Collect environment metadata and dispatch the report task."""
         btn_report.configure(state="disabled")
         status_lbl.configure(text="Sending report...", text_color="#3B8ED0")
 
+        # Payload construction with diagnostic metadata
         payload = {
             "error": error_msg,
             "stack_trace": stack_trace,
@@ -87,6 +114,7 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
             "logs": get_recent_logs(150)
         }
 
+        # Threaded submission to prevent UI freezing
         threading.Thread(
             target=threads.submit_error_report_task,
             args=(payload, lambda res: parent.after(0, lambda: _on_reported(res))),
@@ -94,12 +122,15 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
         ).start()
 
     def _close() -> None:
+        """Gracefully terminate the modal or the application context."""
         if is_root_created:
             parent.destroy()
         else:
             toplevel.destroy()
 
-    # Buttons
+    # -----------------------------------------------------------------------------
+    # ACTION CONTROLS
+    # -----------------------------------------------------------------------------
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     btn_frame.pack(fill="x", padx=20, pady=20)
 

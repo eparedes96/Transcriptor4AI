@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 """
-Token Counting Utility.
+Hybrid Token Counting Engine.
 
-Provides precise token estimation for LLM contexts using a Hybrid Engine.
-Implements a Strategy Pattern to route calculation to the appropriate provider:
-- OpenAI: 'tiktoken' (Local/Fast).
-- Google/Anthropic: Official SDKs (Network/Precise).
-- Open Source (Llama/Mistral/DeepSeek): 'transformers'/'mistral_common' (Local/Cached).
-
-Falls back to heuristic character density analysis on failure.
+Provides high-precision token estimation for Large Language Model (LLM) 
+contexts. Implements a Strategy Pattern to route calculations to provider-specific 
+SDKs (OpenAI, Google, Anthropic) or local transformers, ensuring accuracy 
+across different architectures. Includes a resilient heuristic fallback 
+mechanism for offline or unsupported scenarios.
 """
 
 import logging
@@ -21,8 +19,9 @@ from typing import Any, Dict, Optional, Type, cast
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
-# Dependency Imports (Lazy/Safe)
+# DEPENDENCY MANAGEMENT (LAZY LOADING)
 # -----------------------------------------------------------------------------
+
 TIKTOKEN_AVAILABLE = False
 try:
     import tiktoken
@@ -66,50 +65,69 @@ except ImportError:
     pass
 
 # -----------------------------------------------------------------------------
-# Constants & Fallbacks
+# GLOBAL CONSTANTS & CACHE
 # -----------------------------------------------------------------------------
+
 CHARS_PER_TOKEN_AVG = 4
 DEFAULT_MODEL = "- Default Model -"
 
-# Global Cache for Transformers/Local Tokenizers to avoid reload latency
+# Global Cache to prevent redundant I/O when loading local tokenizers (HF/Mistral)
 _TOKENIZER_CACHE: Dict[str, Any] = {}
 
 
-# =============================================================================
-# Strategy Interface
-# =============================================================================
+# -----------------------------------------------------------------------------
+# STRATEGY INTERFACES
+# -----------------------------------------------------------------------------
+
 class TokenizerStrategy(ABC):
-    """Abstract base class for counting strategies."""
+    """
+    Abstract base class for model-specific tokenization algorithms.
+    """
 
     @abstractmethod
     def count(self, text: str, model_id: str) -> int:
         """
-        Calculate tokens for the given text.
-        Raises exception on failure to trigger fallback.
+        Calculate the token count for a given text segment.
+
+        Args:
+            text: Input string to be tokenized.
+            model_id: Specific model identifier for encoding selection.
+
+        Returns:
+            int: Total token count.
         """
         pass
 
 
-# =============================================================================
-# Concrete Strategies
-# =============================================================================
+# -----------------------------------------------------------------------------
+# CONCRETE STRATEGIES: LOCAL ENCODERS
+# -----------------------------------------------------------------------------
+
 class HeuristicStrategy(TokenizerStrategy):
-    """Fallback strategy based on character density."""
+    """
+    Fallback algorithm using character density estimation.
+    Used when specific libraries or network access are unavailable.
+    """
 
     def count(self, text: str, model_id: str) -> int:
+        """Estimate tokens using the global characters-to-token ratio."""
         return math.ceil(len(text) / CHARS_PER_TOKEN_AVG)
 
 
 class TiktokenStrategy(TokenizerStrategy):
-    """Strategy for OpenAI models using tiktoken."""
+    """
+    OpenAI-specific encoder using the tiktoken library.
+    Optimized for GPT-3.5, GPT-4, and the O-series models.
+    """
 
     def count(self, text: str, model_id: str) -> int:
+        """Execute local BPE encoding via tiktoken."""
         if not TIKTOKEN_AVAILABLE:
             raise ImportError("tiktoken not installed")
 
         encoding_name = "o200k_base"
 
-        # Legacy mapping
+        # Resolve legacy encoding for older GPT architectures
         if any(x in model_id.lower() for x in ["gpt-4-", "gpt-3.5", "legacy"]):
             encoding_name = "cl100k_base"
 
@@ -121,10 +139,18 @@ class TiktokenStrategy(TokenizerStrategy):
         return len(encoding.encode(text, disallowed_special=()))
 
 
+# -----------------------------------------------------------------------------
+# CONCRETE STRATEGIES: REMOTE SDKS
+# -----------------------------------------------------------------------------
+
 class GoogleApiStrategy(TokenizerStrategy):
-    """Strategy for Gemini models using Google GenAI SDK."""
+    """
+    Google Gemini strategy utilizing the Generative AI SDK.
+    Requires active network and valid GOOGLE_API_KEY.
+    """
 
     def count(self, text: str, model_id: str) -> int:
+        """Fetch token count from Gemini remote service."""
         if not GOOGLE_AVAILABLE:
             raise ImportError("google-generativeai not installed")
 
@@ -134,6 +160,8 @@ class GoogleApiStrategy(TokenizerStrategy):
 
         genai.configure(api_key=api_key)
         clean_model = model_id.lower().replace(" ", "-")
+
+        # Default to flash if model resolution is ambiguous
         if "gemini" not in clean_model:
             clean_model = "models/gemini-1.5-flash"
         elif not clean_model.startswith("models/"):
@@ -145,9 +173,13 @@ class GoogleApiStrategy(TokenizerStrategy):
 
 
 class AnthropicApiStrategy(TokenizerStrategy):
-    """Strategy for Claude models using Anthropic SDK."""
+    """
+    Anthropic strategy utilizing the official SDK for Claude models.
+    Requires active network and ANTHROPIC_API_KEY.
+    """
 
     def count(self, text: str, model_id: str) -> int:
+        """Fetch token count from Claude beta counting service."""
         if not ANTHROPIC_AVAILABLE:
             raise ImportError("anthropic not installed")
 
@@ -157,7 +189,7 @@ class AnthropicApiStrategy(TokenizerStrategy):
 
         client = anthropic.Anthropic(api_key=api_key)
 
-        # Mapping known display names to API IDs
+        # Mapping logical model names to API identifiers
         api_model = "claude-3-5-sonnet-20240620"
 
         if "4.5" in model_id:
@@ -179,14 +211,22 @@ class AnthropicApiStrategy(TokenizerStrategy):
         return int(response.input_tokens)
 
 
+# -----------------------------------------------------------------------------
+# CONCRETE STRATEGIES: OPEN SOURCE / HF
+# -----------------------------------------------------------------------------
+
 class TransformersStrategy(TokenizerStrategy):
-    """Strategy for Open Source models (Llama, Qwen, DeepSeek)."""
+    """
+    Open-source model strategy using HuggingFace AutoTokenizers.
+    Supports Llama, Qwen, and DeepSeek families.
+    """
 
     def count(self, text: str, model_id: str) -> int:
+        """Execute local tokenization via transformers SDK."""
         if not TRANSFORMERS_AVAILABLE:
             raise ImportError("transformers not installed")
 
-        # Map display names to HuggingFace Hub IDs
+        # Map display names to HuggingFace Hub repositories
         hf_id = "meta-llama/Meta-Llama-3-8B"
         lower_id = model_id.lower()
 
@@ -197,7 +237,7 @@ class TransformersStrategy(TokenizerStrategy):
         elif "deepseek" in lower_id:
             hf_id = "deepseek-ai/deepseek-coder-33b-instruct"
 
-        # Cache mechanism
+        # Persist tokenizer in cache to avoid reload overhead
         if hf_id not in _TOKENIZER_CACHE:
             _TOKENIZER_CACHE[hf_id] = AutoTokenizer.from_pretrained(hf_id)
 
@@ -206,9 +246,13 @@ class TransformersStrategy(TokenizerStrategy):
 
 
 class MistralStrategy(TokenizerStrategy):
-    """Strategy for Mistral models using mistral_common."""
+    """
+    Mistral-specific strategy using the mistral_common library.
+    Ensures high-fidelity counting for Mistral and Codestral models.
+    """
 
     def count(self, text: str, model_id: str) -> int:
+        """Execute tokenization using Mistral's reference encoder."""
         if not MISTRAL_AVAILABLE:
             raise ImportError("mistral_common not installed")
 
@@ -222,17 +266,23 @@ class MistralStrategy(TokenizerStrategy):
         return int(len(encoded.tokens))
 
 
-# =============================================================================
-# Service Facade
-# =============================================================================
+# -----------------------------------------------------------------------------
+# SERVICE ORCHESTRATION (FACADE)
+# -----------------------------------------------------------------------------
+
 class TokenizerService:
     """
-    Factory service to route token counting requests.
+    Centralized service for model-aware token estimation.
+
+    Orchestrates the selection of the appropriate counting strategy
+    based on the target model name and manages graceful fallbacks.
     """
 
     def __init__(self) -> None:
+        """Initialize the service and register strategy mappings."""
         self.heuristic = HeuristicStrategy()
-        # Mapeo de prefijos de modelos a estrategias para búsqueda O(1)
+
+        # Mapping model prefixes to specialized strategies for O(1) routing
         self._strategy_map: Dict[str, TokenizerStrategy] = {
             "gpt": TiktokenStrategy(),
             "o1": TiktokenStrategy(),
@@ -253,64 +303,84 @@ class TokenizerService:
 
     def count(self, text: str, model: str) -> int:
         """
-        Main entry point. Determines strategy based on model mapping.
-        Handles errors gracefully by falling back to heuristic.
+        Determine strategy and calculate token count.
+
+        Handles special cases such as OCR/Vision models and provides
+        robust error handling to prevent pipeline failures.
+
+        Args:
+            text: Raw input text.
+            model: Selected LLM identifier.
+
+        Returns:
+            int: Estimated or precise token count.
         """
         if not text:
             return 0
 
         model_lower = model.lower()
 
+        # Skip counting for Vision-based models where text context is not applicable
         if "ocr" in model_lower or "vision" in model_lower:
-            logger.info("OCR model selected. Token counting skipped (Vision-based).")
+            logger.info("Vision model detected. Skipping token counting.")
             return 0
 
+        # Special handling for default model selection
         if "- default model -" in model_lower:
             try:
                 return TiktokenStrategy().count(text, "gpt-4o")
             except Exception as e:
-                logger.warning(f"Default tokenizer failed: {e}. Using heuristic.")
+                logger.warning(f"Default tokenizer execution failed: {e}. Routing to heuristic.")
                 return self.heuristic.count(text, model)
 
-        # Selección de estrategia optimizada
+        # Iterate through mappings to find the specific provider strategy
         strategy: TokenizerStrategy = self.heuristic
         for prefix, strat in self._strategy_map.items():
             if prefix in model_lower:
                 strategy = strat
                 break
 
-        # Fallback si no hay match en el mapa pero es un modelo conocido
+        # Secondary fallback if no direct prefix match found for known architectures
         if strategy == self.heuristic and TIKTOKEN_AVAILABLE:
             strategy = TiktokenStrategy()
 
         try:
             return strategy.count(text, model)
         except Exception as e:
-            logger.warning(f"Tokenizer strategy {type(strategy).__name__} failed: {e}. Using heuristic.")
+            # Final safety net to ensure a result is returned
+            logger.warning(f"Selected strategy {type(strategy).__name__} failed: {e}. Using heuristic fallback.")
             return self.heuristic.count(text, model)
 
 
 # -----------------------------------------------------------------------------
-# Public API
+# PUBLIC API
 # -----------------------------------------------------------------------------
+
+# Singleton instance for global application access
 _SERVICE_INSTANCE = TokenizerService()
 
 
 def count_tokens(text: str, model: str = DEFAULT_MODEL) -> int:
     """
-    Estimate the number of tokens in a text string.
-    Delegates to the Singleton TokenizerService.
+    Estimate the number of tokens for the target model.
+
+    Delegates the calculation to the global TokenizerService instance.
 
     Args:
-        text: The input text.
-        model: The target model name (e.g., "Claude 3.5").
+        text: Input string content.
+        model: Target model name (e.g., "GPT-4o", "Claude 3.5").
 
     Returns:
-        int: The estimated token count.
+        int: Total token count.
     """
     return _SERVICE_INSTANCE.count(text, model)
 
 
 def is_tiktoken_available() -> bool:
-    """Legacy check for tiktoken availability."""
+    """
+    Check for local Tiktoken library availability.
+
+    Returns:
+        bool: True if tiktoken is successfully imported.
+    """
     return TIKTOKEN_AVAILABLE

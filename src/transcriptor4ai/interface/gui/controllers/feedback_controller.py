@@ -3,8 +3,9 @@ from __future__ import annotations
 """
 Feedback Logic Controller.
 
-Handles the user request to open the Feedback/Bug Report interface.
-Acts as a bridge between the Main Controller and the Feedback Dialog.
+Provides an abstraction layer for user-initiated feedback and error reporting.
+Acts as a bridge between the main application controller and the modal
+dialogs, ensuring that UI triggers are decoupled from dialog implementation.
 """
 
 import logging
@@ -17,22 +18,37 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# FEEDBACK INTERACTION HANDLER
+# -----------------------------------------------------------------------------
 
 class FeedbackController:
     """
-    Manages user interaction for sending feedback or bug reports.
+    Coordinates user feedback workflows and bug reporting sessions.
     """
 
     def __init__(self, main_controller: AppController):
+        """
+        Initialize the controller with a reference to the main app orchestrator.
+
+        Args:
+            main_controller: Reference to the parent AppController instance.
+        """
         self.controller = main_controller
 
     def on_feedback_requested(self) -> None:
         """
-        Trigger the feedback modal workflow.
+        Trigger the display of the Feedback Hub modal.
+
+        Captures requests from the sidebar or settings menu and delegates
+        the window creation to the dialogs subsystem, providing the main
+        application as the parent for modal grouping.
         """
-        logger.debug("User requested feedback window.")
+        logger.debug("User interaction: Feedback modal requested.")
 
         try:
+            # Delegate UI creation to the specialized dialog module
             show_feedback_window(self.controller.app)
         except Exception as e:
-            logger.error(f"Failed to open feedback window: {e}")
+            # Prevent feedback failures from crashing the main event loop
+            logger.error(f"UI Exception: Failed to initialize feedback window: {e}")

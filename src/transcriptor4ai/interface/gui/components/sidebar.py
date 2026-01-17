@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 """
-Sidebar Component.
+Sidebar Navigation Component.
 
-Navigation panel containing branding, menu buttons, and update badges.
+Constructs the persistent left navigation panel. Manages primary 
+application routing, visual branding, version identification, 
+and dynamic update notifications. Acts as the anchor for the global UI state.
 """
 
 import logging
@@ -15,17 +17,35 @@ from transcriptor4ai.utils.i18n import i18n
 
 logger = logging.getLogger(__name__)
 
+
+# -----------------------------------------------------------------------------
+# SIDEBAR VIEW CLASS
+# -----------------------------------------------------------------------------
+
 class SidebarFrame(ctk.CTkFrame):
     """
-    Left navigation panel containing branding, menu buttons, and update badges.
+    Application navigation and information sidebar.
+
+    Provides centralized access to core views and displays metadata
+    regarding the application lifecycle, including versioning and
+    available updates.
     """
 
     def __init__(self, master: Any, nav_callback: Any, **kwargs: Any):
+        """
+        Initialize the sidebar with branding and navigation triggers.
+
+        Args:
+            master: Parent window container.
+            nav_callback: Function to execute for view switching.
+        """
         super().__init__(master, width=200, corner_radius=0, **kwargs)
 
         self.nav_callback = nav_callback
 
-        # 1. Branding / Logo
+        # -----------------------------------------------------------------------------
+        # COMPONENT: BRANDING AND VERSIONING
+        # -----------------------------------------------------------------------------
         self.logo_label = ctk.CTkLabel(
             self,
             text="Transcriptor\n4AI",
@@ -41,7 +61,9 @@ class SidebarFrame(ctk.CTkFrame):
         )
         self.version_label.grid(row=1, column=0, padx=20, pady=(0, 20))
 
-        # 2. Navigation Buttons
+        # -----------------------------------------------------------------------------
+        # COMPONENT: NAVIGATION ROUTING
+        # -----------------------------------------------------------------------------
         self.btn_dashboard = ctk.CTkButton(
             self,
             text=i18n.t("gui.sidebar.dashboard"),
@@ -72,7 +94,10 @@ class SidebarFrame(ctk.CTkFrame):
         )
         self.btn_logs.grid(row=4, column=0, padx=20, pady=10)
 
-        # 3. Update Badge (Hidden by default)
+        # -----------------------------------------------------------------------------
+        # COMPONENT: OTA UPDATE NOTIFICATION
+        # -----------------------------------------------------------------------------
+        # Initialized as disabled; visibility managed by the update controller
         self.update_badge = ctk.CTkButton(
             self,
             text=i18n.t("gui.sidebar.update"),
@@ -82,10 +107,12 @@ class SidebarFrame(ctk.CTkFrame):
             text_color="white"
         )
 
-        # Spacer to push bottom items
+        # Strategic grid weight to push footer items to the bottom
         self.grid_rowconfigure(5, weight=1)
 
-        # 4. Footer Buttons
+        # -----------------------------------------------------------------------------
+        # COMPONENT: FOOTER ACTIONS
+        # -----------------------------------------------------------------------------
         self.btn_feedback = ctk.CTkButton(
             self,
             text="Feedback",

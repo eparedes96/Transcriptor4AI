@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 """
-Standalone Updater Utility.
+Standalone Binary Swapper (Sidecar Utility).
 
-This script is independent of the transcriptor4ai package to avoid
-import shadowing conflicts or file locks during updates.
-
-It handles the binary swap lifecycle:
-1. Process termination wait.
-2. Integrity verification (SHA-256 Checksum).
-3. File replacement with rollback safety.
-4. Application restart.
+Provides a fail-safe update mechanism decoupled from the main application 
+package. Executes the binary replacement lifecycle: process synchronization, 
+checksum verification, and atomic file rotation with rollback capabilities.
 """
 
 import argparse
@@ -22,21 +17,24 @@ import sys
 import time
 from typing import Optional
 
-# Configure basic logging for the standalone script
+# Standalone logging configuration (Entrypoint owned)
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("updater")
 
+# -----------------------------------------------------------------------------
+# PROCESS AND INTEGRITY HELPERS
+# -----------------------------------------------------------------------------
 
 def wait_for_pid(pid: int, timeout: int = 30) -> bool:
     """
-    Wait for a process ID to terminate.
+    Monitor a specific Process ID until termination or timeout.
 
     Args:
-        pid: Process ID to monitor.
-        timeout: Maximum seconds to wait.
+        pid: Target process identifier.
+        timeout: Maximum duration in seconds to wait for exit.
 
     Returns:
-        bool: True if the process terminated, False on timeout.
+        bool: True if process terminated, False if timeout exceeded.
     """
     logger.info(f"Waiting for process {pid} to exit...")
     start_time = time.time()
@@ -53,13 +51,13 @@ def wait_for_pid(pid: int, timeout: int = 30) -> bool:
 
 def calculate_sha256(file_path: str) -> str:
     """
-    Calculate SHA-256 hash of a file using chunked reading.
+    Compute SHA-256 digest using buffered reading for memory efficiency.
 
     Args:
-        file_path: Path to the file.
+        file_path: Target file path for hash calculation.
 
     Returns:
-        str: Hexadecimal SHA-256 string.
+        str: Hexadecimal representation of the SHA-256 checksum.
     """
     sha256_hash = hashlib.sha256()
     try:
@@ -71,6 +69,9 @@ def calculate_sha256(file_path: str) -> str:
         logger.error(f"Failed to calculate hash for {file_path}: {e}")
         return ""
 
+# -----------------------------------------------------------------------------
+# CORE UPDATE LIFECYCLE
+# -----------------------------------------------------------------------------
 
 def run_update(
         old_exe: str,
@@ -79,20 +80,23 @@ def run_update(
         expected_sha256: Optional[str] = None
 ) -> None:
     """
-    Perform integrity check, file swap, and restart the application.
+    Perform an atomic binary swap and application restart.
+
+    Implements a backup-rename-deploy strategy to allow manual recovery
+    if the operating system file lock prevents direct replacement.
 
     Args:
-        old_exe: Path to the current executable to be replaced.
-        new_exe: Path to the new version downloaded.
-        pid: PID of the running application to wait for.
-        expected_sha256: Optional checksum to verify binary integrity.
+        old_exe: Current executable path to be replaced.
+        new_exe: New binary path to be deployed.
+        pid: Process identifier of the caller to synchronize termination.
+        expected_sha256: Integrity verification string.
     """
-    # 1. Wait for the main app to close
+    # Phase 1: Termination Synchronization
     if not wait_for_pid(pid):
         logger.error("Timeout waiting for main application to close. Aborting update.")
         sys.exit(1)
 
-    # 2. Integrity Verification
+    # Phase 2: Cryptographic Verification
     if expected_sha256:
         logger.info("Verifying binary integrity...")
         actual_sha256 = calculate_sha256(new_exe)
@@ -103,7 +107,7 @@ def run_update(
             sys.exit(1)
         logger.info("Integrity check passed.")
 
-    # 3. Perform the swap
+    # Phase 3: Filesystem Swap
     try:
         if not os.path.exists(new_exe):
             logger.error(f"New version not found at: {new_exe}")
@@ -113,6 +117,7 @@ def run_update(
 
         logger.info(f"Updating {old_exe}...")
 
+        # Rotate backup file
         backup_exe = old_exe + ".old"
         if os.path.exists(backup_exe):
             try:
@@ -120,7 +125,6 @@ def run_update(
             except OSError:
                 pass
 
-        # Move current (running) exe to backup
         os.rename(old_exe, backup_exe)
 
         try:
@@ -132,7 +136,7 @@ def run_update(
                 os.rename(backup_exe, old_exe)
             raise
 
-        # Cleanup backup
+        # Clean rotation artifact
         try:
             if os.path.exists(backup_exe):
                 os.remove(backup_exe)
@@ -143,7 +147,7 @@ def run_update(
         logger.error(f"Critical error during swap: {e}")
         sys.exit(1)
 
-    # 4. Restart the application
+    # Phase 4: Application Revival
     try:
         logger.info(f"Restarting application: {old_exe}")
         if sys.platform == "win32":
@@ -154,9 +158,12 @@ def run_update(
         logger.error(f"Failed to restart application: {e}")
         sys.exit(1)
 
+# -----------------------------------------------------------------------------
+# SCRIPT INTERFACE
+# -----------------------------------------------------------------------------
 
 def main() -> None:
-    """Entry point for the updater CLI."""
+    """Parse CLI arguments and initiate the update lifecycle."""
     parser = argparse.ArgumentParser(description="Transcriptor4AI Sidecar Updater")
     parser.add_argument("--pid", type=int, required=True, help="PID of the process to wait for")
     parser.add_argument("--old", type=str, required=True, help="Path to the current executable")

@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Tree Renderer.
 
-Converts a recursive Tree dictionary structure into a visual string representation.
-Delegates to the AST parser for symbol extraction on leaf nodes.
+Converts recursive Tree models into visual ASCII representations. 
+Handles symbol indentation and integrates with AST definition extraction.
 """
 
 from typing import List
@@ -12,6 +12,9 @@ from typing import List
 from transcriptor4ai.core.analysis.ast_parser import extract_definitions
 from transcriptor4ai.domain.tree_models import FileNode, Tree
 
+# -----------------------------------------------------------------------------
+# PUBLIC API
+# -----------------------------------------------------------------------------
 
 def render_tree_structure(
         tree_structure: Tree,
@@ -22,15 +25,18 @@ def render_tree_structure(
         show_methods: bool = False,
 ) -> None:
     """
-    Recursively render the tree structure into a list of strings.
+    Recursively transform the Tree model into a list of strings.
+
+    Uses standard ASCII connectors (├──, └──) and manages indentation
+    levels for nested directories and AST symbols.
 
     Args:
-        tree_structure: The current level of the tree dictionary.
-        lines: The list accumulator for output lines.
-        prefix: The indentation string for the current level.
-        show_functions: Flag to enable function display.
-        show_classes: Flag to enable class display.
-        show_methods: Flag to enable method display.
+        tree_structure: Current Tree node to process.
+        lines: Accumulator list for output strings.
+        prefix: Indentation prefix for the current recursion level.
+        show_functions: Enable AST function display.
+        show_classes: Enable AST class display.
+        show_methods: Enable AST method display.
     """
     entries = sorted(tree_structure.keys())
     total = len(entries)
@@ -41,7 +47,7 @@ def render_tree_structure(
 
         node = tree_structure[entry]
 
-        # Case A: Directory (Recursion)
+        # Scenario A: Node is a Directory (Dictionary)
         if isinstance(node, dict):
             lines.append(f"{prefix}{connector}{entry}")
             new_prefix = prefix + ("    " if is_last else "│   ")
@@ -55,11 +61,11 @@ def render_tree_structure(
             )
             continue
 
-        # Case B: File (Leaf)
+        # Scenario B: Node is a File (FileNode)
         if isinstance(node, FileNode):
             lines.append(f"{prefix}{connector}{entry}")
 
-            # AST Analysis Integration
+            # AST definitions injection if any flag is enabled
             if show_functions or show_classes or show_methods:
                 symbols = extract_definitions(
                     node.path,
@@ -68,12 +74,12 @@ def render_tree_structure(
                     show_methods=show_methods,
                 )
 
-                # Indent symbols below the file
+                # Indent symbols as children of the file entry
                 child_prefix = prefix + ("    " if is_last else "│   ")
                 for item in symbols:
                     lines.append(f"{child_prefix}{item}")
 
             continue
 
-        # Case C: Fallback (Just name)
+        # Scenario C: Fallback for unclassified nodes
         lines.append(f"{prefix}{connector}{entry}")

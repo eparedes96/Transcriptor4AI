@@ -1,65 +1,82 @@
 from __future__ import annotations
 
 """
-Pipeline data models and result factories.
+Pipeline Domain Data Models.
 
-This module defines the data structures used to communicate the results
-of the transcription pipeline to the consumer interfaces (CLI/GUI).
+Defines the core data structures and factory functions used to communicate 
+execution results between the pipeline engine and interface layers (CLI/GUI).
 """
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
+# -----------------------------------------------------------------------------
+# CORE DATA MODELS
+# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class PipelineResult:
     """
-    Aggregated result of the pipeline execution.
+    Unified result object of a complete pipeline execution.
+
+    Encapsulates execution status, normalized configuration, metrics,
+    and paths to generated artifacts.
 
     Attributes:
-        ok (bool): True if the pipeline completed successfully.
-        error (str): Error message if execution failed.
-        base_path (str): The normalized input directory path.
-        final_output_path (str): The actual directory where files were saved.
-        token_count (int): Estimated number of tokens in the unified file.
-        summary (Dict[str, Any]): Detailed statistics and file paths.
+        ok: Flag indicating success or failure.
+        error: Descriptive message in case of failure.
+        base_path: Normalized root directory processed.
+        output_base_dir: Root directory for output artifacts.
+        output_subdir_name: Subdirectory where results are saved.
+        output_prefix: User-defined prefix for generated files.
+        process_modules: Whether source logic was targeted.
+        process_tests: Whether test files were targeted.
+        process_resources: Whether project resources were targeted.
+        create_individual_files: Flag for categorized output files.
+        create_unified_file: Flag for single aggregated context file.
+        enable_sanitizer: Flag for PII/Secret redaction.
+        mask_user_paths: Flag for environment anonymization.
+        minify_output: Flag for code comment removal.
+        final_output_path: Absolute directory containing artifacts.
+        existing_files: List of paths that caused naming collisions.
+        transcription_res: Metadata from categorized workers.
+        tree_lines: Text lines representing the directory tree.
+        tree_path: Absolute path to the persisted tree file.
+        token_count: Estimated token density of the unified context.
+        summary: Technical execution summary and statistics.
     """
     ok: bool
     error: str
 
-    # Normalized Inputs
     base_path: str
     output_base_dir: str
     output_subdir_name: str
     output_prefix: str
 
-    # Flags
     process_modules: bool
     process_tests: bool
     process_resources: bool
     create_individual_files: bool
     create_unified_file: bool
 
-    # Security & Optimization Flags
     enable_sanitizer: bool
     mask_user_paths: bool
     minify_output: bool
 
-    # Output Paths
     final_output_path: str
     existing_files: List[str] = field(default_factory=list)
 
-    # Partial Results
     transcription_res: Dict[str, Any] = field(default_factory=dict)
     tree_lines: List[str] = field(default_factory=list)
     tree_path: str = ""
 
-    # Metrics
     token_count: int = 0
 
-    # Summary
     summary: Dict[str, Any] = field(default_factory=dict)
 
+# -----------------------------------------------------------------------------
+# FACTORY FUNCTIONS
+# -----------------------------------------------------------------------------
 
 def create_error_result(
         error: str,
@@ -70,15 +87,18 @@ def create_error_result(
         summary_extra: Optional[Dict[str, Any]] = None
 ) -> PipelineResult:
     """
-    Factory to create a failed PipelineResult.
+    Create a failed pipeline result instance.
 
     Args:
-        error: The error message description.
-        cfg: The configuration dictionary used during execution.
-        base_path: The input directory path.
-        final_output_path: The output directory path (if created).
-        existing_files: List of pre-existing files that caused conflicts.
-        summary_extra: Additional data for the summary dict.
+        error: Detailed error description.
+        cfg: The configuration used during the failed run.
+        base_path: The target input directory.
+        final_output_path: Calculated output directory.
+        existing_files: Files that caused collision aborts.
+        summary_extra: Additional metadata for the summary payload.
+
+    Returns:
+        PipelineResult: An immutable error result object.
     """
     return PipelineResult(
         ok=False,
@@ -113,18 +133,21 @@ def create_success_result(
         summary_extra: Optional[Dict[str, Any]] = None
 ) -> PipelineResult:
     """
-    Factory to create a successful PipelineResult.
+    Create a successful pipeline result instance.
 
     Args:
-        cfg: The configuration dictionary.
-        base_path: The input directory.
-        final_output_path: The directory where results were saved.
-        existing_files: Files that existed before execution.
-        trans_res: The result dictionary from the transcription service.
-        tree_lines: The generated directory tree as strings.
-        tree_path: Path to the saved tree file.
-        token_count: The estimated token count.
-        summary_extra: Additional summary statistics.
+        cfg: Final configuration used during execution.
+        base_path: Normalized input directory.
+        final_output_path: Absolute artifact directory.
+        existing_files: Collision artifacts (if any were permitted).
+        trans_res: Metadata from worker execution.
+        tree_lines: Generated ASCII tree content.
+        tree_path: Path to the structural tree file.
+        token_count: Final token count metrics.
+        summary_extra: Final execution metrics.
+
+    Returns:
+        PipelineResult: An immutable success result object.
     """
     return PipelineResult(
         ok=True,

@@ -1,27 +1,32 @@
 from __future__ import annotations
 
 """
-Resilient File Reader.
+Resilient File Reading Component.
 
-Provides utilities to read files securely and resiliently, handling
-encoding issues gracefully to prevent pipeline crashes.
+Implements high-performance streaming for file consumption. Focuses on 
+encoding resilience to ensure project processing is not interrupted by 
+binary artifacts or corrupted UTF-8 sequences.
 """
 
 from typing import Iterator
 
+# -----------------------------------------------------------------------------
+# STREAM READING OPERATIONS
+# -----------------------------------------------------------------------------
 
 def stream_file_content(file_path: str) -> Iterator[str]:
     """
-    Read a file line by line using a generator.
+    Generate a line-by-line stream of file content.
 
-    It uses 'errors="replace"' to handle non-UTF-8 files without crashing,
-    inserting replacement characters for invalid bytes.
+    Implements the 'replace' error handling strategy to substitute
+    unrecognized byte sequences with placeholder characters, preventing
+    UnicodeDecodeError in mixed-encoding environments.
 
     Args:
-        file_path: Absolute path to the file.
+        file_path: Absolute path to the target file.
 
     Yields:
-        str: Lines from the file.
+        str: Sanitized lines from the file.
     """
     with open(file_path, "r", encoding="utf-8", errors="replace") as f:
         for line in f:

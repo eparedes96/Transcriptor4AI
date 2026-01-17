@@ -1,26 +1,27 @@
 from __future__ import annotations
 
 """
-Domain Constants and Data Structures.
+Domain Constants and Static Data Structures.
 
-Contains static definitions for AI models, file extension stacks,
-and default application constants. Separating data from logic
-improves maintainability and readability.
+Provides centralized access to application-wide constants, including 
+supported AI model mappings, default file extension stacks, and 
+system versioning.
 """
 
 from typing import Dict, List
 
 # -----------------------------------------------------------------------------
-# Global Constants
+# SYSTEM VERSIONING
 # -----------------------------------------------------------------------------
+
 CURRENT_CONFIG_VERSION = "2.0.0"
 DEFAULT_OUTPUT_PREFIX = "transcription"
 DEFAULT_MODEL_KEY = "- Default Model -"
 
 # -----------------------------------------------------------------------------
-# Extension Stacks
+# STACK PRESETS
 # -----------------------------------------------------------------------------
-# Immutable default extension stacks for quick selection
+
 DEFAULT_STACKS: Dict[str, List[str]] = {
     "Python Data": [".py", ".ipynb", ".json", ".csv", ".yaml"],
     "Web Fullstack": [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json"],
@@ -39,12 +40,13 @@ DEFAULT_STACKS: Dict[str, List[str]] = {
 }
 
 # -----------------------------------------------------------------------------
-# AI Providers & Models
+# AI PROVIDER REGISTRY
 # -----------------------------------------------------------------------------
+
 AI_MODELS: Dict[str, Dict[str, str]] = {
     "- Default Model -": {"id": "gpt-4o", "provider": "- Default -"},
 
-    # OpenAI
+    # OpenAI Family
     "ChatGPT 5.2 (Preview)": {"id": "gpt-5.2-chat-latest", "provider": "OPENAI"},
     "ChatGPT 4o": {"id": "chatgpt-4o-latest", "provider": "OPENAI"},
     "GPT-5.2 (API)": {"id": "gpt-5.2", "provider": "OPENAI"},
@@ -54,20 +56,20 @@ AI_MODELS: Dict[str, Dict[str, str]] = {
     "OpenAI o3 Deep Research": {"id": "o3-deep-research", "provider": "OPENAI"},
     "OpenAI o4-mini Deep Research": {"id": "o4-mini-deep-research", "provider": "OPENAI"},
 
-    # Anthropic
+    # Anthropic Family
     "Claude 4.5 Sonnet": {"id": "claude-sonnet-4-5-20250929", "provider": "ANTHROPIC"},
     "Claude 4.5 Haiku": {"id": "claude-haiku-4-5-20251001", "provider": "ANTHROPIC"},
     "Claude 4.5 Opus": {"id": "claude-opus-4-5-20251101", "provider": "ANTHROPIC"},
     "Claude 3.5 Sonnet": {"id": "claude-3-5-sonnet-20240620", "provider": "ANTHROPIC"},
 
-    # Google
+    # Google Family
     "Gemini 3 Pro (Preview)": {"id": "gemini-3-pro-preview", "provider": "GOOGLE"},
     "Gemini 3 Flash (Preview)": {"id": "gemini-3-flash-preview", "provider": "GOOGLE"},
     "Gemini 2.5 Pro": {"id": "gemini-2.5-pro", "provider": "GOOGLE"},
     "Gemini 2.5 Flash": {"id": "gemini-2.5-flash", "provider": "GOOGLE"},
     "Gemini 2.5 Flash-Lite": {"id": "gemini-2.5-flash-lite", "provider": "GOOGLE"},
 
-    # Mistral
+    # Mistral Family
     "Mistral Large 3 (2512)": {"id": "mistral-large-2512", "provider": "MISTRAL"},
     "Mistral Medium 3.1 (2508)": {"id": "mistral-medium-2508", "provider": "MISTRAL"},
     "Mistral Small 3.2 (2506)": {"id": "mistral-small-2506", "provider": "MISTRAL"},
@@ -80,11 +82,9 @@ AI_MODELS: Dict[str, Dict[str, str]] = {
     "Devstral Small": {"id": "devstral-small-2507", "provider": "MISTRAL"},
     "Devstral Small (Labs)": {"id": "labs-devstral-small-2512", "provider": "MISTRAL"},
 
-    # DeepSeek
+    # DeepSeek & Local HF Architectures
     "DeepSeek Chat V3.2": {"id": "deepseek-chat", "provider": "HF_LOCAL"},
     "DeepSeek Reasoner (Thinking)": {"id": "deepseek-reasoner", "provider": "HF_LOCAL"},
-
-    # Qwen
     "Qwen3 Instruct (235B)": {"id": "Qwen/Qwen3-235B-A22B-Instruct-2507", "provider": "HF_LOCAL"},
     "Qwen3 Thinking (235B)": {"id": "Qwen/Qwen3-235B-A22B-Thinking-2507", "provider": "HF_LOCAL"},
     "Qwen3-Next Instruct (80B)": {"id": "Qwen/Qwen3-Next-80B-A3B-Instruct", "provider": "HF_LOCAL"},
@@ -93,7 +93,5 @@ AI_MODELS: Dict[str, Dict[str, str]] = {
     "Qwen3 Coder (480B)": {"id": "Qwen/Qwen3-Coder-480B-A35B-Instruct", "provider": "HF_LOCAL"},
     "Qwen3 Coder Small (30B)": {"id": "qwen3-coder-30b-a3b-instruct", "provider": "HF_LOCAL"},
     "Qwen2.5 Coder (32B)": {"id": "Qwen/Qwen2.5-Coder-32B-Instruct", "provider": "HF_LOCAL"},
-
-    # Other Open Source
     "Llama 3 70B": {"id": "meta-llama/Meta-Llama-3-70B", "provider": "HF_LOCAL"},
 }

@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 """
-Pipeline Assembler & Finalizer.
+Pipeline Assembler & Finalizer Stage.
 
-This module handles the final phase of the workflow:
-1. Assembling the unified context file from partials.
-2. Counting tokens of the final result.
-3. Deploying files (move from staging to final).
-4. Cleaning up temporary resources.
-5. Generating the final PipelineResult summary.
+Orchestrates the terminal phase of the transcription workflow:
+1. Unified context aggregation from partial transcription files.
+2. Context-aware token counting using the hybrid strategy.
+3. Atomic deployment from staging/temporary areas to final destinations.
+4. Final metrics generation and resource cleanup.
 """
 
 import logging
@@ -25,6 +24,10 @@ from transcriptor4ai.domain.pipeline_models import (
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# CORE ASSEMBLY LOGIC
+# -----------------------------------------------------------------------------
+
 def assemble_and_finalize(
         cfg: Dict[str, Any],
         trans_res: Dict[str, Any],
@@ -33,19 +36,23 @@ def assemble_and_finalize(
         dry_run: bool
 ) -> PipelineResult:
     """
-    Assemble files, calculate metrics, and deploy results.
+    Perform final assembly of artifacts, compute metrics, and deploy results.
+
+    Coordinates the transition from intermediate staging files to the
+    user-facing output directory. Handles token estimation and ensures
+    temporary resources are released.
 
     Args:
-        cfg: The configuration dictionary.
-        trans_res: Results from the transcription worker.
-        tree_lines: Generated tree structure lines.
-        env_context: Context dictionary from the setup phase.
-        dry_run: Whether to simulate execution.
+        cfg: Validated configuration dictionary.
+        trans_res: Dictionary containing results from the transcription workers.
+        tree_lines: Visual directory tree generated in previous stages.
+        env_context: Execution environment context (paths, staging info).
+        dry_run: If True, skips physical deployment to final paths.
 
     Returns:
-        PipelineResult: The final success object with summary statistics.
+        PipelineResult: Success object containing summary and execution metadata.
     """
-    # Unpack context
+    # Unpack environment context provided by the setup stage
     base_path = env_context["base_path"]
     final_output_path = env_context["final_output_path"]
     staging_dir = env_context["staging_dir"]
@@ -58,15 +65,17 @@ def assemble_and_finalize(
     unified_created = False
     final_token_count = 0
 
-    # -------------------------------------------------------------------------
-    # Assembly: Unified File Creation
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 1: UNIFIED CONTEXT AGGREGATION
+    # -----------------------------------------------------------------------------
     if cfg["create_unified_file"]:
         try:
             with open(paths["unified"], "w", encoding="utf-8") as outfile:
+                # Header Section
                 outfile.write(f"PROJECT CONTEXT: {os.path.basename(base_path)}\n")
                 outfile.write("=" * 80 + "\n\n")
 
+                # Structure Section (Directory Tree)
                 if cfg["generate_tree"] and os.path.exists(paths["tree"]):
                     outfile.write("PROJECT STRUCTURE:\n")
                     outfile.write("-" * 50 + "\n")
@@ -74,6 +83,7 @@ def assemble_and_finalize(
                         shutil.copyfileobj(infile, outfile)
                     outfile.write("\n\n")
 
+                # Content Sections (Modules, Tests, Resources)
                 for key in ["modules", "tests", "resources"]:
                     gen_path = trans_res.get("generated", {}).get(key)
                     if gen_path and os.path.exists(gen_path):
@@ -83,7 +93,7 @@ def assemble_and_finalize(
 
             unified_created = True
 
-            # Calculate Tokens
+            # Calculate token metrics for the unified context
             try:
                 target_model = cfg.get("target_model", "GPT-4o / GPT-5")
                 with open(paths["unified"], "r", encoding="utf-8") as f:
@@ -97,36 +107,42 @@ def assemble_and_finalize(
         except OSError as e:
             logger.error(f"Failed to process unified file in staging: {e}")
 
-    # -------------------------------------------------------------------------
-    # Deployment
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 2: ARTIFACT DEPLOYMENT (STAGING -> FINAL)
+    # -----------------------------------------------------------------------------
     gen_files_map = trans_res.get("generated", {}).copy()
 
     if dry_run:
-        logger.info("Dry run: Skipping file deployment to final destination.")
+        logger.info("Dry run enabled: Skipping physical deployment of artifacts.")
         if unified_created:
             gen_files_map["unified"] = "(Simulated: Unified Context File)"
     else:
+        # Move unified context to the final destination directory
         if unified_created:
             real_path_unified = os.path.join(final_output_path, f"{prefix}_full_context.txt")
             shutil.move(paths["unified"], real_path_unified)
             gen_files_map["unified"] = real_path_unified
 
+        # Deploy error logs if they were generated in a staging area
         if os.path.exists(paths["errors"]) and staging_dir != final_output_path:
             shutil.move(paths["errors"], os.path.join(final_output_path, f"{prefix}_errors.txt"))
 
-    # -------------------------------------------------------------------------
-    # Cleanup & Finalize
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 3: RESOURCE CLEANUP AND SUMMARY
+    # -----------------------------------------------------------------------------
+    # Dispose of temporary staging directory if it was created
     if temp_dir_obj:
         temp_dir_obj.cleanup()
-        logger.debug("Staging directory cleaned up.")
+        logger.debug("Temporary staging resources cleaned up.")
 
+    # Filter out individual file paths if only unified output was requested
     if not cfg["create_individual_files"]:
         for k in ["modules", "tests", "resources"]:
             gen_files_map.pop(k, None)
 
     counters = trans_res.get("counters", {}) or {}
+
+    # Construct technical execution summary
     summary = {
         "final_output_path": final_output_path,
         "processed": int(counters.get("processed", 0)),
@@ -151,7 +167,7 @@ def assemble_and_finalize(
         }
     }
 
-    logger.info("Pipeline completed successfully.")
+    logger.info("Pipeline execution finalized successfully.")
     return create_success_result(
         cfg, base_path, final_output_path, existing_files,
         trans_res, tree_lines, paths["tree"], final_token_count, summary

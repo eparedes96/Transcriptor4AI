@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 """
-Pipeline Setup & Preparation.
+Pipeline Setup & Environment Preparation Stage.
 
-This module handles the initialization phase of the pipeline:
-1. Path normalization and validation.
-2. Conflict detection (existing files).
-3. Directory creation (final and staging).
-4. Path definitions for intermediate files.
+Handles the initialization lifecycle of the pipeline:
+1. Path normalization and filesystem validation.
+2. Conflict detection for pre-existing output files.
+3. Staging area creation (Temporary vs. Final directories).
+4. Context mapping for downstream stages.
 """
 
 import logging
 import os
 import tempfile
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from transcriptor4ai.domain.pipeline_models import (
     PipelineResult,
@@ -27,6 +27,9 @@ from transcriptor4ai.infra.fs import (
 
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# ENVIRONMENT PREPARATION LOGIC
+# -----------------------------------------------------------------------------
 
 def prepare_environment(
         cfg: Dict[str, Any],
@@ -35,36 +38,42 @@ def prepare_environment(
         tree_output_path: Optional[str]
 ) -> Tuple[Optional[PipelineResult], Dict[str, Any]]:
     """
-    Prepare the filesystem and execution context for the pipeline.
+    Initialize the filesystem state and execution context for the pipeline.
+
+    Calculates absolute paths for all potential outputs, checks for naming
+    collisions, and establishes the staging area for transcription workers.
 
     Args:
-        cfg: The validated configuration dictionary.
-        overwrite: Whether to overwrite existing files.
-        dry_run: Whether to simulate execution.
-        tree_output_path: Optional override for tree file path.
+        cfg: Validated configuration dictionary.
+        overwrite: Whether to allow overwriting of existing files.
+        dry_run: Whether execution is a simulation.
+        tree_output_path: Optional override for the directory tree file path.
 
     Returns:
-        Tuple containing:
-        1. PipelineResult (if an error occurred during setup, else None).
-        2. Context Dictionary (containing paths, temp objects, and state data).
+        Tuple[Optional[PipelineResult], Dict[str, Any]]:
+            A PipelineResult object if setup fails, else None and the
+            environment context dictionary.
     """
+    # 1. Path Normalization and Validation
     fallback_base = os.getcwd()
     base_path = normalize_path(cfg.get("input_path", ""), fallback_base)
 
     if not os.path.exists(base_path) or not os.path.isdir(base_path):
-        msg = f"Invalid input directory: {base_path}"
+        msg = f"Invalid or non-existent input directory: {base_path}"
         logger.error(msg)
         return create_error_result(msg, cfg, base_path), {}
 
+    # Resolve output directory hierarchy
     output_base_dir = normalize_path(cfg.get("output_base_dir", ""), base_path)
     final_output_path = get_real_output_path(output_base_dir, cfg["output_subdir_name"])
     prefix = cfg["output_prefix"]
 
-    # -------------------------------------------------------------------------
-    # Overwrite Check
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # 2. COLLISION DETECTION (OVERWRITE CHECK)
+    # -----------------------------------------------------------------------------
     files_to_check: List[str] = []
 
+    # Map possible files based on configuration flags
     if cfg["create_individual_files"]:
         if cfg["process_modules"]:
             files_to_check.append(f"{prefix}_modules.txt")
@@ -81,36 +90,38 @@ def prepare_environment(
     if cfg["save_error_log"]:
         files_to_check.append(f"{prefix}_errors.txt")
 
+    # Verify physical existence in target directory
     existing_files = check_existing_output_files(final_output_path, files_to_check)
 
     if existing_files and not overwrite and not dry_run:
-        msg = "Existing files detected and overwrite=False. Aborting."
-        logger.warning(f"{msg} Files: {existing_files}")
+        msg = "Naming collision detected: Output files already exist and overwrite is disabled."
+        logger.warning(f"{msg} Target files: {existing_files}")
         return create_error_result(
             msg, cfg, base_path, final_output_path, existing_files,
             summary_extra={"existing_files": list(existing_files)}
         ), {}
 
-    # -------------------------------------------------------------------------
-    # Directory & Staging Preparation
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # 3. DIRECTORY AND STAGING INITIALIZATION
+    # -----------------------------------------------------------------------------
     if not dry_run:
         try:
             os.makedirs(final_output_path, exist_ok=True)
         except OSError as e:
-            msg = f"Failed to create output directory {final_output_path}: {e}"
+            msg = f"Critical error creating output directory {final_output_path}: {e}"
             logger.critical(msg)
             return create_error_result(msg, cfg, base_path, final_output_path), {}
 
+    # Setup staging area: uses TemporaryDirectory if simulation or unified-only mode
     temp_dir_obj = None
     if dry_run or not cfg["create_individual_files"]:
         temp_dir_obj = tempfile.TemporaryDirectory()
         staging_dir = temp_dir_obj.name
-        logger.debug(f"Using temporary staging directory: {staging_dir}")
+        logger.debug(f"Staging area initialized in temporary directory: {staging_dir}")
     else:
         staging_dir = final_output_path
 
-    # Define Paths for Components
+    # Define intermediate file paths
     paths = {
         "modules": os.path.join(staging_dir, f"{prefix}_modules.txt"),
         "tests": os.path.join(staging_dir, f"{prefix}_tests.txt"),
@@ -120,7 +131,7 @@ def prepare_environment(
         "unified": os.path.join(staging_dir, f"{prefix}_full_context.txt"),
     }
 
-    # Context bundle to pass to the next stage
+    # Bundle environment state for worker orchestration
     env_context = {
         "base_path": base_path,
         "final_output_path": final_output_path,
@@ -132,4 +143,5 @@ def prepare_environment(
         "files_to_check": files_to_check
     }
 
+    logger.info("Pipeline environment setup complete.")
     return None, env_context

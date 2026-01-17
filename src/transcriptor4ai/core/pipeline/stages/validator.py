@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 """
-Configuration Validator.
+Configuration Validation Service.
 
-Acts as a gatekeeper to ensure that the configuration dictionary passed
-to the pipeline contains valid types and normalized values.
-Uses a schema-driven approach to minimize boilerplate.
+Acts as the primary gatekeeper for the pipeline, ensuring that the configuration 
+dictionary conforms to the expected schema. Handles type coercion, path 
+normalization, and default value injection to maintain execution stability.
 """
 
 import logging
@@ -21,28 +21,33 @@ from transcriptor4ai.domain.config import get_default_config
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# PUBLIC API
+# -----------------------------------------------------------------------------
+
 def validate_config(
         config: Any,
         *,
         strict: bool = False,
 ) -> Tuple[Dict[str, Any], List[str]]:
     """
-    Validate and normalize the configuration dictionary.
+    Validate and normalize the provided configuration dictionary.
 
-    Ensures types are correct (converting strings to bools/lists if needed)
-    and fills in missing values with defaults using a declarative schema.
+    Ensures data integrity by converting untrusted inputs (e.g., from CLI or GUI)
+    into strictly typed parameters. Fills missing keys with domain defaults.
 
     Args:
-        config: The raw configuration dictionary (or untrusted input).
-        strict: If True, raises TypeError/ValueError on invalid data.
+        config: Raw configuration data (usually a dictionary).
+        strict: If True, raises exceptions on type mismatch instead of coercing.
 
     Returns:
-        Tuple[Dict, List[str]]: (Normalized Config, List of Warnings).
+        Tuple[Dict[str, Any], List[str]]: A tuple containing the normalized
+                                          configuration and a list of warnings.
     """
     warnings: List[str] = []
     defaults = get_default_config()
 
-    # Base Validation: Type Check
+    # 1. Base Type Validation
     if not isinstance(config, dict):
         msg = f"Invalid config type: expected dict, received {type(config).__name__}."
         if strict:
@@ -51,11 +56,11 @@ def validate_config(
         logger.warning(msg)
         return defaults, warnings
 
-    # Start with defaults and update with provided config
+    # Initialize merged configuration with domain defaults
     merged: Dict[str, Any] = dict(defaults)
     merged.update(config)
 
-    # Declarative Schema Definition
+    # 2. Schema Definition (Declarative mapping)
     string_fields = [
         "input_path", "output_base_dir", "output_subdir_name",
         "output_prefix", "target_model"
@@ -75,37 +80,40 @@ def validate_config(
         "exclude_patterns": default_exclude_patterns(),
     }
 
-    # Process String Fields
+    # 3. Field Processing & Normalization
     for field in string_fields:
         merged[field] = _as_str(
             merged.get(field), defaults.get(field, ""), field, warnings, strict
         )
 
-    # Process Boolean Fields
     for field in bool_fields:
         merged[field] = _as_bool(
             merged.get(field), defaults.get(field, False), field, warnings, strict
         )
 
-    # Process List Fields
     for field, fallback in list_fields_map.items():
         merged[field] = _as_list_str(
             merged.get(field), fallback, field, warnings, strict
         )
 
-    # Post-processing normalization
+    # 4. Domain-Specific Normalization (Extensions)
     merged["extensions"] = _normalize_extensions(merged["extensions"], warnings, strict)
 
     return merged, warnings
 
 
+# -----------------------------------------------------------------------------
+# PRIVATE HELPERS: TYPE COERCION
+# -----------------------------------------------------------------------------
+
 def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: bool) -> str:
-    """Ensure value is a string."""
+    """Validate and sanitize string inputs."""
     if value is None:
         return fallback
     if isinstance(value, str):
         v = value.strip()
         return v if v else fallback
+
     msg = f"Invalid field '{field}': expected str, received {type(value).__name__}."
     if strict:
         raise TypeError(msg)
@@ -114,16 +122,18 @@ def _as_str(value: Any, fallback: str, field: str, warnings: List[str], strict: 
 
 
 def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict: bool) -> bool:
-    """Coerce value to boolean."""
+    """Coerce various input types into native booleans."""
     if isinstance(value, bool):
         return value
     if value is None:
         return fallback
 
     if not strict:
+        # Support numeric coercion (0/1)
         if isinstance(value, (int, float)) and value in (0, 1):
             warnings.append(f"Field '{field}' converted from number {value} to bool.")
             return bool(value)
+        # Support string coercion (human-friendly keywords)
         if isinstance(value, str):
             s = value.strip().lower()
             if s in ("true", "1", "yes", "y", "si", "sí"):
@@ -141,10 +151,11 @@ def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict
 
 
 def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str], strict: bool) -> List[str]:
-    """Ensure value is a list of strings."""
+    """Ensure input is a list of sanitized strings, supporting CSV parsing."""
     if value is None:
         return list(fallback)
 
+    # Support CSV string to list conversion for CLI/GUI compatibility
     if isinstance(value, str) and not strict:
         items = [x.strip() for x in value.split(",") if x.strip()]
         if items:
@@ -173,8 +184,12 @@ def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str
     return list(fallback)
 
 
+# -----------------------------------------------------------------------------
+# PRIVATE HELPERS: DOMAIN NORMALIZATION
+# -----------------------------------------------------------------------------
+
 def _normalize_extensions(exts: List[str], warnings: List[str], strict: bool) -> List[str]:
-    """Ensure extensions start with a dot."""
+    """Ensure all file extensions are prefixed with a dot for filesystem consistency."""
     out: List[str] = []
     for ext in exts:
         e = ext.strip()

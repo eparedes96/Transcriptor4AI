@@ -1,23 +1,26 @@
 from __future__ import annotations
 
 """
-Transcription Data Models.
+Transcription Domain Data Models.
 
-Defines Data Transfer Objects (DTOs) related to file processing errors
-and results within the transcription domain.
+Defines the Data Transfer Objects (DTOs) used to encapsulate atomic 
+transcription units and error reporting within the processing domain.
 """
 
 from dataclasses import dataclass
 
+# -----------------------------------------------------------------------------
+# ERROR TRACKING MODELS
+# -----------------------------------------------------------------------------
 
 @dataclass(frozen=True)
 class TranscriptionError:
     """
-    Represents an error encountered during the processing of a single file.
+    Encapsulates technical failure details during file processing.
 
     Attributes:
-        rel_path: The file path relative to the input root.
-        error: Description of the error or exception message.
+        rel_path: File path identifier relative to project root.
+        error: Descriptive exception or error message.
     """
     rel_path: str
     error: str

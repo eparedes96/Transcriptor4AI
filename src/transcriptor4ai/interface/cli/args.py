@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 """
-CLI Argument Definition and Parsing.
+CLI Argument Definition and Mapping.
 
-This module defines the command-line arguments, flags, and help messages.
-It also handles the translation of argparse Namespaces into dictionary
-overrides compatible with the core configuration.
+Defines the command-line interface schema, including help messages, 
+argument types, and defaults. Provides logic to translate raw argparse 
+namespaces into domain-compatible configuration overrides.
 """
 
 import argparse
@@ -13,20 +13,23 @@ from typing import Optional, Dict, Any, List
 
 from transcriptor4ai.utils.i18n import i18n
 
+# -----------------------------------------------------------------------------
+# ARGUMENT DEFINITION
+# -----------------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
     """
-    Construct the argument parser for the CLI.
+    Construct the argument parser for the Transcriptor4AI CLI.
 
     Returns:
-        argparse.ArgumentParser: The configured parser instance.
+        argparse.ArgumentParser: Configured parser instance.
     """
     p = argparse.ArgumentParser(
         prog="transcriptor4ai",
         description=i18n.t("app.description"),
     )
 
-    # --- Input / Output ---
+    # --- Path Management ---
     p.add_argument(
         "-i", "--input",
         dest="input_path",
@@ -52,21 +55,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
     )
 
-    # --- Content Selection ---
+    # --- Content Discovery and Selection ---
     p.add_argument(
         "--no-modules",
         action="store_true",
-        help=i18n.t("cli.args.no_modules", default="Do not include source code modules."),
+        help=i18n.t("cli.args.no_modules", default="Exclude source code logic."),
     )
     p.add_argument(
         "--no-tests",
         action="store_true",
-        help=i18n.t("cli.args.no_tests", default="Do not include test files."),
+        help=i18n.t("cli.args.no_tests", default="Exclude test suite files."),
     )
     p.add_argument(
         "--resources",
         action="store_true",
-        help=i18n.t("cli.args.resources", default="Include resource files (docs, config, data)."),
+        help=i18n.t("cli.args.resources", default="Include non-code resources (docs/config)."),
     )
     p.add_argument(
         "--tree",
@@ -85,24 +88,24 @@ def build_parser() -> argparse.ArgumentParser:
         help=i18n.t("cli.args.print_tree"),
     )
 
-    # --- Output Format Shortcuts ---
+    # --- Output Strategies ---
     p.add_argument(
         "--unified-only",
         action="store_true",
-        help=i18n.t("cli.args.unified_only", default="Generate ONLY the unified context file."),
+        help=i18n.t("cli.args.unified_only", default="Target ONLY unified context generation."),
     )
     p.add_argument(
         "--individual-only",
         action="store_true",
-        help=i18n.t("cli.args.individual_only", default="Generate ONLY individual files."),
+        help=i18n.t("cli.args.individual_only", default="Target ONLY categorized file generation."),
     )
 
-    # --- AST flags ---
+    # --- Static Analysis (AST) Configuration ---
     p.add_argument("--functions", action="store_true", help=i18n.t("cli.args.func"))
     p.add_argument("--classes", action="store_true", help=i18n.t("cli.args.cls"))
     p.add_argument("--methods", action="store_true", help=i18n.t("cli.args.meth"))
 
-    # --- Filters ---
+    # --- Data Transformation Filters ---
     p.add_argument(
         "--ext",
         dest="extensions",
@@ -124,10 +127,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--no-gitignore",
         action="store_true",
-        help=i18n.t("cli.args.no_gitignore", default="Do not read .gitignore files."),
+        help=i18n.t("cli.args.no_gitignore", default="Ignore local .gitignore rules."),
     )
 
-    # --- Safety / UX ---
+    # --- Runtime Constraints and Safety ---
     p.add_argument(
         "--overwrite",
         action="store_true",
@@ -144,7 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=i18n.t("cli.args.no_log"),
     )
 
-    # --- Config handling ---
+    # --- Configuration and Diagnostic Tools ---
     p.add_argument(
         "--use-defaults",
         action="store_true",
@@ -158,10 +161,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--debug",
         action="store_true",
-        help="Enable DEBUG logging level.",
+        help="Elevate logging verbosity to DEBUG.",
     )
 
-    # --- Output formatting ---
+    # --- Format Selection ---
     p.add_argument(
         "--json",
         dest="json_output",
@@ -171,17 +174,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     return p
 
+# -----------------------------------------------------------------------------
+# ARGUMENT MAPPING
+# -----------------------------------------------------------------------------
 
 def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     """
-    Transform parsed CLI arguments into a configuration override dictionary.
+    Translate the argparse Namespace into a domain configuration dictionary.
 
     Args:
-        args: The Namespace object returned by argparse.
+        args: Parsed command-line arguments.
 
     Returns:
-        Dict[str, Any]: A dictionary containing only the values that should
-        override the default configuration.
+        Dict[str, Any]: Configuration overrides subset.
     """
     overrides: Dict[str, Any] = {}
 
@@ -190,7 +195,7 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     overrides["output_subdir_name"] = args.output_subdir_name
     overrides["output_prefix"] = args.output_prefix
 
-    # Content Selection Mapping
+    # Content Scope overrides
     if args.no_modules:
         overrides["process_modules"] = False
     if args.no_tests:
@@ -198,11 +203,11 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     if args.resources:
         overrides["process_resources"] = True
 
-    # Tree mapping
+    # Analysis overrides
     if args.tree:
         overrides["generate_tree"] = True
 
-    # Output Format Mapping (Shortcuts)
+    # Output Format overrides
     if args.unified_only:
         overrides["create_individual_files"] = False
         overrides["create_unified_file"] = True
@@ -210,7 +215,7 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["create_individual_files"] = True
         overrides["create_unified_file"] = False
 
-    # Filters
+    # Logic-based filtering overrides
     if args.extensions:
         overrides["extensions"] = _split_csv(args.extensions)
     if args.include_patterns:
@@ -220,7 +225,7 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     if args.no_gitignore:
         overrides["respect_gitignore"] = False
 
-    # AST Options
+    # Detailed Analysis flags
     if args.print_tree:
         overrides["print_tree"] = True
     if args.functions:
@@ -234,11 +239,13 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
 
     return overrides
 
+# -----------------------------------------------------------------------------
+# HELPERS
+# -----------------------------------------------------------------------------
 
 def _split_csv(value: Optional[str]) -> Optional[List[str]]:
     """
-    Helper to split a comma-separated string into a list of strings.
-    Strips whitespace from each item.
+    Convert a comma-separated string into a list of sanitized strings.
     """
     if value is None:
         return None

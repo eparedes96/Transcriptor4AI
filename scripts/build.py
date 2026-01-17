@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 """
-Industrial-grade Build Script for Transcriptor4AI.
+Build Automation Engine for Transcriptor4AI.
 
-Automates the creation of a standalone executable using PyInstaller.
-Handles data resources (locales), icons, and dependency collection
-for network-enabled features.
-
-Assumes execution from the project root or scripts directory.
+Orchestrates the standalone executable generation using PyInstaller.
+Handles resource bundling, cross-platform path resolution, and 
+automated cleanup of build artifacts.
 """
 
 import os
@@ -17,8 +15,17 @@ import sys
 import PyInstaller.__main__
 
 
+# -----------------------------------------------------------------------------
+# ARTIFACT MANAGEMENT
+# -----------------------------------------------------------------------------
+
 def _clean_artifacts() -> None:
-    """Remove previous build artifacts to ensure a clean build environment."""
+    """
+    Remove residual build artifacts to ensure an idempotent build process.
+
+    Targets standard PyInstaller output directories and the generated
+    spec file to prevent cached configuration leaks.
+    """
     folders_to_clean = ["build", "dist"]
     for folder in folders_to_clean:
         if os.path.exists(folder):
@@ -30,20 +37,28 @@ def _clean_artifacts() -> None:
         os.remove(spec_file)
 
 
+# -----------------------------------------------------------------------------
+# BUILD EXECUTION LOGIC
+# -----------------------------------------------------------------------------
+
 def build() -> None:
     """
-    Configure and execute the PyInstaller build process.
+    Configure and execute the PyInstaller compilation pipeline.
+
+    Resolves project root dynamically, manages multi-platform separators,
+    and bundles essential resources (locales, icons, and sidecar utilities).
     """
     print("======================================================")
     print("Starting Build Process for Transcriptor4AI")
     print("======================================================")
 
-    # 1. Environment Preparation
+    # Prepare environment
     _clean_artifacts()
 
-    # 2. Resource Path Management
+    # Resolve platform-specific data separators
     sep = ';' if platform.system() == 'Windows' else ':'
 
+    # Resolve filesystem hierarchy
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
 
@@ -53,12 +68,13 @@ def build() -> None:
 
     main_entry = os.path.join(src_dir, "transcriptor4ai", "main.py")
 
-    # Resources
+    # Resource definitions (Internal package structure)
     locales_src = os.path.join(src_dir, "transcriptor4ai", "interface", "locales", "*.json")
     locales_dest = os.path.join("transcriptor4ai", "interface", "locales")
 
     updater_src = os.path.join(scripts_dir, "updater.py")
 
+    # PyInstaller data bundling arguments
     data_args = [
         f"{locales_src}{sep}{locales_dest}",
         f"{updater_src}{sep}."
@@ -66,7 +82,7 @@ def build() -> None:
 
     icon_path = os.path.join(assets_dir, "icon.ico")
 
-    # PyInstaller Args
+    # Pipeline configuration for standalone binary
     args = [
         main_entry,
         '--name=transcriptor4ai',
@@ -79,11 +95,11 @@ def build() -> None:
         '--collect-all=tkinterdnd2',
     ]
 
-    # Add data resources
+    # Map resources into the binary VFS
     for data in data_args:
         args.append(f'--add-data={data}')
 
-    # Add icon if available
+    # Visual branding configuration
     if os.path.exists(icon_path):
         print(f"[*] Icon found: {icon_path}")
         args.append(f'--icon={icon_path}')
@@ -98,6 +114,10 @@ def build() -> None:
         print(f"\n[!] CRITICAL BUILD FAILURE: {e}", file=sys.stderr)
         sys.exit(1)
 
+
+# -----------------------------------------------------------------------------
+# SCRIPT ENTRYPOINT
+# -----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     build()

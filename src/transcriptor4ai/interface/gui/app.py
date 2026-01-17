@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 """
-Main Entry Point for the Graphical User Interface.
+GUI Entrypoint and Application Lifecycle Orchestrator.
 
-This module orchestrates the application lifecycle using CustomTkinter:
-1. Initialization (Logging, State Load).
-2. UI Construction (assembling Layouts).
-3. Logic Integration (linking the AppController).
-4. Main Event Loop Management.
+Initializes the CustomTkinter environment, coordinates persistent state loading, 
+assembles the visual component hierarchy, and bridges UI events with the 
+AppController. Manages asynchronous log polling and background update cycles.
 """
 
 import logging
@@ -39,57 +37,60 @@ import tkinter.messagebox as mb
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# MAIN APPLICATION LOOP
+# -----------------------------------------------------------------------------
+
 def main() -> None:
     """
-    Main GUI Application loop (V2.0 Architecture).
-    """
-    # -------------------------------------------------------------------------
-    # 1. System Initialization
-    # -------------------------------------------------------------------------
-    log_path = get_default_gui_log_path()
-    # Configure root logger with thread-safe queue for file/console
-    configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
-    logger.info(f"GUI V2.0 Starting - Version {const.CURRENT_CONFIG_VERSION}")
+    Initialize and launch the Graphical User Interface.
 
-    # Setup a specific queue for the GUI Log Console widget
+    Executes the six-phase startup sequence: Logging Setup, State Recovery,
+    UI Construction, Controller Binding, Task Scheduling, and Loop Entry.
+    """
+    # -----------------------------------------------------------------------------
+    # PHASE 1: DIAGNOSTIC INFRASTRUCTURE SETUP
+    # -----------------------------------------------------------------------------
+    log_path = get_default_gui_log_path()
+    # Configure root logging with rotating file and console handlers
+    configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
+    logger.info(f"GUI Lifecycle: Initializing v{const.CURRENT_CONFIG_VERSION}")
+
+    # Initialize dedicated queue for real-time UI log console updates
     gui_log_queue: queue.Queue = queue.Queue()
     gui_log_handler = QueueHandler(gui_log_queue)
     gui_log_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(gui_log_handler)
 
-    # -------------------------------------------------------------------------
-    # 2. State Loading
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 2: PERSISTENT STATE RECOVERY
+    # -----------------------------------------------------------------------------
     try:
         app_state = cfg.load_app_state()
         config = cfg.load_config()
         saved_profiles = app_state.get("saved_profiles", {})
         profile_names = sorted(list(saved_profiles.keys()))
     except Exception as e:
-        logger.error(f"State load failed: {e}")
+        logger.error(f"State Error: Failure during config deserialization: {e}")
         app_state = cfg.get_default_app_state()
         config = cfg.get_default_config()
         profile_names = []
 
-    # -------------------------------------------------------------------------
-    # 3. View Construction (Wireframe)
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 3: VIEW COMPONENT HIERARCHY CONSTRUCTION
+    # -----------------------------------------------------------------------------
     app = transcriptor4ai.interface.gui.components.main_window.create_main_window(profile_names, config)
 
-    # Define Navigation Logic
     def show_frame(name: str) -> None:
-        """Switch visible content frame."""
-        # Hide all
+        """Switch current visible view via grid management."""
         dashboard_frame.grid_forget()
         settings_frame.grid_forget()
         logs_frame.grid_forget()
 
-        # Update Sidebar Buttons visual state
         sidebar_frame.btn_dashboard.configure(fg_color="transparent")
         sidebar_frame.btn_settings.configure(fg_color="transparent")
         sidebar_frame.btn_logs.configure(fg_color="transparent")
 
-        # Show selected
         if name == "dashboard":
             dashboard_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
             sidebar_frame.btn_dashboard.configure(fg_color=("gray75", "gray25"))
@@ -100,7 +101,7 @@ def main() -> None:
             logs_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
             sidebar_frame.btn_logs.configure(fg_color=("gray75", "gray25"))
 
-    # Instantiate Frames
+    # Instantiate specialized UI modules
     sidebar_frame = transcriptor4ai.interface.gui.components.sidebar.SidebarFrame(app, nav_callback=show_frame)
     sidebar_frame.grid(row=0, column=0, sticky="nsew")
 
@@ -108,58 +109,49 @@ def main() -> None:
     settings_frame = transcriptor4ai.interface.gui.components.settings.SettingsFrame(app, config, profile_names)
     logs_frame = transcriptor4ai.interface.gui.components.logs_console.LogsFrame(app)
 
-    # Default View
     show_frame("dashboard")
 
-    # -------------------------------------------------------------------------
-    # 4. Logic Integration (Controller)
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 4: CONTROLLER INTEGRATION AND EVENT BINDING
+    # -----------------------------------------------------------------------------
     controller = transcriptor4ai.interface.gui.controllers.main_controller.AppController(app, config, app_state)
     controller.register_views(dashboard_frame, settings_frame, logs_frame, sidebar_frame)
 
-    # Sync initial state to widgets
+    # Scrape configuration into widget initial values
     controller.sync_view_from_config()
 
-    # Link View Events to Controller Actions
+    # Link execution triggers
     dashboard_frame.btn_process.configure(command=lambda: controller.start_processing(dry_run=False))
     dashboard_frame.btn_simulate.configure(command=lambda: controller.start_processing(dry_run=True))
-
-    # Link dynamic Tree Switch
     dashboard_frame.sw_tree.configure(command=controller.on_tree_toggled)
 
-    # Update Input
+    # Link I/O directory selectors
     dashboard_frame.btn_browse_in.configure(
-        command=lambda: _browse_folder(
-            app,
-            dashboard_frame.entry_input,
-            linked_entry=dashboard_frame.entry_output
-        )
+        command=lambda: _browse_folder(app, dashboard_frame.entry_input, linked_entry=dashboard_frame.entry_output)
     )
-    # Update Output
     dashboard_frame.btn_browse_out.configure(
         command=lambda: _browse_folder(app, dashboard_frame.entry_output)
     )
 
+    # Link configuration and profile management events
     settings_frame.btn_load.configure(command=controller.load_profile)
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
     settings_frame.combo_stack.configure(command=controller.on_stack_selected)
     settings_frame.combo_provider.configure(command=controller.on_provider_selected)
     settings_frame.combo_model.configure(command=controller.on_model_selected)
-
     settings_frame.btn_reset.configure(command=controller.reset_config)
+
     sidebar_frame.btn_feedback.configure(
         command=lambda: transcriptor4ai.interface.gui.dialogs.feedback_modal.show_feedback_window(app))
 
-    # -------------------------------------------------------------------------
-    # 5. Background Tasks & Polling
-    # -------------------------------------------------------------------------
-
-    # Log Polling (Updates UI Log Console safely from main thread)
+    # -----------------------------------------------------------------------------
+    # PHASE 5: BACKGROUND POLLING AND TASKS
+    # -----------------------------------------------------------------------------
     log_formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s", "%H:%M:%S")
 
     def poll_log_queue() -> None:
-        """Fetch logs from background queue and update UI."""
+        """Continuously flush logs from background queue to the UI console."""
         while not gui_log_queue.empty():
             try:
                 record = gui_log_queue.get_nowait()
@@ -169,12 +161,11 @@ def main() -> None:
                 pass
         app.after(100, poll_log_queue)
 
-    # Auto-Update Check
     def on_update_checked(result: Dict[str, Any], is_manual: bool) -> None:
-        """Callback when update check finishes."""
+        """Coordinate the update prompt when a new version is detected."""
         if result.get("has_update"):
             version = result.get("latest_version", "?")
-            logger.info(f"Update available: {version}")
+            logger.info(f"Update Lifecycle: Discovered version {version}")
 
             sidebar_frame.update_badge.configure(
                 text=f"Update v{version}",
@@ -184,18 +175,17 @@ def main() -> None:
                     result.get("binary_url", ""), "", result.get("download_url", "")
                 )
             )
-
             sidebar_frame.update_badge.grid(row=5, column=0, padx=20, pady=10)
 
-            # If manual check, show prompt immediately
             if is_manual:
                 transcriptor4ai.interface.gui.dialogs.update_modal.show_update_prompt_modal(
                     app, version, result.get("changelog", ""),
                     result.get("binary_url", ""), "", result.get("download_url", "")
                 )
         elif is_manual:
-            mb.showinfo("Update Check", "App is up to date.")
+            mb.showinfo("Update Check", "Application is already up to date.")
 
+    # Schedule non-blocking update check if enabled
     if app_state["app_settings"].get("auto_check_updates"):
         threading.Thread(
             target=threads.check_updates_task,
@@ -203,43 +193,48 @@ def main() -> None:
             daemon=True
         ).start()
 
-    # -------------------------------------------------------------------------
-    # 6. Lifecycle Management
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PHASE 6: LIFECYCLE FINALIZATION
+    # -----------------------------------------------------------------------------
     def on_closing() -> None:
-        """Handle app exit."""
-        # Save last session state
+        """Persist session state and terminate the process."""
         controller.sync_config_from_view()
         app_state["last_session"] = config
         cfg.save_app_state(app_state)
-
-        # Shutdown
         app.destroy()
 
     app.protocol("WM_DELETE_WINDOW", on_closing)
-
-    # Start Polling
     app.after(100, poll_log_queue)
 
-    # Launch
     app.mainloop()
 
+
+# -----------------------------------------------------------------------------
+# PRIVATE UI HELPERS
+# -----------------------------------------------------------------------------
 
 def _browse_folder(
         app: ctk.CTk,
         entry_widget: ctk.CTkEntry,
         linked_entry: Optional[ctk.CTkEntry] = None
 ) -> None:
-    """Helper for folder selection dialog."""
+    """
+    Prompt user for directory selection and synchronize related entry widgets.
+
+    Args:
+        app: Root application instance.
+        entry_widget: Target entry for the primary path update.
+        linked_entry: Optional secondary entry to keep in sync.
+    """
     path = ctk.filedialog.askdirectory(parent=app, title="Select Directory")
     if path:
-        # Update primary entry
+        # Update primary input field
         entry_widget.configure(state="normal")
         entry_widget.delete(0, "end")
         entry_widget.insert(0, path)
         entry_widget.configure(state="readonly")
 
-        # Automatically sync linked entry to the same path
+        # Automatically synchronize linked field (usually output follows input)
         if linked_entry:
             linked_entry.configure(state="normal")
             linked_entry.delete(0, "end")

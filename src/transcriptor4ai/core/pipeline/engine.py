@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 """
-Core orchestration pipeline.
+Core Pipeline Orchestrator.
 
-This module coordinates the entire transcription workflow:
-1. Validates configuration and paths.
-2. Checks for overwrite conflicts.
-3. Prepares output directories (or staging areas).
-4. Executes Transcription and Tree Generation in parallel threads.
-5. Assembles unified context files.
-6. Computes token metrics.
-7. Deploys final files to the destination.
+Acts as the central Facade for the transcription engine. It coordinates the 
+entire workflow lifecycle: configuration validation, environment setup, 
+parallel task execution (scanning and transcription), and final assembly 
+of results into a unified AI context.
 """
 
 import logging
@@ -31,6 +27,10 @@ from transcriptor4ai.core.pipeline.stages.assembler import assemble_and_finalize
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# PIPELINE ORCHESTRATION
+# -----------------------------------------------------------------------------
+
 def run_pipeline(
         config: Optional[Dict[str, Any]],
         *,
@@ -39,53 +39,50 @@ def run_pipeline(
         tree_output_path: Optional[str] = None,
 ) -> PipelineResult:
     """
-    Execute the full transcription pipeline.
+    Execute the full project transcription pipeline.
 
-    Orchestrates services in parallel to reduce I/O wait times and
-    aggregates results into a unified structure.
+    Orchestrates specialized stages in parallel using a ThreadPoolExecutor
+    to optimize I/O and CPU-bound operations. Aggregates results into a
+    standardized domain model.
 
     Args:
-        config: The configuration dictionary (raw or partial).
-        overwrite: If True, overwrite existing output files.
-        dry_run: If True, simulate execution without writing to disk.
-        tree_output_path: Optional override path for the tree file.
+        config: Raw configuration parameters.
+        overwrite: Permission to overwrite existing files at destination.
+        dry_run: Simulation mode (calculates tokens, skips file deployment).
+        tree_output_path: Optional path override for the structure tree.
 
     Returns:
-        PipelineResult: Object containing status, metrics, and summary.
+        PipelineResult: Final execution result containing metrics and summary.
     """
-    logger.info("Pipeline execution started.")
+    logger.info("Pipeline execution sequence started.")
 
-    # -------------------------------------------------------------------------
-    # 1) Validation
-    # -------------------------------------------------------------------------
+    # 1. Validation Stage: Schema enforcement
     cfg, warnings = validate_config(config, strict=False)
 
     if warnings:
         for warning in warnings:
-            logger.warning(f"Configuration Warning: {warning}")
+            logger.warning(f"Configuration Constraint: {warning}")
 
-    # -------------------------------------------------------------------------
-    # 2) Environment Setup & Safety Checks
-    # -------------------------------------------------------------------------
+    # 2. Setup Stage: Environment initialization and safety checks
     error_result, env_context = prepare_environment(cfg, overwrite, dry_run, tree_output_path)
 
     if error_result:
         return error_result
 
-    # Unpack paths for workers
+    # Extraction of environment parameters for parallel execution
     paths = env_context["paths"]
     base_path = env_context["base_path"]
     final_output_path = env_context["final_output_path"]
     temp_dir_obj = env_context["temp_dir_obj"]
 
-    # -------------------------------------------------------------------------
-    # 3) Parallel Execution (Tree & Transcription)
-    # -------------------------------------------------------------------------
+    # 3. Execution Stage: Parallel processing of Tree and Transcription
     tree_lines: List[str] = []
     trans_res: Dict[str, Any] = {}
 
+    # Parallelization of I/O heavy tasks
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="PipelineExecutor") as executor:
-        # Task A: Tree Generation
+
+        # Sub-Task: Structural Tree Generation (Static Analysis)
         future_tree = executor.submit(
             generate_directory_tree,
             input_path=base_path,
@@ -101,7 +98,7 @@ def run_pipeline(
             save_path=paths["tree"] if cfg["generate_tree"] else "",
         )
 
-        # Task B: Transcription
+        # Sub-Task: Sequential Transcription (Transformation Pipeline)
         future_trans = executor.submit(
             transcribe_code,
             input_path=base_path,
@@ -122,22 +119,18 @@ def run_pipeline(
             minify_output=bool(cfg.get("minify_output", False)),
         )
 
-        # Collect results
+        # Synchronize and collect task results
         if cfg["generate_tree"]:
             tree_lines = future_tree.result()
 
         trans_res = future_trans.result()
 
-    # -------------------------------------------------------------------------
-    # 4) Error Handling
-    # -------------------------------------------------------------------------
+    # 4. Error Management Phase
     if not trans_res.get("ok"):
         if temp_dir_obj:
             temp_dir_obj.cleanup()
-        err_msg = trans_res.get('error', 'Unknown transcription error')
-        return create_error_result(f"Transcription failure: {err_msg}", cfg, base_path, final_output_path)
+        err_msg = trans_res.get('error', 'Critical transcription failure.')
+        return create_error_result(f"Pipeline error: {err_msg}", cfg, base_path, final_output_path)
 
-    # -------------------------------------------------------------------------
-    # 5) Assembly & Finalization
-    # -------------------------------------------------------------------------
+    # 5. Finalization Stage: Assembly and Deployment
     return assemble_and_finalize(cfg, trans_res, tree_lines, env_context, dry_run)

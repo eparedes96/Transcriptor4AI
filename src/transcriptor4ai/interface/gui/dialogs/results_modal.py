@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+"""
+Pipeline Execution Results Viewer.
+
+Constructs a summary dialog displayed after successful (or simulated) 
+pipeline runs. Provides statistical metrics (tokens, files processed), 
+lists generated artifacts, and offers shortcuts for file explorer 
+navigation and clipboard synchronization.
+"""
+
 import os
 from tkinter import messagebox as mb
 
@@ -10,8 +19,20 @@ from transcriptor4ai.interface.gui.utils.tk_helpers import open_file_explorer
 from transcriptor4ai.utils.i18n import i18n
 
 
+# -----------------------------------------------------------------------------
+# PUBLIC DIALOG API
+# -----------------------------------------------------------------------------
+
 def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
-    """Display execution results in a Toplevel window."""
+    """
+    Display the results summary modal.
+
+    Dynamically adjusts styling based on dry-run vs physical execution status.
+
+    Args:
+        parent: Parent UI window reference.
+        result: The PipelineResult object containing execution metadata.
+    """
     toplevel = ctk.CTkToplevel(parent)
     toplevel.title(i18n.t("gui.popups.title_result"))
     toplevel.geometry("600x500")
@@ -22,21 +43,27 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
     header = i18n.t("gui.results_window.dry_run_header") if dry_run else i18n.t("gui.results_window.success_header")
     color = "#F0AD4E" if dry_run else "#2CC985"
 
-    # Header
+    # Header and Status
     ctk.CTkLabel(
         toplevel, text=header,
         font=ctk.CTkFont(size=18, weight="bold"),
         text_color=color
     ).pack(pady=20)
 
-    # Stats
+    # -----------------------------------------------------------------------------
+    # STATISTICS GRID
+    # -----------------------------------------------------------------------------
     stats_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     stats_frame.pack(pady=10)
+
     ctk.CTkLabel(stats_frame,
                  text=f"{i18n.t('gui.results_window.stats_processed')}: {summary.get('processed', 0)}").pack()
     ctk.CTkLabel(stats_frame, text=f"{i18n.t('gui.results_window.stats_skipped')}: {summary.get('skipped', 0)}").pack()
     ctk.CTkLabel(stats_frame, text=f"{i18n.t('gui.results_window.stats_tokens')}: {result.token_count:,}").pack()
 
+    # -----------------------------------------------------------------------------
+    # ARTIFACT LIST SECTION
+    # -----------------------------------------------------------------------------
     ctk.CTkLabel(toplevel, text=i18n.t("gui.results_window.files_label")).pack(pady=(20, 5))
     scroll_frame = ctk.CTkScrollableFrame(toplevel, height=150)
     scroll_frame.pack(fill="x", padx=20)
@@ -49,14 +76,16 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
             name = os.path.basename(path)
             ctk.CTkLabel(scroll_frame, text=f"[{key.upper()}] {name}", anchor="w").pack(fill="x", padx=5)
 
-    # Actions
-    btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
-    btn_frame.pack(pady=20, fill="x", padx=20)
+    # -----------------------------------------------------------------------------
+    # ACTION HANDLERS
+    # -----------------------------------------------------------------------------
 
     def _open() -> None:
+        """Trigger the host OS file explorer."""
         open_file_explorer(result.final_output_path)
 
     def _copy() -> None:
+        """Synchronize unified context content with the system clipboard."""
         if unified_path and os.path.exists(unified_path):
             try:
                 with open(unified_path, "r", encoding="utf-8") as f:
@@ -66,11 +95,19 @@ def show_results_window(parent: ctk.CTk, result: PipelineResult) -> None:
             except Exception as e:
                 mb.showerror(i18n.t("gui.dialogs.error_title"), str(e))
 
+    # -----------------------------------------------------------------------------
+    # ACTION CONTROLS
+    # -----------------------------------------------------------------------------
+    btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
+    btn_frame.pack(pady=20, fill="x", padx=20)
+
     ctk.CTkButton(btn_frame, text=i18n.t("gui.results_window.btn_open"), command=_open).pack(side="left", expand=True,
                                                                                              padx=5)
 
     copy_btn = ctk.CTkButton(btn_frame, text=i18n.t("gui.results_window.btn_copy"), command=_copy)
     copy_btn.pack(side="left", expand=True, padx=5)
+
+    # Validation to prevent copying simulated or non-existent data
     if dry_run or not unified_path:
         copy_btn.configure(state="disabled")
 

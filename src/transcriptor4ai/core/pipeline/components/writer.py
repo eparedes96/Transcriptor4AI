@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 """
-Output Writer and Formatter.
+Output Orchestration and Formatting.
 
-This module handles the physical writing of consolidated files using a
-streaming approach. It applies transformation pipelines (minification,
-sanitization) on-the-fly to ensure memory efficiency.
+Handles the physical persistence of the transcription entries. Manages 
+the lazy-evaluation pipeline for code transformations (minification, 
+masking, and sanitization) to maintain a low memory footprint.
 """
 
 from typing import Iterator
@@ -13,6 +13,9 @@ from typing import Iterator
 from transcriptor4ai.core.processing.minifier import minify_code_stream
 from transcriptor4ai.core.processing.sanitizer import sanitize_text_stream, mask_local_paths_stream
 
+# -----------------------------------------------------------------------------
+# FILE OUTPUT MANAGEMENT
+# -----------------------------------------------------------------------------
 
 def append_entry(
         output_path: str,
@@ -24,29 +27,30 @@ def append_entry(
         minify_output: bool = False,
 ) -> None:
     """
-    Append a file content entry to the consolidated output file using streaming.
+    Append a processed file entry to a consolidated text file.
 
-    This function chains multiple generators to process the file content
-    without ever loading the full text into memory.
+    Chains multiple transformation generators to the input stream.
+    Transformations are applied on-the-fly as the lines are written,
+    ensuring that large files do not exhaust system memory.
 
-    Format:
-    -------------------- (separator)
-    <relative_path>
-    <file_content>
+    Output Format:
+    -------------------- (200 char separator)
+    <relative_path_header>
+    <processed_content>
 
     Args:
-        output_path: Destination file path.
-        rel_path: Relative path of the source file (header).
-        line_iterator: Iterator yielding lines from the source file.
-        extension: File extension for language-specific minification.
-        enable_sanitizer: If True, redact secrets and keys.
-        mask_user_paths: If True, replace local home paths with placeholders.
-        minify_output: If True, remove comments and excessive whitespace.
+        output_path: Target consolidated file.
+        rel_path: Source file identifier (header).
+        line_iterator: Source content generator.
+        extension: File extension for syntax-aware minification.
+        enable_sanitizer: Redact sensitive keys and network info.
+        mask_user_paths: Anonymize local environment paths.
+        minify_output: Strip non-essential code characters.
 
     Raises:
-        OSError: If writing to the file fails.
+        OSError: If filesystem write permissions are denied.
     """
-    # 1. Chain Transformation Pipeline (Lazy Evaluation)
+    # 1. Pipeline Assembly (Lazy Transformation Chain)
     processed_stream = line_iterator
 
     if minify_output:
@@ -58,7 +62,7 @@ def append_entry(
     if mask_user_paths:
         processed_stream = mask_local_paths_stream(processed_stream)
 
-    # 2. Final Formatting and Buffered Writing
+    # 2. Synchronous Disk Persistence
     separator = "-" * 200
 
     try:
@@ -66,22 +70,28 @@ def append_entry(
             out.write(f"{separator}\n")
             out.write(f"{rel_path}\n")
 
+            # Iterate through the chained generator and write directly
             for processed_line in processed_stream:
                 out.write(processed_line)
 
+            # Ensure separation between entries
             out.write("\n")
 
     except OSError as e:
+        # Propagate error to worker/manager level
         raise e
 
 
 def initialize_output_file(file_path: str, header: str) -> None:
     """
-    Create a new file (or overwrite) and write the initial header.
+    Perform a clean initialization of an output file.
+
+    Creates or overwrites the file with a descriptive header to
+    set the context for the transcription content.
 
     Args:
-        file_path: Absolute path to the file.
-        header: The header text line.
+        file_path: Target file path.
+        header: Introductory text for the file.
     """
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(f"{header}\n")

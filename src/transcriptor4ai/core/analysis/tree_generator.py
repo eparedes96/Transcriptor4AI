@@ -3,8 +3,9 @@ from __future__ import annotations
 """
 Directory Tree Generator.
 
-Builds a hierarchical representation of the project structure.
-Supports filtering, Gitignore rules, and AST symbol integration.
+Constructs a hierarchical representation of project structures. Integrates 
+with the filtering system and AST service to provide high-level context 
+while respecting exclusion rules and .gitignore patterns.
 """
 
 import logging
@@ -27,6 +28,9 @@ from transcriptor4ai.domain.tree_models import FileNode, Tree
 
 logger = logging.getLogger(__name__)
 
+# -----------------------------------------------------------------------------
+# PUBLIC API
+# -----------------------------------------------------------------------------
 
 def generate_directory_tree(
         input_path: str,
@@ -42,32 +46,35 @@ def generate_directory_tree(
         save_path: str = "",
 ) -> List[str]:
     """
-    Generate a text-based tree representation of the directory structure.
+    Generate a formatted text representation of the directory structure.
+
+    Orchestrates the scanning, filtering, and rendering of the tree.
+    Supports pruning of empty branches after filtering.
 
     Args:
-        input_path: Root directory to scan.
-        mode: Scan mode ("all", "modules_only", "tests_only").
-        extensions: List of allowed file extensions.
-        include_patterns: Regex patterns for inclusion.
-        exclude_patterns: Regex patterns for exclusion.
-        respect_gitignore: Whether to parse .gitignore files.
-        show_functions: Whether to list functions (Python only).
-        show_classes: Whether to list classes (Python only).
-        show_methods: Whether to list methods (Python only).
-        print_to_log: If True, log the tree to INFO.
-        save_path: If provided, save the tree to this file.
+        input_path: Source directory for the scan.
+        mode: Filtering mode (all/modules/tests).
+        extensions: Allowed file extensions.
+        include_patterns: Inclusion regexes.
+        exclude_patterns: Exclusion regexes.
+        respect_gitignore: Flag to enable .gitignore parsing.
+        show_functions: Flag to enable AST function extraction.
+        show_classes: Flag to enable AST class extraction.
+        show_methods: Flag to enable AST method extraction.
+        print_to_log: Whether to log the output to INFO.
+        save_path: Optional file path to persist the tree.
 
     Returns:
-        List[str]: The lines of the generated tree.
+        List[str]: Visual lines of the generated tree.
     """
     logger.info(f"Generating directory tree for: {input_path}")
 
-    # 1. Preparar filtros y reglas
+    # 1. Compile and aggregate filtering rules
     include_rx, exclude_rx = _setup_tree_filters(
         input_path, extensions, include_patterns, exclude_patterns, respect_gitignore
     )
 
-    # 2. Construir y podar estructura
+    # 2. Build recursive dictionary structure and prune empty branches
     tree_structure = _build_structure(
         os.path.abspath(input_path),
         mode=mode,
@@ -78,7 +85,7 @@ def generate_directory_tree(
     )
     _prune_empty_nodes(tree_structure)
 
-    # 3. Renderizado y salida
+    # 3. Rendering and persistence
     lines: List[str] = []
     render_tree_structure(
         tree_structure, lines, prefix="",
@@ -93,6 +100,9 @@ def generate_directory_tree(
 
     return lines
 
+# -----------------------------------------------------------------------------
+# INTERNAL HELPERS (FILTERS AND STORAGE)
+# -----------------------------------------------------------------------------
 
 def _setup_tree_filters(
         path: str,
@@ -101,7 +111,7 @@ def _setup_tree_filters(
         exc: Optional[List[str]],
         gitignore: bool
 ) -> Tuple[List[re.Pattern], List[re.Pattern]]:
-    """Internal helper to consolidate regex patterns for the tree scanner."""
+    """Aggregate and compile all filtering patterns into regex objects."""
     final_exclusions = list(exc) if exc is not None else default_exclude_patterns()
     if gitignore:
         git_patterns = load_gitignore_patterns(os.path.abspath(path))
@@ -111,7 +121,7 @@ def _setup_tree_filters(
 
 
 def _save_tree_to_disk(save_path: str, lines: List[str]) -> None:
-    """Internal helper to handle safe file writing of the tree."""
+    """Safely persist tree lines to the filesystem."""
     try:
         out_dir = os.path.dirname(os.path.abspath(save_path))
         os.makedirs(out_dir, exist_ok=True)
@@ -121,6 +131,9 @@ def _save_tree_to_disk(save_path: str, lines: List[str]) -> None:
     except OSError as e:
         logger.error(f"Failed to save tree to '{save_path}': {e}")
 
+# -----------------------------------------------------------------------------
+# INTERNAL HELPERS (SCANNING AND PRUNING)
+# -----------------------------------------------------------------------------
 
 def _build_structure(
         input_path: str,
@@ -131,10 +144,11 @@ def _build_structure(
         test_detect_func: Callable[[str], bool],
 ) -> Tree:
     """
-    Recursively scan the filesystem and build a Tree dictionary.
+    Execute filesystem walk to build the recursive Tree model.
     """
     tree_structure: Tree = {}
 
+    # In-place modification of dirs for recursive pruning during walk
     for root, dirs, files in os.walk(input_path):
         dirs[:] = [d for d in dirs if not matches_any(d, exclude_patterns_rx)]
         dirs.sort()
@@ -144,7 +158,7 @@ def _build_structure(
         if rel_root == ".":
             rel_root = ""
 
-        # Navigate/Create current node in the structure
+        # Tree navigation and level creation
         current_node_level: Tree = tree_structure
         if rel_root:
             for p in rel_root.split(os.sep):
@@ -154,7 +168,7 @@ def _build_structure(
                 if isinstance(next_level, dict):
                     current_node_level = next_level
 
-        # Process Files
+        # Leaf processing (Files)
         for file_name in files:
             if matches_any(file_name, exclude_patterns_rx):
                 continue
@@ -164,7 +178,7 @@ def _build_structure(
             if ext not in extensions:
                 continue
 
-            # Filtering Mode Logic
+            # Core filtering logic based on processing mode
             file_is_test = test_detect_func(file_name)
             if mode == "tests_only" and not file_is_test:
                 continue
@@ -180,11 +194,7 @@ def _build_structure(
 
 def _prune_empty_nodes(tree: Tree) -> None:
     """
-    Recursively remove directory nodes (dicts) that are empty.
-    This cleans up the tree if filters removed all files in a folder.
-
-    Args:
-        tree: The recursive dictionary structure to clean.
+    Recursively remove empty directory nodes from the Tree model.
     """
     keys_to_remove = []
 

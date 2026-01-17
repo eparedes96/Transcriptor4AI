@@ -3,9 +3,10 @@ from __future__ import annotations
 """
 Main Application Controller.
 
-Bridges the View (UI Components) and the Model (Core Logic).
-Handles user interactions, configuration sync, and process execution.
-Acts as a Facade for specialized sub-controllers (Profiles, Feedback).
+Bridges the View (UI Components) and the Model (Core Logic). 
+Handles user interactions, configuration sync, and process execution. 
+Acts as a Facade for specialized sub-controllers (Profiles, Feedback), 
+managing the asynchronous lifecycle of the transcription pipeline.
 """
 
 import logging
@@ -24,17 +25,23 @@ from transcriptor4ai.interface.gui.dialogs import results_modal, crash_modal
 from transcriptor4ai.interface.gui.utils import tk_helpers
 from transcriptor4ai.utils.i18n import i18n
 
-# Sub-controllers
+# Specialized sub-controllers for concern separation
 from transcriptor4ai.interface.gui.controllers.profile_controller import ProfileController
 from transcriptor4ai.interface.gui.controllers.feedback_controller import FeedbackController
 
 logger = logging.getLogger(__name__)
 
 
+# -----------------------------------------------------------------------------
+# PRIMARY APPLICATION CONTROLLER
+# -----------------------------------------------------------------------------
+
 class AppController:
     """
     Central controller class that bridges the UI (View) and the Core (Model).
-    It manages the application state, configuration syncing, and event handling.
+
+    It manages the application state, configuration syncing via declarative
+    mappings, and thread-safe event handling for long-running tasks.
     """
 
     def __init__(
@@ -43,12 +50,20 @@ class AppController:
             config: Dict[str, Any],
             app_state: Dict[str, Any]
     ):
+        """
+        Initialize the controller with application context and state.
+
+        Args:
+            app: Root CustomTkinter application instance.
+            config: Active session configuration dictionary.
+            app_state: Global persistent application state.
+        """
         self.app = app
         self.config = config
         self.app_state = app_state
         self._cancellation_event = threading.Event()
 
-        # Shortcuts to Views
+        # Shortcuts to registered View components
         self.dashboard_view: Any = None
         self.settings_view: Any = None
         self.logs_view: Any = None
@@ -58,11 +73,20 @@ class AppController:
         self.profile_controller = ProfileController(self)
         self.feedback_controller = FeedbackController(self)
 
-    # -------------------------------------------------------------------------
-    # View Management
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # VIEW REGISTRATION AND MAPPING
+    # -----------------------------------------------------------------------------
+
     def register_views(self, dashboard: Any, settings: Any, logs: Any, sidebar: Any) -> None:
-        """Link view frames to the controller."""
+        """
+        Link visual frame instances to the controller.
+
+        Args:
+            dashboard: Dashboard logic and IO frame.
+            settings: Advanced configuration frame.
+            logs: Real-time logging console frame.
+            sidebar: Primary navigation frame.
+        """
         self.dashboard_view = dashboard
         self.settings_view = settings
         self.logs_view = logs
@@ -70,8 +94,13 @@ class AppController:
 
     def _get_ui_mapping(self) -> Dict[str, List[Tuple[str, Any]]]:
         """
-        Returns a declarative mapping of config keys to UI components.
-        Organized by component type to simplify iteration.
+        Get a declarative mapping of configuration keys to UI widgets.
+
+        Organizes components by type to facilitate batch synchronization
+        and reduce boilerplate code.
+
+        Returns:
+            Dict: Mapping of UI types to lists of (config_key, widget) tuples.
         """
         if not self.dashboard_view or not self.settings_view:
             return {}
@@ -101,8 +130,17 @@ class AppController:
             ]
         }
 
+    # -----------------------------------------------------------------------------
+    # CONFIGURATION SYNCHRONIZATION
+    # -----------------------------------------------------------------------------
+
     def sync_view_from_config(self) -> None:
-        """Populate UI widgets with values from self.config using declarative mapping."""
+        """
+        Populate UI widgets with values from the internal configuration state.
+
+        Uses the declarative UI mapping to update switches, checkboxes,
+        entries, and combo boxes. Resolves model-provider dependencies.
+        """
         if not self.dashboard_view:
             return
 
@@ -153,7 +191,12 @@ class AppController:
         self._filter_models_by_provider(current_provider, preserve_selection=target_model)
 
     def sync_config_from_view(self) -> None:
-        """Scrape values from UI widgets into self.config using declarative mapping."""
+        """
+        Scrape current UI widget values into the internal configuration state.
+
+        Performs data cleaning and type conversion (string to bool/list)
+        before updating the transient session config dictionary.
+        """
         if not self.dashboard_view:
             return
 
@@ -181,53 +224,21 @@ class AppController:
         # 4. Otros
         self.config["target_model"] = self.settings_view.combo_model.get()
 
-    def on_provider_selected(self, provider: str) -> None:
-        """Callback triggered when the Provider Combobox changes."""
-        self._filter_models_by_provider(provider)
-
-        # Automatically select the first model available for this provider
-        new_model = self.settings_view.combo_model.get()
-        self.config["target_model"] = new_model
-        self.on_model_selected(new_model)
-
-    def _filter_models_by_provider(self, provider: str, preserve_selection: Optional[str] = None) -> None:
-        """
-        Update the Model Combobox values based on the selected provider.
-        """
-        models = sorted([name for name, data in const.AI_MODELS.items() if data.get("provider") == provider])
-
-        if not models:
-            models = ["-- No Models --"]
-
-        self.settings_view.combo_model.configure(values=models)
-
-        # Logic to set the current selection
-        if preserve_selection and preserve_selection in models:
-            self.settings_view.combo_model.set(preserve_selection)
-        else:
-            self.settings_view.combo_model.set(models[0])
-            self.config["target_model"] = models[0]
-
-    def _safe_entry_update(self, entry: ctk.CTkEntry, text: str) -> None:
-        """Helper to update readonly entries."""
-        entry.configure(state="normal")
-        entry.delete(0, "end")
-        entry.insert(0, text)
-        entry.configure(state="readonly")
-
-    def _set_switch(self, switch: ctk.CTkSwitch, key: str) -> None:
-        if self.config.get(key):
-            switch.select()
-        else:
-            switch.deselect()
-
-    def _set_checkbox(self, chk: ctk.CTkCheckBox, key: str) -> None:
-        if self.config.get(key):
-            chk.select()
-        else:
-            chk.deselect()
+    # -----------------------------------------------------------------------------
+    # CORE PIPELINE EXECUTION
+    # -----------------------------------------------------------------------------
 
     def start_processing(self, dry_run: bool = False, overwrite: bool = False) -> None:
+        """
+        Initiate the transcription pipeline in a background thread.
+
+        Performs pre-flight validation of paths, updates UI state to
+        'processing', and dispatches the long-running task.
+
+        Args:
+            dry_run: Enable simulation mode.
+            overwrite: Flag to permit overwriting existing artifacts.
+        """
         self.sync_config_from_view()
 
         input_path = self.config.get("input_path", "")
@@ -235,6 +246,7 @@ class AppController:
             mb.showerror(i18n.t("gui.dialogs.error_title"), i18n.t("gui.dialogs.invalid_input"))
             return
 
+        # UI State transition to locked/processing
         self._toggle_ui(disabled=True)
         btn_text = i18n.t("gui.dashboard.btn_simulating") if dry_run else "PROCESSING..."
         self.dashboard_view.btn_process.configure(text=btn_text, fg_color="gray")
@@ -244,7 +256,7 @@ class AppController:
         # Debug log to verify data integrity before core execution
         logger.debug(f"Starting pipeline (DryRun={dry_run}). Config Payload: {self.config}")
 
-        # Start thread
+        # Dispatch execution to background thread to maintain GUI responsiveness
         threading.Thread(
             target=threads.run_pipeline_task,
             args=(self.config, overwrite, dry_run, self._on_process_complete, self._cancellation_event),
@@ -252,20 +264,34 @@ class AppController:
         ).start()
 
     def _on_process_complete(self, result: Any) -> None:
-        """Callback executed when the pipeline thread finishes."""
+        """
+        Handle pipeline completion from the background thread.
+
+        Marshals the result back to the main thread via CustomTkinter's
+        after() method for thread-safe UI updates.
+        """
         self.app.after(0, lambda: self._handle_process_result(result))
 
     def _handle_process_result(self, result: Any) -> None:
+        """
+        Process the pipeline result and update the UI accordingly.
+
+        Handles success reporting, collision prompts, and critical
+        crash modal triggers.
+        """
+        # Scenario: Naming collision check
         if isinstance(result, PipelineResult) and not result.ok:
             if result.existing_files:
-                msg = i18n.t("gui.popups.overwrite_msg", files="/n".join(result.existing_files))
+                msg = i18n.t("gui.popups.overwrite_msg", files="\n".join(result.existing_files))
                 if mb.askyesno(i18n.t("gui.popups.overwrite_title"), msg):
                     self.start_processing(dry_run=False, overwrite=True)
                     return
 
+        # UI State transition back to normal
         self._toggle_ui(disabled=False)
         self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#1f538d")
 
+        # Result orchestration
         if isinstance(result, PipelineResult):
             if result.ok:
                 results_modal.show_results_window(self.app, result)
@@ -275,15 +301,45 @@ class AppController:
             crash_modal.show_crash_modal(str(result), "See logs for details.", self.app)
 
     def _toggle_ui(self, disabled: bool) -> None:
+        """Helper to enable/disable interaction during processing."""
         state = "disabled" if disabled else "normal"
         self.dashboard_view.btn_process.configure(state=state)
         self.dashboard_view.btn_simulate.configure(state=state)
 
-    # -------------------------------------------------------------------------
-    # UI Logic & Helpers
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # UI EVENT HANDLERS
+    # -----------------------------------------------------------------------------
+
+    def on_provider_selected(self, provider: str) -> None:
+        """
+        Update the model selection list when the provider changes.
+        """
+        self._filter_models_by_provider(provider)
+
+        # Automatically select the first model available for this provider
+        new_model = self.settings_view.combo_model.get()
+        self.config["target_model"] = new_model
+        self.on_model_selected(new_model)
+
+    def _filter_models_by_provider(self, provider: str, preserve_selection: Optional[str] = None) -> None:
+        """
+        Internal logic to filter the model ComboBox by selected provider.
+        """
+        models = sorted([name for name, data in const.AI_MODELS.items() if data.get("provider") == provider])
+
+        if not models:
+            models = ["-- No Models --"]
+
+        self.settings_view.combo_model.configure(values=models)
+
+        if preserve_selection and preserve_selection in models:
+            self.settings_view.combo_model.set(preserve_selection)
+        else:
+            self.settings_view.combo_model.set(models[0])
+            self.config["target_model"] = models[0]
+
     def on_stack_selected(self, stack_name: str) -> None:
-        """Update extension field when a stack preset is chosen."""
+        """Update extension filters based on a technology stack preset."""
         if stack_name in const.DEFAULT_STACKS:
             extensions = const.DEFAULT_STACKS[stack_name]
             self.settings_view.entry_ext.delete(0, "end")
@@ -291,14 +347,14 @@ class AppController:
             self.config["extensions"] = extensions
 
     def on_tree_toggled(self) -> None:
-        """Show/Hide AST options based on Tree Switch state."""
+        """Dynamic UI visibility logic for AST analysis options."""
         if self.dashboard_view.sw_tree.get():
             self.dashboard_view.frame_ast.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         else:
             self.dashboard_view.frame_ast.grid_forget()
 
     def reset_config(self) -> None:
-        """Reset the current configuration to factory defaults."""
+        """Revert the current session to factory default settings."""
         if mb.askyesno(i18n.t("gui.dialogs.confirm_title"),
                        "Are you sure you want to reset all settings to their defaults?"):
             self.config = cfg.get_default_config()
@@ -306,7 +362,9 @@ class AppController:
             mb.showinfo(i18n.t("gui.dialogs.success_title"), "Settings have been reset to default.")
 
     def on_model_selected(self, model_name: str) -> None:
-        """Update config and check for API keys (Phase 12.2)."""
+        """
+        Update session state and perform security checks for specific models.
+        """
         self.config["target_model"] = model_name
 
         if model_name == const.DEFAULT_MODEL_KEY:
@@ -318,7 +376,7 @@ class AppController:
         model_info = const.AI_MODELS.get(model_name, {})
         provider = model_info.get("provider", "")
 
-        # Security/Environment Check
+        # Environment security verification for accurate tokenization
         missing_key = False
         if provider == "GOOGLE" and not os.environ.get("GOOGLE_API_KEY"):
             missing_key = True
@@ -336,20 +394,47 @@ class AppController:
                 "Missing API Key for accurate token count.\nUsing heuristic fallback."
             )
 
-    # -------------------------------------------------------------------------
-    # Delegated Profile Actions
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # PRIVATE UI HELPERS
+    # -----------------------------------------------------------------------------
+
+    def _safe_entry_update(self, entry: ctk.CTkEntry, text: str) -> None:
+        """Update entry content while respecting readonly state constraints."""
+        entry.configure(state="normal")
+        entry.delete(0, "end")
+        entry.insert(0, text)
+        entry.configure(state="readonly")
+
+    def _set_switch(self, switch: ctk.CTkSwitch, key: str) -> None:
+        """Set switch state based on boolean configuration value."""
+        if self.config.get(key):
+            switch.select()
+        else:
+            switch.deselect()
+
+    def _set_checkbox(self, chk: ctk.CTkCheckBox, key: str) -> None:
+        """Set checkbox state based on boolean configuration value."""
+        if self.config.get(key):
+            chk.select()
+        else:
+            chk.deselect()
+
+    # -----------------------------------------------------------------------------
+    # DELEGATED ACTIONS (SUB-CONTROLLERS)
+    # -----------------------------------------------------------------------------
+
     def load_profile(self) -> None:
+        """Delegate profile loading to specialized sub-controller."""
         self.profile_controller.load_profile()
 
     def save_profile(self) -> None:
+        """Delegate profile saving to specialized sub-controller."""
         self.profile_controller.save_profile()
 
     def delete_profile(self) -> None:
+        """Delegate profile deletion to specialized sub-controller."""
         self.profile_controller.delete_profile()
 
-    # -------------------------------------------------------------------------
-    # Delegated Feedback Actions
-    # -------------------------------------------------------------------------
     def request_feedback(self) -> None:
+        """Delegate feedback hub trigger to specialized sub-controller."""
         self.feedback_controller.on_feedback_requested()

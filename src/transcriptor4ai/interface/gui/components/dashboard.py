@@ -1,5 +1,14 @@
 from __future__ import annotations
 
+"""
+Dashboard UI Component.
+
+Constructs the primary workspace for the application. Manages input/output 
+path selection, processing mode toggles (modules, tests, resources), 
+and execution triggers. Implements a scrollable layout to ensure 
+usability across different window dimensions.
+"""
+
 from typing import Any, Dict
 
 import customtkinter as ctk
@@ -7,29 +16,47 @@ import customtkinter as ctk
 from transcriptor4ai.utils.i18n import i18n
 
 
+# -----------------------------------------------------------------------------
+# DASHBOARD VIEW CLASS
+# -----------------------------------------------------------------------------
+
 class DashboardFrame(ctk.CTkFrame):
     """
-    Main workspace: IO paths, Action buttons.
-    Wrapped in ScrollableFrame for small screens.
+    Main execution dashboard for Transcriptor4AI.
+
+    Provides an interactive interface for filesystem path resolution and
+    core transcription parameters. Encapsulated within a scrollable frame
+    to handle complex widget hierarchies.
     """
 
     def __init__(self, master: Any, config: Dict[str, Any], **kwargs: Any):
+        """
+        Initialize the dashboard with persistent session configuration.
+
+        Args:
+            master: Parent container or window.
+            config: Initial configuration state for widget population.
+        """
         super().__init__(master, corner_radius=10, fg_color="transparent", **kwargs)
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # Main scroll container
+        # -----------------------------------------------------------------------------
+        # LAYOUT: MAIN SCROLLABLE CONTAINER
+        # -----------------------------------------------------------------------------
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll.grid(row=0, column=0, sticky="nsew")
         self.scroll.grid_columnconfigure(0, weight=1)
 
-        # --- Section 1: Input / Output ---
+        # -----------------------------------------------------------------------------
+        # SECTION: I/O PATH MANAGEMENT
+        # -----------------------------------------------------------------------------
         self.frame_io = ctk.CTkFrame(self.scroll)
         self.frame_io.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         self.frame_io.grid_columnconfigure(0, weight=1)
 
-        # Input Header
+        # Source Path Input
         ctk.CTkLabel(
             self.frame_io,
             text=i18n.t("gui.dashboard.source_header"),
@@ -37,7 +64,6 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=("gray40", "gray60")
         ).grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 0), sticky="w")
 
-        # Input Controls
         self.entry_input = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/project")
         self.entry_input.insert(0, config.get("input_path", ""))
         self.entry_input.configure(state="readonly")
@@ -50,7 +76,7 @@ class DashboardFrame(ctk.CTkFrame):
         )
         self.btn_browse_in.grid(row=1, column=1, padx=10, pady=10)
 
-        # Output Header
+        # Destination Path Input
         ctk.CTkLabel(
             self.frame_io,
             text=i18n.t("gui.dashboard.dest_header"),
@@ -58,7 +84,6 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=("gray40", "gray60")
         ).grid(row=2, column=0, columnspan=2, padx=10, pady=(10, 0), sticky="w")
 
-        # Output Controls
         self.entry_output = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/output")
         self.entry_output.insert(0, config.get("output_base_dir", ""))
         self.entry_output.configure(state="readonly")
@@ -71,7 +96,9 @@ class DashboardFrame(ctk.CTkFrame):
         )
         self.btn_browse_out.grid(row=3, column=1, padx=10, pady=10)
 
-        # Subdir & Prefix Headers
+        # -----------------------------------------------------------------------------
+        # SECTION: ARTIFACT NAMING (SUBDIR & PREFIX)
+        # -----------------------------------------------------------------------------
         self.frame_sub_headers = ctk.CTkFrame(self.frame_io, fg_color="transparent")
         self.frame_sub_headers.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10)
 
@@ -89,7 +116,6 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=("gray40", "gray60")
         ).pack(side="left")
 
-        # Subdir & Prefix Inputs
         self.frame_sub = ctk.CTkFrame(self.frame_io, fg_color="transparent")
         self.frame_sub.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
 
@@ -101,7 +127,9 @@ class DashboardFrame(ctk.CTkFrame):
         self.entry_prefix.insert(0, config.get("output_prefix", ""))
         self.entry_prefix.pack(side="left")
 
-        # --- Section 2: Quick Toggles ---
+        # -----------------------------------------------------------------------------
+        # SECTION: CONTENT PROCESSING TOGGLES
+        # -----------------------------------------------------------------------------
         self.frame_opts = ctk.CTkFrame(self.scroll)
         self.frame_opts.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self.frame_opts.grid_columnconfigure((0, 1, 2), weight=1)
@@ -118,12 +146,13 @@ class DashboardFrame(ctk.CTkFrame):
         if config.get("process_resources"): self.sw_resources.select()
         self.sw_resources.grid(row=0, column=2, padx=20, pady=15, sticky="w")
 
-        # Tree Toggle
         self.sw_tree = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.gen_tree"))
         if config.get("generate_tree"): self.sw_tree.select()
         self.sw_tree.grid(row=1, column=0, padx=20, pady=15, sticky="w")
 
-        # --- AST Options Sub-Frame ---
+        # -----------------------------------------------------------------------------
+        # SECTION: STATIC ANALYSIS (AST) PARAMETERS
+        # -----------------------------------------------------------------------------
         self.frame_ast = ctk.CTkFrame(self.scroll, fg_color="transparent")
 
         self.chk_func = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_func"))
@@ -138,7 +167,9 @@ class DashboardFrame(ctk.CTkFrame):
         if config.get("show_methods"): self.chk_meth.select()
         self.chk_meth.pack(side="left", padx=20)
 
-        # --- Section 3: Action Bar ---
+        # -----------------------------------------------------------------------------
+        # SECTION: PIPELINE EXECUTION TRIGGERS
+        # -----------------------------------------------------------------------------
         self.btn_process = ctk.CTkButton(
             self.scroll,
             text=i18n.t("gui.dashboard.btn_start"),

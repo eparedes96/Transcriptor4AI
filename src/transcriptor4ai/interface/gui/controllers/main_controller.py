@@ -1,19 +1,29 @@
 from __future__ import annotations
 
+"""
+Main Application Controller.
+
+Bridges the View (UI Components) and the Model (Core Logic).
+Handles user interactions, configuration sync, and process execution.
+"""
+
+import logging
 import os
 import threading
-from tkinter import messagebox as mb
-from typing import Dict, Any, Optional
+import tkinter.messagebox as mb
+from typing import Dict, Any, Optional, List
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.domain.pipeline_models import PipelineResult
+from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
 from transcriptor4ai.interface.gui import threads
-from transcriptor4ai.interface.gui.dialogs.crash_modal import show_crash_modal
-from transcriptor4ai.interface.gui.dialogs.results_modal import show_results_window
-from transcriptor4ai.interface.gui.utils.tk_helpers import parse_list_from_string, logger
+from transcriptor4ai.interface.gui.dialogs import results_modal, crash_modal
+from transcriptor4ai.interface.gui.utils import tk_helpers
 from transcriptor4ai.utils.i18n import i18n
+
+logger = logging.getLogger(__name__)
 
 
 class AppController:
@@ -90,15 +100,15 @@ class AppController:
         self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
         self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
 
-        target_model = self.config.get("target_model", cfg.DEFAULT_MODEL_KEY)
+        target_model = self.config.get("target_model", const.DEFAULT_MODEL_KEY)
 
         # 1. Determine Provider from Model
         current_provider = "OPENAI"
-        if target_model in cfg.AI_MODELS:
-            current_provider = cfg.AI_MODELS[target_model].get("provider", "OPENAI")
+        if target_model in const.AI_MODELS:
+            current_provider = const.AI_MODELS[target_model].get("provider", "OPENAI")
 
         # 2. Populate Provider Combo
-        providers = sorted(list(set(m["provider"] for m in cfg.AI_MODELS.values())))
+        providers = sorted(list(set(m["provider"] for m in const.AI_MODELS.values())))
         self.settings_view.combo_provider.configure(values=providers)
         self.settings_view.combo_provider.set(current_provider)
 
@@ -126,8 +136,7 @@ class AppController:
         """
         Update the Model Combobox values based on the selected provider.
         """
-        # Filter models belonging to this provider
-        models = sorted([name for name, data in cfg.AI_MODELS.items() if data.get("provider") == provider])
+        models = sorted([name for name, data in const.AI_MODELS.items() if data.get("provider") == provider])
 
         if not models:
             models = ["-- No Models --"]
@@ -180,10 +189,9 @@ class AppController:
         self.config["show_classes"] = bool(self.dashboard_view.chk_class.get())
         self.config["show_methods"] = bool(self.dashboard_view.chk_meth.get())
 
-        # Settings
-        self.config["extensions"] = parse_list_from_string(self.settings_view.entry_ext.get())
-        self.config["include_patterns"] = parse_list_from_string(self.settings_view.entry_inc.get())
-        self.config["exclude_patterns"] = parse_list_from_string(self.settings_view.entry_exc.get())
+        self.config["extensions"] = tk_helpers.parse_list_from_string(self.settings_view.entry_ext.get())
+        self.config["include_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_inc.get())
+        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_exc.get())
 
         # Model Selector
         self.config["target_model"] = self.settings_view.combo_model.get()
@@ -234,15 +242,15 @@ class AppController:
                     return
 
         self._toggle_ui(disabled=False)
-        self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#007ACC")
+        self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#3B8ED0")
 
         if isinstance(result, PipelineResult):
             if result.ok:
-                show_results_window(self.app, result)
+                results_modal.show_results_window(self.app, result)
             else:
                 mb.showerror(i18n.t("gui.dialogs.pipeline_failed"), result.error)
         elif isinstance(result, Exception):
-            show_crash_modal(str(result), "See logs for details.", self.app)
+            crash_modal.show_crash_modal(str(result), "See logs for details.", self.app)
 
     def _toggle_ui(self, disabled: bool) -> None:
         state = "disabled" if disabled else "normal"
@@ -251,8 +259,8 @@ class AppController:
 
     def on_stack_selected(self, stack_name: str) -> None:
         """Update extension field when a stack preset is chosen."""
-        if stack_name in cfg.DEFAULT_STACKS:
-            extensions = cfg.DEFAULT_STACKS[stack_name]
+        if stack_name in const.DEFAULT_STACKS:
+            extensions = const.DEFAULT_STACKS[stack_name]
             self.settings_view.entry_ext.delete(0, "end")
             self.settings_view.entry_ext.insert(0, ",".join(extensions))
             self.config["extensions"] = extensions
@@ -276,13 +284,13 @@ class AppController:
         """Update config and check for API keys (Phase 12.2)."""
         self.config["target_model"] = model_name
 
-        if model_name == cfg.DEFAULT_MODEL_KEY:
+        if model_name == const.DEFAULT_MODEL_KEY:
             return
 
         # Inform user that actual inference is not active, only estimation
         logger.info(i18n.t("gui.logs.api_warning", model=model_name))
 
-        model_info = cfg.AI_MODELS.get(model_name, {})
+        model_info = const.AI_MODELS.get(model_name, {})
         provider = model_info.get("provider", "")
 
         # Security/Environment Check

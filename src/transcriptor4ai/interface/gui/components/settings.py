@@ -1,12 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+"""
+Settings Component.
+
+Advanced configuration panel: Profiles, Filters, Formatting, and AI Model selection.
+"""
+
+import logging
+from typing import Dict, Any, List
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
 from transcriptor4ai.utils.i18n import i18n
 
+logger = logging.getLogger(__name__)
 
 class SettingsFrame(ctk.CTkFrame):
     """
@@ -46,10 +54,12 @@ class SettingsFrame(ctk.CTkFrame):
         self.btn_save = ctk.CTkButton(self.frame_profiles, text=i18n.t("gui.profiles.save"), width=60)
         self.btn_save.pack(side="left", padx=5)
         self.btn_del = ctk.CTkButton(self.frame_profiles, text=i18n.t("gui.profiles.del"), width=60,
-                                     fg_color="#D9534F", hover_color="#C9302C")
+                                     fg_color="#E04F5F")
         self.btn_del.pack(side="left", padx=5)
 
-        # 2. Quick Stack Presets
+        # ---------------------------------------------------------------------
+        # Stacks Section
+        # ---------------------------------------------------------------------
         self.frame_stack = ctk.CTkFrame(self.scroll)
         self.frame_stack.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         ctk.CTkLabel(
@@ -60,13 +70,15 @@ class SettingsFrame(ctk.CTkFrame):
 
         self.combo_stack = ctk.CTkComboBox(
             self.frame_stack,
-            values=[i18n.t("gui.combos.select_stack")] + sorted(list(cfg.DEFAULT_STACKS.keys())),
+            values=[i18n.t("gui.combos.select_stack")] + sorted(list(const.DEFAULT_STACKS.keys())),
             width=300,
             state="readonly"
         )
         self.combo_stack.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # 3. AI Selection
+        # ---------------------------------------------------------------------
+        # AI Model Section
+        # ---------------------------------------------------------------------
         self.frame_ai = ctk.CTkFrame(self.scroll, fg_color="transparent")
         self.frame_ai.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         self.frame_ai.grid_columnconfigure((0, 1), weight=1)
@@ -103,10 +115,12 @@ class SettingsFrame(ctk.CTkFrame):
             width=200,
             state="readonly"
         )
-        self.combo_model.set(config.get("target_model", cfg.DEFAULT_MODEL_KEY))
+        self.combo_model.set(config.get("target_model", const.DEFAULT_MODEL_KEY))
         self.combo_model.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # 4. Filters
+        # ---------------------------------------------------------------------
+        # Filters Section
+        # ---------------------------------------------------------------------
         self.frame_filters = ctk.CTkFrame(self.scroll)
         self.frame_filters.grid(row=3, column=0, sticky="ew", pady=(0, 10))
         self.frame_filters.grid_columnconfigure(1, weight=1)
@@ -133,7 +147,9 @@ class SettingsFrame(ctk.CTkFrame):
         if config.get("respect_gitignore"): self.sw_gitignore.select()
         self.sw_gitignore.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="w")
 
-        # 5. Formatting & Security
+        # ---------------------------------------------------------------------
+        # Formatting & Security Section
+        # ---------------------------------------------------------------------
         self.frame_fmt = ctk.CTkFrame(self.scroll)
         self.frame_fmt.grid(row=4, column=0, sticky="ew", pady=(0, 10))
 

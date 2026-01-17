@@ -321,6 +321,7 @@ class AppController:
             temp.update(profiles[name])
             self.config.update(temp)
             self.sync_view_from_config()
+            self.settings_view.combo_profiles.set(name)
             self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
             mb.showinfo(i18n.t("gui.dialogs.success_title"), f"Profile '{name}' loaded.")
 
@@ -359,7 +360,5 @@ class AppController:
         self.settings_view.combo_profiles.configure(values=names)
         if select_name:
             self.settings_view.combo_profiles.set(select_name)
-        elif names:
-            self.settings_view.combo_profiles.set(names[0])
         else:
             self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))

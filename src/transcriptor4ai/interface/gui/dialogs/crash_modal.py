@@ -1,16 +1,25 @@
 from __future__ import annotations
 
+"""
+Crash Reporting Modal.
+
+Displays critical errors and allows sending logs to the developer.
+"""
+
+import logging
 import platform
 import threading
-from tkinter import messagebox as mb
+import tkinter.messagebox as mb
 from typing import Optional, Tuple
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
 from transcriptor4ai.infra.logging import get_recent_logs
 from transcriptor4ai.interface.gui import threads
 from transcriptor4ai.utils.i18n import i18n
+
+logger = logging.getLogger(__name__)
 
 
 def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk] = None) -> None:
@@ -32,7 +41,7 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
         toplevel,
         text=i18n.t("gui.crash.header"),
         font=ctk.CTkFont(size=18, weight="bold"),
-        text_color="#D9534F"
+        text_color="#E04F5F"
     ).pack(pady=(20, 10))
 
     ctk.CTkLabel(toplevel, text="The application has encountered an unexpected problem.").pack()
@@ -67,13 +76,13 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
 
     def _send_report() -> None:
         btn_report.configure(state="disabled")
-        status_lbl.configure(text="Sending report...", text_color="#007ACC")
+        status_lbl.configure(text="Sending report...", text_color="#3B8ED0")
 
         payload = {
             "error": error_msg,
             "stack_trace": stack_trace,
             "user_comment": user_comment.get("1.0", "end"),
-            "app_version": cfg.CURRENT_CONFIG_VERSION,
+            "app_version": const.CURRENT_CONFIG_VERSION,
             "os": platform.system(),
             "logs": get_recent_logs(150)
         }
@@ -103,8 +112,8 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     btn_report = ctk.CTkButton(
         btn_frame,
         text="Send Error Report",
-        fg_color="#2CC985",
-        hover_color="#229965",
+        fg_color="#E04F5F",
+        hover_color="#A03541",
         command=_send_report
     )
     btn_report.pack(side="left", padx=5, expand=True)
@@ -112,8 +121,8 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     ctk.CTkButton(
         btn_frame,
         text="Close",
-        fg_color="#D9534F",
-        hover_color="#C9302C",
+        fg_color="#3B8ED0",
+        hover_color="#36719F",
         command=_close
     ).pack(side="right", padx=5)
 

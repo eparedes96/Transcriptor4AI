@@ -16,7 +16,7 @@ import logging
 import math
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, cast
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,6 @@ class TokenizerStrategy(ABC):
 # =============================================================================
 # Concrete Strategies
 # =============================================================================
-
 class HeuristicStrategy(TokenizerStrategy):
     """Fallback strategy based on character density."""
 
@@ -177,7 +176,7 @@ class AnthropicApiStrategy(TokenizerStrategy):
             model=api_model,
             messages=[{"role": "user", "content": text}]
         )
-        return response.input_tokens
+        return int(response.input_tokens)
 
 
 class TransformersStrategy(TokenizerStrategy):
@@ -203,7 +202,7 @@ class TransformersStrategy(TokenizerStrategy):
             _TOKENIZER_CACHE[hf_id] = AutoTokenizer.from_pretrained(hf_id)
 
         tokenizer = _TOKENIZER_CACHE[hf_id]
-        return len(tokenizer.encode(text))
+        return int(len(tokenizer.encode(text)))
 
 
 class MistralStrategy(TokenizerStrategy):
@@ -220,7 +219,7 @@ class MistralStrategy(TokenizerStrategy):
         encoded = tokenizer.encode_chat_completion(
             ChatCompletionRequest(messages=[UserMessage(content=text)])
         )
-        return len(encoded.tokens)
+        return int(len(encoded.tokens))
 
 
 # =============================================================================
@@ -259,19 +258,14 @@ class TokenizerService:
             return 0
 
         # 2. Select Provider Strategy
-        # OpenAI
         if "gpt" in model_lower or "o1" in model_lower or "o3" in model_lower or "o4" in model_lower:
             strategy = TiktokenStrategy()
-        # Gemini
         elif "gemini" in model_lower:
             strategy = GoogleApiStrategy()
-        # Claude
         elif "claude" in model_lower:
             strategy = AnthropicApiStrategy()
-        # Mistral family
         elif "mistral" in model_lower or "magistral" in model_lower or "codestral" in model_lower or "devstral" in model_lower:
             strategy = MistralStrategy()
-        # Transformers family
         elif any(x in model_lower for x in ["llama", "qwen", "qwq", "deepseek", "falcon"]):
             strategy = TransformersStrategy()
         else:

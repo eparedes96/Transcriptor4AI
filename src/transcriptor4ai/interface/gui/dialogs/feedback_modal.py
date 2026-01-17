@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import logging
 import platform
 import threading
-from tkinter import messagebox as mb
-from typing import Tuple
+import tkinter.messagebox as mb
+from typing import Tuple, Optional
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
 from transcriptor4ai.infra.logging import get_recent_logs
 from transcriptor4ai.interface.gui import threads
 from transcriptor4ai.utils.i18n import i18n
+
+logger = logging.getLogger(__name__)
 
 
 def show_feedback_window(parent: ctk.CTk) -> None:
@@ -71,7 +74,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
             mb.showinfo(i18n.t("gui.dialogs.success_title"), "Thank you! Your feedback has been sent.")
             toplevel.destroy()
         else:
-            status_lbl.configure(text=f"Error: {message}", text_color="#D9534F")
+            status_lbl.configure(text=f"Error: {message}", text_color="#E04F5F")
             mb.showerror(i18n.t("gui.dialogs.error_title"), f"Failed to send feedback:\n{message}")
 
     def _send() -> None:
@@ -80,13 +83,13 @@ def show_feedback_window(parent: ctk.CTk) -> None:
             return
 
         btn_send.configure(state="disabled")
-        status_lbl.configure(text="Sending feedback...", text_color="#007ACC")
+        status_lbl.configure(text="Sending feedback...", text_color="#3B8ED0")
 
         payload = {
             "type": report_type.get(),
             "subject": subject.get(),
             "message": msg.get("1.0", "end"),
-            "version": cfg.CURRENT_CONFIG_VERSION,
+            "version": const.CURRENT_CONFIG_VERSION,
             "os": platform.system(),
             "logs": get_recent_logs(100) if chk_logs.get() else ""
         }
@@ -115,7 +118,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
     btn_send = ctk.CTkButton(
         btn_frame,
         text="Send Feedback",
-        fg_color="#007ACC",
+        fg_color="#3B8ED0",
         command=_send
     )
     btn_send.pack(side="left", expand=True, padx=5)

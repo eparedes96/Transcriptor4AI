@@ -5,13 +5,14 @@ Main Application Controller.
 
 Bridges the View (UI Components) and the Model (Core Logic).
 Handles user interactions, configuration sync, and process execution.
+Acts as a Facade for specialized sub-controllers (Profiles, Feedback).
 """
 
 import logging
 import os
 import threading
 import tkinter.messagebox as mb
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 import customtkinter as ctk
 
@@ -22,6 +23,10 @@ from transcriptor4ai.interface.gui import threads
 from transcriptor4ai.interface.gui.dialogs import results_modal, crash_modal
 from transcriptor4ai.interface.gui.utils import tk_helpers
 from transcriptor4ai.utils.i18n import i18n
+
+# Sub-controllers
+from transcriptor4ai.interface.gui.controllers.profile_controller import ProfileController
+from transcriptor4ai.interface.gui.controllers.feedback_controller import FeedbackController
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +54,13 @@ class AppController:
         self.logs_view: Any = None
         self.sidebar_view: Any = None
 
-    # --- View Management ---
+        # Initialize Sub-Controllers (Delegation Pattern)
+        self.profile_controller = ProfileController(self)
+        self.feedback_controller = FeedbackController(self)
+
+    # -------------------------------------------------------------------------
+    # View Management
+    # -------------------------------------------------------------------------
     def register_views(self, dashboard: Any, settings: Any, logs: Any, sidebar: Any) -> None:
         """Link view frames to the controller."""
         self.dashboard_view = dashboard
@@ -204,7 +215,9 @@ class AppController:
         self.config["minify_output"] = bool(self.settings_view.sw_minify.get())
         self.config["save_error_log"] = bool(self.settings_view.sw_error_log.get())
 
-    # --- Actions ---
+    # -------------------------------------------------------------------------
+    # Core Pipeline Execution
+    # -------------------------------------------------------------------------
     def start_processing(self, dry_run: bool = False, overwrite: bool = False) -> None:
         self.sync_config_from_view()
 
@@ -257,6 +270,9 @@ class AppController:
         self.dashboard_view.btn_process.configure(state=state)
         self.dashboard_view.btn_simulate.configure(state=state)
 
+    # -------------------------------------------------------------------------
+    # UI Logic & Helpers
+    # -------------------------------------------------------------------------
     def on_stack_selected(self, stack_name: str) -> None:
         """Update extension field when a stack preset is chosen."""
         if stack_name in const.DEFAULT_STACKS:
@@ -311,54 +327,20 @@ class AppController:
                 "Missing API Key for accurate token count.\nUsing heuristic fallback."
             )
 
+    # -------------------------------------------------------------------------
+    # Delegated Profile Actions
+    # -------------------------------------------------------------------------
     def load_profile(self) -> None:
-        name = self.settings_view.combo_profiles.get()
-        if name == i18n.t("gui.profiles.no_selection"): return
-
-        profiles = self.app_state.get("saved_profiles", {})
-        if name in profiles:
-            temp = cfg.get_default_config()
-            temp.update(profiles[name])
-            self.config.update(temp)
-            self.sync_view_from_config()
-            self.settings_view.combo_profiles.set(name)
-            self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
-            mb.showinfo(i18n.t("gui.dialogs.success_title"), f"Profile '{name}' loaded.")
+        self.profile_controller.load_profile()
 
     def save_profile(self) -> None:
-        dialog = ctk.CTkInputDialog(text=i18n.t("gui.profiles.prompt_name"), title="Save Profile")
-        name = dialog.get_input()
-        if name:
-            name = name.strip()
-            profiles = self.app_state.get("saved_profiles", {})
-            if name in profiles:
-                if not mb.askyesno(
-                        i18n.t("gui.profiles.confirm_overwrite_title"),
-                        i18n.t("gui.profiles.confirm_overwrite_msg", name=name)
-                ):
-                    return
-
-            self.sync_config_from_view()
-            self.app_state.setdefault("saved_profiles", {})[name] = self.config.copy()
-            cfg.save_app_state(self.app_state)
-            self._update_profile_list(name)
-            mb.showinfo(i18n.t("gui.dialogs.saved_title"), i18n.t("gui.profiles.saved", name=name))
+        self.profile_controller.save_profile()
 
     def delete_profile(self) -> None:
-        name = self.settings_view.combo_profiles.get()
-        if name == i18n.t("gui.profiles.no_selection"): return
+        self.profile_controller.delete_profile()
 
-        profiles = self.app_state.get("saved_profiles", {})
-        if name in profiles:
-            if mb.askyesno(i18n.t("gui.dialogs.confirm_title"), i18n.t("gui.profiles.confirm_delete", name=name)):
-                del profiles[name]
-                cfg.save_app_state(self.app_state)
-                self._update_profile_list()
-
-    def _update_profile_list(self, select_name: str = "") -> None:
-        names = sorted(list(self.app_state.get("saved_profiles", {}).keys()))
-        self.settings_view.combo_profiles.configure(values=names)
-        if select_name:
-            self.settings_view.combo_profiles.set(select_name)
-        else:
-            self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
+    # -------------------------------------------------------------------------
+    # Delegated Feedback Actions
+    # -------------------------------------------------------------------------
+    def request_feedback(self) -> None:
+        self.feedback_controller.on_feedback_requested()

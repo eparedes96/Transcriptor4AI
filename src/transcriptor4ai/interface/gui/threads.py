@@ -10,6 +10,8 @@ main window via generic callbacks (CustomTkinter compatible).
 
 import logging
 import threading
+import os
+import zipfile
 from typing import Dict, Any, Callable, Optional, Tuple
 
 from transcriptor4ai.core.pipeline.engine import run_pipeline
@@ -87,6 +89,7 @@ def download_update_task(
 ) -> None:
     """
     Download the new binary in a background thread with progress reporting.
+    Handles extraction if the downloaded file is a ZIP archive.
 
     Args:
         binary_url: URL of the file to download.
@@ -95,6 +98,41 @@ def download_update_task(
         on_complete: Callback accepting (SuccessBool, MessageStr).
     """
     success, msg = network.download_binary_stream(binary_url, dest_path, on_progress)
+
+    if success and dest_path.lower().endswith(".zip"):
+        try:
+            logger.info(f"Unpacking update package: {dest_path}")
+            base_dir = os.path.dirname(dest_path)
+
+            with zipfile.ZipFile(dest_path, 'r') as zf:
+                exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
+                if not exe_files:
+                    raise ValueError("No executable (.exe) found in update package.")
+
+                target_exe = next((f for f in exe_files if "transcriptor" in f.lower()), exe_files[0])
+
+                zf.extract(target_exe, base_dir)
+                extracted_full_path = os.path.join(base_dir, target_exe)
+
+            # Clean up the .zip file
+            os.remove(dest_path)
+            final_exe_path = dest_path[:-4] + ".exe"
+
+            if os.path.exists(final_exe_path):
+                try:
+                    os.remove(final_exe_path)
+                except OSError:
+                    pass
+
+            os.rename(extracted_full_path, final_exe_path)
+            msg = "Update extracted and ready."
+            logger.info(f"Update extracted to: {final_exe_path}")
+
+        except Exception as e:
+            logger.error(f"Failed to unpack update: {e}")
+            success = False
+            msg = f"Failed to unpack update: {e}"
+
     on_complete((success, msg))
 
 

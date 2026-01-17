@@ -18,9 +18,9 @@ import pytest
 from transcriptor4ai.domain.config import (
     load_app_state,
     get_default_app_state,
-    CURRENT_CONFIG_VERSION,
     get_default_config
 )
+from transcriptor4ai.domain.constants import CURRENT_CONFIG_VERSION
 
 
 @pytest.fixture

@@ -85,16 +85,16 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
                 asset_name = asset.get("name", "").lower()
                 download_url = asset.get("browser_download_url")
 
-                if asset_name.endswith(".exe"):
+                if asset_name.endswith(".exe") or asset_name.endswith(".zip"):
                     result["binary_url"] = download_url
-                    logger.info(f"Direct binary asset detected: {asset_name}")
+                    logger.info(f"Update asset detected: {asset_name}")
 
                 elif asset_name.endswith(".sha256"):
                     _fetch_checksum(download_url, headers, result)
 
             # Safety Check
             if result["has_update"] and not result["binary_url"]:
-                logger.warning("No direct .exe asset found. Background OTA disabled.")
+                logger.warning("No direct .exe or .zip asset found. Background OTA disabled.")
         else:
             logger.info("Status: Application is up to date.")
 

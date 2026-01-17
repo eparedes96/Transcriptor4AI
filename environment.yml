@@ -18,12 +18,11 @@ dependencies:
   - pip:
       - types-setuptools
       - types-requests
-      - customtkinter
+      - customtkinter>=5.2.2
       - tkinterdnd2
-      - python-semantic-release
-      # ------ INICIO DE MODIFICACIÓN: V2.0.0 Hybrid Tokenizer Deps ------
+      - pillow
+      - python-semantic-release>=9.0.0
       - google-generativeai>=0.8.0
       - anthropic>=0.30.0
       - transformers>=4.40.0
       - mistral-common>=1.0.0
-      # ------ FIN DE MODIFICACIÓN: V2.0.0 Hybrid Tokenizer Deps ------

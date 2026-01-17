@@ -74,10 +74,7 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # 3. View Construction (Wireframe)
     # -------------------------------------------------------------------------
-    # ------ INICIO DE MODIFICACIÓN: Use main_window component ------
     app = transcriptor4ai.interface.gui.components.main_window.create_main_window(profile_names, config)
-
-    # ------ FIN DE MODIFICACIÓN: Use main_window component ------
 
     # Define Navigation Logic
     def show_frame(name: str) -> None:
@@ -178,7 +175,16 @@ def main() -> None:
         if result.get("has_update"):
             version = result.get("latest_version", "?")
             logger.info(f"Update available: {version}")
-            sidebar_frame.update_badge.configure(text=f"Update v{version}", state="normal")
+
+            sidebar_frame.update_badge.configure(
+                text=f"Update v{version}",
+                state="normal",
+                command=lambda: transcriptor4ai.interface.gui.dialogs.update_modal.show_update_prompt_modal(
+                    app, version, result.get("changelog", ""),
+                    result.get("binary_url", ""), "", result.get("download_url", "")
+                )
+            )
+
             sidebar_frame.update_badge.grid(row=5, column=0, padx=20, pady=10)
 
             # If manual check, show prompt immediately

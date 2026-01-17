@@ -13,10 +13,9 @@ import threading
 from typing import Dict, Any, Callable, Optional, Tuple
 
 from transcriptor4ai.core.pipeline.engine import run_pipeline
-from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
 from transcriptor4ai.infra import network
 
-# Initialize module-level logger to avoid circular dependency with handlers
 logger = logging.getLogger(__name__)
 
 
@@ -73,7 +72,7 @@ def check_updates_task(
         is_manual: Whether the check was triggered by user action.
     """
     try:
-        res = network.check_for_updates(cfg.CURRENT_CONFIG_VERSION)
+        res = network.check_for_updates(const.CURRENT_CONFIG_VERSION)
         on_complete(res, is_manual)
     except Exception as e:
         logger.error(f"Update check failed in thread: {e}")

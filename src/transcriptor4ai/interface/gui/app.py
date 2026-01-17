@@ -1,14 +1,5 @@
 from __future__ import annotations
 
-import transcriptor4ai.interface.gui.components.dashboard
-import transcriptor4ai.interface.gui.components.logs_console
-import transcriptor4ai.interface.gui.components.main_window
-import transcriptor4ai.interface.gui.components.settings
-import transcriptor4ai.interface.gui.components.sidebar
-import transcriptor4ai.interface.gui.controllers.main_controller
-import transcriptor4ai.interface.gui.dialogs.feedback_modal
-import transcriptor4ai.interface.gui.dialogs.update_modal
-
 """
 Main Entry Point for the Graphical User Interface.
 
@@ -24,23 +15,33 @@ import queue
 import threading
 from logging.handlers import QueueHandler
 from typing import Dict, Any, Optional
-import tkinter.messagebox as mb
+
 import customtkinter as ctk
 
 from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
+import transcriptor4ai.interface.gui.components.dashboard
+import transcriptor4ai.interface.gui.components.logs_console
+import transcriptor4ai.interface.gui.components.settings
+import transcriptor4ai.interface.gui.components.sidebar
+import transcriptor4ai.interface.gui.components.main_window
+import transcriptor4ai.interface.gui.controllers.main_controller
+import transcriptor4ai.interface.gui.dialogs.feedback_modal
+import transcriptor4ai.interface.gui.dialogs.update_modal
 from transcriptor4ai.infra.logging import (
     configure_logging,
     LoggingConfig,
     get_default_gui_log_path
 )
 from transcriptor4ai.interface.gui import threads
+import tkinter.messagebox as mb
 
 logger = logging.getLogger(__name__)
 
 
 def main() -> None:
     """
-    Main GUI Application loop.
+    Main GUI Application loop (V2.0 Architecture).
     """
     # -------------------------------------------------------------------------
     # 1. System Initialization
@@ -48,7 +49,7 @@ def main() -> None:
     log_path = get_default_gui_log_path()
     # Configure root logger with thread-safe queue for file/console
     configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
-    logger.info(f"GUI V2.0 Starting - Version {cfg.CURRENT_CONFIG_VERSION}")
+    logger.info(f"GUI V2.0 Starting - Version {const.CURRENT_CONFIG_VERSION}")
 
     # Setup a specific queue for the GUI Log Console widget
     gui_log_queue: queue.Queue = queue.Queue()
@@ -73,7 +74,10 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # 3. View Construction (Wireframe)
     # -------------------------------------------------------------------------
+    # ------ INICIO DE MODIFICACIÓN: Use main_window component ------
     app = transcriptor4ai.interface.gui.components.main_window.create_main_window(profile_names, config)
+
+    # ------ FIN DE MODIFICACIÓN: Use main_window component ------
 
     # Define Navigation Logic
     def show_frame(name: str) -> None:
@@ -147,7 +151,8 @@ def main() -> None:
     settings_frame.combo_model.configure(command=controller.on_model_selected)
 
     settings_frame.btn_reset.configure(command=controller.reset_config)
-    sidebar_frame.btn_feedback.configure(command=lambda: transcriptor4ai.interface.gui.dialogs.feedback_modal.show_feedback_window(app))
+    sidebar_frame.btn_feedback.configure(
+        command=lambda: transcriptor4ai.interface.gui.dialogs.feedback_modal.show_feedback_window(app))
 
     # -------------------------------------------------------------------------
     # 5. Background Tasks & Polling

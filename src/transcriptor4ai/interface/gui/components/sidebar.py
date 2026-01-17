@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+"""
+Sidebar Component.
 
+Navigation panel containing branding, menu buttons, and update badges.
+"""
+
+import logging
+from typing import Any
 import customtkinter as ctk
 
-from transcriptor4ai.domain import config as cfg
+from transcriptor4ai.domain import constants as const
 from transcriptor4ai.utils.i18n import i18n
 
+logger = logging.getLogger(__name__)
 
 class SidebarFrame(ctk.CTkFrame):
     """
@@ -28,7 +35,7 @@ class SidebarFrame(ctk.CTkFrame):
 
         self.version_label = ctk.CTkLabel(
             self,
-            text=f"v{cfg.CURRENT_CONFIG_VERSION}",
+            text=f"v{const.CURRENT_CONFIG_VERSION}",
             font=ctk.CTkFont(size=10),
             text_color="gray"
         )
@@ -69,8 +76,8 @@ class SidebarFrame(ctk.CTkFrame):
         self.update_badge = ctk.CTkButton(
             self,
             text=i18n.t("gui.sidebar.update"),
-            fg_color="#2CC985",
-            hover_color="#229965",
+            fg_color="#E04F5F",
+            hover_color="#A03541",
             state="disabled",
             text_color="white"
         )

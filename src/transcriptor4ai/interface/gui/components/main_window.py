@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from typing import List, Dict, Any
+"""
+Main Window Factory.
 
+Responsible for creating the root application window and applying initial settings.
+"""
+
+from typing import Dict, Any, List
 import customtkinter as ctk
-
-from transcriptor4ai.domain import config as cfg
-
+from transcriptor4ai.domain import constants as const
 
 def create_main_window(
         profile_names: List[str],
@@ -27,7 +30,7 @@ def create_main_window(
 
     app = ctk.CTk()
 
-    app.title(f"Transcriptor4AI - v{cfg.CURRENT_CONFIG_VERSION}")
+    app.title(f"Transcriptor4AI - v{const.CURRENT_CONFIG_VERSION}")
     app.geometry("1000x700")
 
     # Configure Grid Layout (1 Sidebar + 1 Content)

@@ -1,47 +1,47 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-1.6.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-2.0.0-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
-**Transcriptor4AI** is a professional engine designed to transform complex local codebases into optimized, secure, and structured context for Large Language Models (LLMs) like **GPT-4o**, **Claude 3.5**, or **Gemini**.
+**Transcriptor4AI** is a professional Context Engineering Engine designed to transform complex local codebases into optimized, secure, and structured input for Large Language Models (LLMs) like **GPT-4o**, **Claude 3.5**, or **Gemini 1.5**.
 
 Stop wasting time copying and pasting files or exposing sensitive data. Transcriptor4AI automates the creation of a "Master Context" that allows AI to understand your entire project architecture at once.
 
 ---
 
-## 🌟 Why Transcriptor4AI?
+## 🌟 Why Transcriptor4AI v2.0?
 
-When working with AI and large projects, you face three main challenges: **Context Limits**, **Security Risks**, and **Manual Toil**. Transcriptor4AI solves them all:
+Working with AI on large projects presents three challenges: **Context Limits**, **Security Risks**, and **Tooling Friction**. The new v2.0 release solves them with enterprise-grade architecture:
 
-*   **Privacy First**: Never send an API key or a local path to the cloud by mistake. The sanitizer runs locally.
-*   **Token Efficiency**: Reduce the cost of your prompts by stripping away redundant code and comments (Minification).
-*   **Structural Clarity**: Provide the AI with a map of your project (AST Tree) so it understands how classes and functions relate.
-*   **Industrial Performance**: Built with a parallel streaming engine to handle everything from small scripts to massive monorepos without slowing down your machine.
+*   **Privacy First**: Local-only sanitization of API keys and paths. Your secrets never leave your machine.
+*   **Hybrid Precision**: New **Strategy-based Tokenizer** that uses the exact counting method for your target model (Tiktoken for OpenAI, Google SDK for Gemini, Anthropic SDK for Claude).
+*   **Modern Experience**: A completely rewritten **GUI (CustomTkinter)** with Dark Mode, intuitive dashboards, and silent background updates.
+*   **Structural Clarity**: Generates a deep AST map of your project, allowing the AI to "see" class hierarchies and function signatures.
 
 ---
 
 ## 🚀 Key Features
 
 ### 🛡️ Security & Privacy
-*   **Secret Redaction**: Automatically identifies and masks API keys (AWS, OpenAI), passwords, and tokens.
-*   **Path Anonymization**: Replaces local system paths (`C:/Users/...`) with generic tags to protect your identity.
-*   **Gitignore Compliance**: Respects your `.gitignore` rules out of the box to avoid leaking temporary files.
+*   **Secret Redaction**: Automatically identifies and masks API keys (AWS, OpenAI, Google), passwords, and tokens.
+*   **Path Anonymization**: Replaces local system paths (e.g., `C:/Users/Admin`) with generic tags (`<USER_HOME>`) to protect identity.
+*   **Gitignore Compliance**: Respects `.gitignore` rules natively to prevent leaking temporary files or `node_modules`.
 
 ### 📉 Smart Optimization
-*   **Code Compression**: Strips comments and excessive whitespace, reducing token count by up to 25% while preserving logic.
-*   **Token Estimation**: Get accurate token counts for different models (GPT, Claude, Gemini) before you even open the AI chat.
+*   **Code Minification**: Strips comments and excessive whitespace, reducing token usage by ~25% while preserving logic.
+*   **Hybrid Tokenizer**: No more guessing. The engine selects the correct tokenizer strategy (OpenAI, Anthropic, Google, or Llama/Mistral) based on your selected model.
 
 ### 🌳 Structural Intelligence
-*   **Static Analysis**: Generates a project tree that doesn't just show files, but also the **Classes, Functions, and Methods** inside them using Python's AST.
-*   **Contextual Separation**: Automatically categorizes files into Modules, Tests, and Resources.
+*   **Static Analysis**: Generates a project tree that details **Classes, Functions, and Methods** using Python's AST without executing code.
+*   **Contextual Separation**: Automatically categorizes files into Modules (Logic), Tests, and Resources (Config/Docs).
 
 ### ⚙️ Professional Workflow
-*   **Dual Interface**: Use the intuitive **GUI** for daily development or the **CLI** for automation and pipelines.
-*   **Profiles**: Save different configurations (e.g., "Full Audit" vs "Minimal Logic") and switch between them instantly.
-*   **Seamless Updates**: The app stays up to date automatically via background downloads (OTA) and integrity checks.
+*   **Modern GUI**: A responsive, thread-safe interface with Dashboard, Settings, and Logs tabs.
+*   **Silent OTA**: Background updates download and verify integrity (SHA-256) while you work, applying only when you restart.
+*   **Profiles**: Save different configurations (e.g., "Full Audit" vs "Minimal Logic") and switch instantly.
 
 ---
 
@@ -70,20 +70,20 @@ pip install -e .
 ## 🖥️ Usage
 
 ### 1. Graphical User Interface (GUI)
-The most common way to use Transcriptor4AI. Launch it, select your folder, and get your context.
+The completely redesigned interface offering a dashboard experience.
 
 ```bash
 # Using the installed command
 transcriptor-gui
 
-# OR running from source (New Entrypoint)
-python src/transcriptor4ai/main.py
+# OR running from source
+python src/transcriptor4ai/interface/gui/app.py
 ```
 
-*   **Simulation Mode**: Use **"SIMULATE"** to see exactly what will be sent and how many tokens it will cost without creating any files.
+*   **Simulation Mode**: Use **"SIMULATE"** to perform a dry-run. It calculates tokens and shows the file structure without writing to disk.
 
 ### 2. Command Line Interface (CLI)
-For power users who need speed or want to integrate transcription into their build scripts.
+For CI/CD pipelines and power users.
 
 **Basic Context Extraction:**
 ```bash
@@ -101,27 +101,27 @@ transcriptor-cli -i ./src -o ./out --unified-only --minify --sanitize --tree --c
 
 Every run generates a structured directory (default: `transcript/`) with:
 
-1.  **`full_context.txt`**: The ultimate file. It contains the Tree, Modules, Tests, and Resources in one single AI-ready document.
-2.  **`tree.txt`**: A clean map of your project structure.
-3.  **`modules.txt / tests.txt`**: Separated logic for fine-grained control.
-4.  **`errors.txt`**: A transparent log of any files that couldn't be read (e.g., permission issues).
+1.  **`full_context.txt`**: The unified AI-ready document containing Tree, Modules, Tests, and Resources.
+2.  **`tree.txt`**: A visual map of your project structure with AST symbols.
+3.  **`modules.txt / tests.txt`**: Separated logic for fine-grained manual control.
+4.  **`errors.txt`**: A transparent log of any read errors (e.g., permission issues).
 
 ---
 
 ## ⚙️ Configuration
 
-Transcriptor4AI stores your preferences and profiles in a local `config.json` inside your user data folder.
+Transcriptor4AI stores preferences in `config.json` inside your user data folder. Version 2.0.0 introduces a hierarchical structure.
 
 **Sample Configuration:**
 ```json
 {
-    "version": "1.6.0",
+    "version": "2.0.0",
     "app_settings": {
         "theme": "SystemDefault",
         "auto_check_updates": true
     },
     "last_session": {
-        "target_model": "GPT-4o / GPT-5",
+        "target_model": "Claude 3.5 Sonnet",
         "enable_sanitizer": true,
         "minify_output": true,
         "respect_gitignore": true
@@ -133,11 +133,11 @@ Transcriptor4AI stores your preferences and profiles in a local `config.json` in
 
 ## 🛠️ Development & Architecture
 
-This project follows a **Hexagonal Architecture** to ensure maintainability and robustness:
+This project follows a **Hexagonal Architecture** with a strict **MVC** pattern for the GUI:
 *   **Domain**: Data models and business rules.
-*   **Core**: Pipeline logic, workers, and AST analysis.
-*   **Infra**: FileSystem, Logging, and Network adapters.
-*   **Interface**: CLI and GUI adapters.
+*   **Core**: Pipeline logic, AST analysis, and Processing strategies.
+*   **Infra**: FileSystem, Thread-safe Logging, and Network adapters.
+*   **Interface**: CustomTkinter controllers and views.
 
 ### Quality Assurance
 Run the comprehensive test suite (Unit, Integration, E2E):
@@ -147,12 +147,15 @@ pytest -v
 
 # Static type analysis with strict checking
 mypy src/transcriptor4ai
+
+# Linting and formatting check
+ruff check .
 ```
 
 ### Standalone Build
 To create a standalone executable (`.exe`):
 ```bash
-# Use the refactored build script in the scripts/ folder
+# Use the automated build script
 python scripts/build.py
 ```
 

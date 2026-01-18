@@ -32,8 +32,7 @@ except ImportError:
 
 GOOGLE_AVAILABLE = False
 try:
-    from google import genai
-
+    import google.genai as genai
     GOOGLE_AVAILABLE = True
 except ImportError:
     pass

@@ -10,6 +10,7 @@ of results into a unified AI context.
 """
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -37,6 +38,7 @@ def run_pipeline(
         overwrite: bool = False,
         dry_run: bool = False,
         tree_output_path: Optional[str] = None,
+        cancellation_event: Optional[threading.Event] = None,
 ) -> PipelineResult:
     """
     Execute the full project transcription pipeline.
@@ -50,6 +52,7 @@ def run_pipeline(
         overwrite: Permission to overwrite existing files at destination.
         dry_run: Simulation mode (calculates tokens, skips file deployment).
         tree_output_path: Optional path override for the structure tree.
+        cancellation_event: Optional event to signal process termination.
 
     Returns:
         PipelineResult: Final execution result containing metrics and summary.
@@ -117,6 +120,7 @@ def run_pipeline(
             enable_sanitizer=bool(cfg.get("enable_sanitizer", True)),
             mask_user_paths=bool(cfg.get("mask_user_paths", True)),
             minify_output=bool(cfg.get("minify_output", False)),
+            cancellation_event=cancellation_event,
         )
 
         # Synchronize and collect task results

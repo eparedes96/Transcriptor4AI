@@ -57,7 +57,7 @@ def test_normalize_path_expansion() -> None:
         assert path.lower().endswith(os.path.join("my_folder", "sub").lower())
 
         # Test home expansion (~)
-        with patch("os.path.expanduser", return_value="/home/user"):
+        with patch("os.path.expanduser", side_effect=lambda p: p.replace("~", "/home/user")):
             path = normalize_path("~/code", fallback=".")
             assert "code" in Path(path).parts
 

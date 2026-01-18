@@ -11,6 +11,7 @@ import logging
 import os
 import time
 from pathlib import Path
+from logging.handlers import QueueListener
 
 import pytest
 
@@ -26,9 +27,16 @@ from transcriptor4ai.infra.logging import (
 def reset_logging() -> None:
     """Clean up root logger handlers before and after each test."""
     root = logging.getLogger()
+
+    listener = getattr(root, _QUEUE_LISTENER_ATTR, None)
+    if listener and isinstance(listener, QueueListener):
+        listener.stop()
+        setattr(root, _QUEUE_LISTENER_ATTR, None)
+
     for h in list(root.handlers):
         root.removeHandler(h)
         h.close()
+
     if hasattr(root, "_transcriptor4ai_configured"):
         delattr(root, "_transcriptor4ai_configured")
 

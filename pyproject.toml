@@ -95,6 +95,9 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-v --strict-markers"
+markers = [
+    "gui: mark test as requiring a GUI environment (skip in headless CI if needed)."
+]
 
 # =============================================================================
 # RUFF CONFIGURATION

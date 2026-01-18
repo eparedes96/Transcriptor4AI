@@ -1,27 +1,206 @@
 {
   "app": {
     "name": "Transcriptor4AI",
-    "description": "Herramienta de transcripción de código (Tests/Módulos/Recursos) con soporte para generación de árbol de directorios."
+    "description": "Code transcription tool (Tests/Modules/Resources) with directory tree generation support."
   },
-  "cli": {},
+  "cli": {
+    "args": {
+      "input": "Path to the source directory to process.",
+      "output_base": "Base output directory.",
+      "subdir": "Name of the output subdirectory.",
+      "prefix": "Prefix for generated files.",
+      "tree": "Generate directory tree.",
+      "tree_file": "Path to save the tree file (overrides default).",
+      "print_tree": "Print the tree to console.",
+      "func": "Show functions in tree.",
+      "cls": "Show classes in tree.",
+      "meth": "Show methods in tree.",
+      "ext": "Comma-separated extensions (e.g. .py,.txt).",
+      "inc": "Regex inclusion patterns.",
+      "exc": "Regex exclusion patterns.",
+      "overwrite": "Overwrite existing files without prompting.",
+      "dry_run": "Simulate execution without writing files.",
+      "no_log": "Do not generate the error log file.",
+      "defaults": "Ignore config.json and use defaults.",
+      "dump": "Print final config in JSON and exit.",
+      "json": "Output result in JSON format.",
+      "no_modules": "Do not include source code modules.",
+      "no_tests": "Do not include test files.",
+      "resources": "Include resource files (docs, config, data).",
+      "no_gitignore": "Do not read .gitignore files.",
+      "unified_only": "Generate ONLY the unified context file.",
+      "individual_only": "Generate ONLY individual files."
+    },
+    "errors": {
+      "path_not_exist": "Input path does not exist: {path}",
+      "path_not_dir": "Input path is not a directory: {path}",
+      "pipeline_fail": "Unhandled exception in pipeline: {error}"
+    },
+    "status": {
+      "interrupted": "Operation cancelled by user (SIGINT).",
+      "success": "SUCCESS",
+      "output_dir": "Output Directory: {path}",
+      "generated": "Generated Files:"
+    }
+  },
   "gui": {
-    "sidebar": {},
-    "dashboard": {},
-    "sections": {},
-    "labels": {},
-    "tooltips": {},
-    "checkboxes": {},
-    "buttons": {},
-    "profiles": {},
-    "settings": {},
-    "combos": {},
-    "logs": {},
-    "feedback": {},
-    "status": {},
-    "dialogs": {},
-    "crash": {},
-    "popups": {},
-    "results_window": {},
-    "errors": {}
+    "sidebar": {
+      "dashboard": "Dashboard",
+      "settings": "Settings",
+      "logs": "System Logs",
+      "update": "Update Ready"
+    },
+    "dashboard": {
+      "source_header": "Source Directory Path",
+      "dest_header": "Destination Directory",
+      "ast_func": "Show Functions",
+      "ast_class": "Show Classes",
+      "ast_meth": "Show Methods",
+      "btn_start": "START PROCESSING",
+      "btn_simulating": "SIMULATING..."
+    },
+    "sections": {
+      "input": "Source Directory:",
+      "output": "Base Output Directory (a subdirectory will be created inside):",
+      "sub_output": "Output Subdirectory:",
+      "prefix": "File Prefix:",
+      "content": "Content Selection:",
+      "format": "Output Format:",
+      "filters": "Filters:",
+      "actions": "Actions:"
+    },
+    "labels": {
+      "subdir": "Output Subdirectory",
+      "prefix": "Filename Prefix",
+      "extensions": "Extensions (comma-separated):",
+      "include": "Include Patterns (Regex):",
+      "exclude": "Exclude Patterns (Regex):",
+      "stack": "Extension Stack:",
+      "target_model": "Target AI Model:",
+      "profile": "Profile:"
+    },
+    "tooltips": {
+      "input": "Root folder containing the source code.",
+      "output": "Parent folder where results will be saved.",
+      "subdir": "Name of the final folder.",
+      "prefix": "Example: project_v1 -> project_v1_modules.txt",
+      "ext": "Example: .py, .js, .java",
+      "inc": "Only process files matching these patterns.",
+      "exc": "Ignore files/folders matching these patterns."
+    },
+    "checkboxes": {
+      "modules": "Include Modules (Source)",
+      "tests": "Include Tests",
+      "resources": "Include Resources (.md, .json, etc.)",
+      "gen_tree": "Include Directory Tree",
+      "individual": "Individual Files (.txt separated)",
+      "unified": "Unified Context File (single .txt)",
+      "func": "Show functions",
+      "cls": "Show classes",
+      "meth": "Show methods",
+      "print_tree": "Print tree to console",
+      "log_err": "Save error log",
+      "gitignore": "Respect .gitignore rules",
+      "overwrite": "Overwrite existing files"
+    },
+    "buttons": {
+      "explore": "Browse",
+      "examine": "Browse",
+      "simulate": "SIMULATE",
+      "process": "PROCESS",
+      "save": "Save Session",
+      "reset": "Reset Config",
+      "exit": "Exit"
+    },
+    "profiles": {
+      "load": "Load",
+      "save": "Save As...",
+      "del": "Del",
+      "prompt_name": "Enter name for new profile:",
+      "saved": "Profile '{name}' saved!",
+      "deleted": "Profile deleted.",
+      "confirm_delete": "Delete profile '{name}'?",
+      "confirm_overwrite_title": "Profile Exists",
+      "confirm_overwrite_msg": "The profile '{name}' already exists. Overwrite?",
+      "error_select": "Please select a valid profile from the list.",
+      "no_selection": "-- No Profile --"
+    },
+    "settings": {
+      "stack_header": "Quick Stack Presets",
+      "output_strat": "Output Strategy",
+      "security": "Security & Optimization",
+      "provider_label": "AI Provider",
+      "model_label": "Target AI Model"
+    },
+    "combos": {
+      "select_stack": "-- Select Stack --",
+      "no_profile": "-- No Profile --"
+    },
+    "logs": {
+      "copy": "Copy Logs",
+      "api_warning": "Model '{model}' selected. Note: API inference is not active; performing Token Estimation only."
+    },
+    "feedback": {
+      "type_label": "Report Type:",
+      "types": {
+        "bug": "Bug Report",
+        "feature": "Feature Request",
+        "other": "Other"
+      }
+    },
+    "status": {
+      "processing": "⏳ Processing... Please wait.",
+      "success": "Session saved successfully.",
+      "reset": "Configuration reset to defaults."
+    },
+    "dialogs": {
+      "error_title": "Error",
+      "success_title": "Success",
+      "saved_title": "Saved",
+      "confirm_title": "Confirm",
+      "invalid_input": "Invalid Input Directory",
+      "pipeline_failed": "Pipeline Failed",
+      "sending_feedback": "Sending feedback in background...",
+      "update_title": "Update Available",
+      "up_to_date": "App is up to date."
+    },
+    "crash": {
+      "title": "Critical Error",
+      "header": "CRITICAL ERROR DETECTED"
+    },
+    "popups": {
+      "title_result": "Result",
+      "dry_run_title": "=== SIMULATION COMPLETE ===",
+      "dry_run_msg": "No files were written to disk.\nSimulation would have generated: {files}",
+      "success_title": "=== PROCESS COMPLETED SUCCESSFULLY ===",
+      "output_path": "Output: {path}",
+      "stats": "Processed: {proc}\nSkipped: {skip}\nRead Errors: {err}",
+      "generated_files": "\nGenerated Files:",
+      "error_save": "Could not save configuration:\n{error}",
+      "error_path": "Path does not exist:\n{path}",
+      "error_dir": "Path is not a directory:\n{path}",
+      "error_process": "Process Error:\n{error}",
+      "error_critical": "Critical Thread Error:\n{error}",
+      "overwrite_msg": "The following files will be overwritten:\n\n{files}\n\nDo you want to continue?",
+      "overwrite_title": "Overwrite Warning"
+    },
+    "results_window": {
+      "title": "Result",
+      "dry_run_header": "SIMULATION COMPLETE",
+      "success_header": "PROCESS COMPLETED",
+      "stats_processed": "Processed",
+      "stats_skipped": "Skipped",
+      "stats_errors": "Errors",
+      "stats_tokens": "Est. Tokens",
+      "files_label": "Generated Files:",
+      "btn_open": "Open Folder",
+      "btn_copy": "Copy Unified Output",
+      "btn_close": "Close",
+      "copied_msg": "Copied to clipboard!"
+    },
+    "errors": {
+      "tokenizer_api": "Tokenizer API Error (using estimate)",
+      "dnd_invalid": "Invalid path dropped"
+    }
   }
 }

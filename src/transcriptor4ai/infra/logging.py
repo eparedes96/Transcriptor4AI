@@ -163,7 +163,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         setattr(root, _CONFIGURED_FLAG_ATTR, True)
 
         # Register cleanup to ensure logs are flushed on shutdown
-        atexit.register(listener.stop)
+        atexit.register(_safe_stop_listener, listener)
 
         return root
 
@@ -268,9 +268,26 @@ def _remove_our_handlers(root: logging.Logger) -> None:
 def _stop_existing_listener(root: logging.Logger) -> None:
     """Terminate and release the existing QueueListener to reset state."""
     listener = getattr(root, _QUEUE_LISTENER_ATTR, None)
-    if listener and isinstance(listener, QueueListener):
-        listener.stop()
+    if listener:
+        _safe_stop_listener(listener)
         setattr(root, _QUEUE_LISTENER_ATTR, None)
+
+
+def _safe_stop_listener(listener: Optional[QueueListener]) -> None:
+    """
+    Safely stop a QueueListener preventing crashes on double-stop calls.
+
+    Handles cases where the internal thread has already been joined or
+    set to None, preventing AttributeError in atexit or test resets.
+    """
+    if not listener:
+        return
+
+    try:
+        if hasattr(listener, "_thread") and listener._thread is not None:
+            listener.stop()
+    except Exception:
+        pass
 
 
 def _create_rotating_file_handler(

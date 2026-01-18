@@ -19,7 +19,8 @@ from transcriptor4ai.infra.logging import (
     configure_logging,
     LoggingConfig,
     _HANDLER_TAG_ATTR,
-    _QUEUE_LISTENER_ATTR
+    _QUEUE_LISTENER_ATTR,
+    _safe_stop_listener
 )
 
 
@@ -29,8 +30,8 @@ def reset_logging() -> None:
     root = logging.getLogger()
 
     listener = getattr(root, _QUEUE_LISTENER_ATTR, None)
-    if listener and isinstance(listener, QueueListener):
-        listener.stop()
+    if listener:
+        _safe_stop_listener(listener)
         setattr(root, _QUEUE_LISTENER_ATTR, None)
 
     for h in list(root.handlers):

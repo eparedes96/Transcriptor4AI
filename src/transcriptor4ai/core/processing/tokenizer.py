@@ -32,7 +32,7 @@ except ImportError:
 
 GOOGLE_AVAILABLE = False
 try:
-    import google.generativeai as genai
+    from google import genai
 
     GOOGLE_AVAILABLE = True
 except ImportError:
@@ -143,33 +143,36 @@ class TiktokenStrategy(TokenizerStrategy):
 # CONCRETE STRATEGIES: REMOTE SDKS
 # -----------------------------------------------------------------------------
 
+# ------ INICIO DE MODIFICACIÓN: REFACTORIZACIÓN ESTRATEGIA GOOGLE ------
 class GoogleApiStrategy(TokenizerStrategy):
     """
-    Google Gemini strategy utilizing the Generative AI SDK.
+    Google Gemini strategy utilizing the new Google GenAI SDK.
     Requires active network and valid GOOGLE_API_KEY.
     """
 
     def count(self, text: str, model_id: str) -> int:
-        """Fetch token count from Gemini remote service."""
+        """Fetch token count from Gemini remote service via GenAI Client."""
         if not GOOGLE_AVAILABLE:
-            raise ImportError("google-generativeai not installed")
+            raise ImportError("google-genai not installed")
 
         api_key = os.environ.get("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment")
 
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         clean_model = model_id.lower().replace(" ", "-")
 
         # Default to flash if model resolution is ambiguous
         if "gemini" not in clean_model:
-            clean_model = "models/gemini-1.5-flash"
-        elif not clean_model.startswith("models/"):
-            clean_model = f"models/{clean_model}"
+            clean_model = "gemini-1.5-flash"
+        elif clean_model.startswith("models/"):
+            clean_model = clean_model.replace("models/", "")
 
-        model = genai.GenerativeModel(clean_model)
-        response = model.count_tokens(text)
-        return int(response.total_tokens)
+        response = client.models.count_tokens(
+            model=clean_model,
+            contents=text
+        )
+        return int(response.total_token_count)
 
 
 class AnthropicApiStrategy(TokenizerStrategy):

@@ -263,6 +263,15 @@ class AppController:
             daemon=True
         ).start()
 
+    def cancel_processing(self) -> None:
+        """
+        Signal the background pipeline to abort execution.
+        """
+        if not self._cancellation_event.is_set():
+            logger.info("User requested task cancellation. Signaling workers...")
+            self._cancellation_event.set()
+            self.dashboard_view.btn_process.configure(text="CANCELING...", state="disabled")
+
     def _on_process_complete(self, result: Any) -> None:
         """
         Handle pipeline completion from the background thread.
@@ -296,7 +305,10 @@ class AppController:
             if result.ok:
                 results_modal.show_results_window(self.app, result)
             else:
-                mb.showerror(i18n.t("gui.dialogs.pipeline_failed"), result.error)
+                if self._cancellation_event.is_set() and "cancelled" in result.error.lower():
+                    logger.info("Pipeline stopped by user signal.")
+                else:
+                    mb.showerror(i18n.t("gui.dialogs.pipeline_failed"), result.error)
         elif isinstance(result, Exception):
             crash_modal.show_crash_modal(str(result), "See logs for details.", self.app)
 
@@ -384,7 +396,7 @@ class AppController:
         elif provider == "ANTHROPIC" and not os.environ.get("ANTHROPIC_API_KEY"):
             missing_key = True
             logger.warning(f"Selected {model_name} but ANTHROPIC_API_KEY is missing.")
-        elif (provider == "MISTRAL" or provider == "MISTRAL_VISION") and not os.environ.get("MISTRAL_API_KEY"):
+        elif provider == "MISTRAL" and not os.environ.get("MISTRAL_API_KEY"):
             missing_key = True
             logger.warning(f"Selected {model_name} but MISTRAL_API_KEY is missing.")
 

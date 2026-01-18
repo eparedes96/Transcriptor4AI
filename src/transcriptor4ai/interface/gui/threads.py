@@ -51,7 +51,12 @@ def run_pipeline_task(
             return
 
         # Trigger core engine orchestration
-        result = run_pipeline(config, overwrite=overwrite, dry_run=dry_run)
+        result = run_pipeline(
+            config,
+            overwrite=overwrite,
+            dry_run=dry_run,
+            cancellation_event=cancellation_event
+        )
 
         if cancellation_event and cancellation_event.is_set():
             logger.info("Pipeline Thread: Execution completed but results discarded due to cancellation.")

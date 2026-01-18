@@ -21,6 +21,7 @@ from typing import Optional
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("updater")
 
+
 # -----------------------------------------------------------------------------
 # PROCESS AND INTEGRITY HELPERS
 # -----------------------------------------------------------------------------
@@ -68,6 +69,7 @@ def calculate_sha256(file_path: str) -> str:
     except Exception as e:
         logger.error(f"Failed to calculate hash for {file_path}: {e}")
         return ""
+
 
 # -----------------------------------------------------------------------------
 # CORE UPDATE LIFECYCLE
@@ -125,15 +127,16 @@ def run_update(
             except OSError:
                 pass
 
-        os.rename(old_exe, backup_exe)
+        # Implement robust rename to handle OS file locks (Antivirus/Indexing)
+        _retry_rename(old_exe, backup_exe)
 
         try:
-            os.rename(new_exe, old_exe)
+            _retry_rename(new_exe, old_exe)
             logger.info("Update applied successfully.")
         except Exception as e:
             logger.error(f"Failed to move new executable: {e}. Rolling back...")
             if os.path.exists(backup_exe):
-                os.rename(backup_exe, old_exe)
+                _retry_rename(backup_exe, old_exe)
             raise
 
         # Clean rotation artifact
@@ -157,6 +160,45 @@ def run_update(
     except Exception as e:
         logger.error(f"Failed to restart application: {e}")
         sys.exit(1)
+
+
+# -----------------------------------------------------------------------------
+# PRIVATE HELPERS
+# -----------------------------------------------------------------------------
+
+def _retry_rename(src: str, dst: str, max_retries: int = 5) -> None:
+    """
+    Attempt to rename a file with exponential backoff on failure.
+
+    Specifically targets Windows Access Denied (EACCES) errors that occur
+    during the short window after a process terminates.
+
+    Args:
+        src: Source path.
+        dst: Destination path.
+        max_retries: Maximum number of attempts before raising exception.
+    """
+    for i in range(max_retries):
+        try:
+            if os.path.exists(dst):
+                try:
+                    os.remove(dst)
+                except OSError:
+                    pass
+            os.rename(src, dst)
+            return
+        except OSError as e:
+            if i == max_retries - 1:
+                logger.error(f"Final rename attempt failed: {src} -> {dst}")
+                raise e
+
+            wait_time = 1.5 ** i
+            logger.warning(
+                f"File system lock detected (attempt {i + 1}/{max_retries}). "
+                f"Retrying in {wait_time:.2f}s... Error: {e}"
+            )
+            time.sleep(wait_time)
+
 
 # -----------------------------------------------------------------------------
 # SCRIPT INTERFACE

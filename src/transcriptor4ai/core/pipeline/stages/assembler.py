@@ -120,12 +120,17 @@ def assemble_and_finalize(
         # Move unified context to the final destination directory
         if unified_created:
             real_path_unified = os.path.join(final_output_path, f"{prefix}_full_context.txt")
+            if os.path.exists(real_path_unified):
+                os.remove(real_path_unified)
             shutil.move(paths["unified"], real_path_unified)
             gen_files_map["unified"] = real_path_unified
 
         # Deploy error logs if they were generated in a staging area
         if os.path.exists(paths["errors"]) and staging_dir != final_output_path:
-            shutil.move(paths["errors"], os.path.join(final_output_path, f"{prefix}_errors.txt"))
+            dest_error_path = os.path.join(final_output_path, f"{prefix}_errors.txt")
+            if os.path.exists(dest_error_path):
+                os.remove(dest_error_path)
+            shutil.move(paths["errors"], dest_error_path)
 
     # -----------------------------------------------------------------------------
     # PHASE 3: RESOURCE CLEANUP AND SUMMARY

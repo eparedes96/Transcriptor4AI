@@ -26,6 +26,7 @@ import transcriptor4ai.interface.gui.components.main_window
 import transcriptor4ai.interface.gui.controllers.main_controller
 import transcriptor4ai.interface.gui.dialogs.feedback_modal
 import transcriptor4ai.interface.gui.dialogs.update_modal
+from transcriptor4ai.core.services.updater import UpdateManager, UpdateStatus
 from transcriptor4ai.infra.logging import (
     configure_logging,
     LoggingConfig,
@@ -52,11 +53,12 @@ def main() -> None:
     # PHASE 1: DIAGNOSTIC INFRASTRUCTURE SETUP
     # -----------------------------------------------------------------------------
     log_path = get_default_gui_log_path()
-    # Configure root logging with rotating file and console handlers
+
+    # Configure root logging with rotating file and console handlers via infra
     configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
     logger.info(f"GUI Lifecycle: Initializing v{const.CURRENT_CONFIG_VERSION}")
 
-    # Initialize dedicated queue for real-time UI log console updates
+    # Dedicated queue for UI console (Redundancy check: only one UI handler added to root)
     gui_log_queue: queue.Queue = queue.Queue()
     gui_log_handler = QueueHandler(gui_log_queue)
     gui_log_handler.setLevel(logging.INFO)
@@ -165,14 +167,17 @@ def main() -> None:
         """Coordinate the update prompt when a new version is detected."""
         if result.get("has_update"):
             version = result.get("latest_version", "?")
-            logger.info(f"Update Lifecycle: Discovered version {version}")
+
+            # Ensure we use the pending binary path from the manager if available
+            bin_url = result.get("binary_url", "")
+            pending_path = result.get("pending_path", "")
 
             sidebar_frame.update_badge.configure(
                 text=f"Update v{version}",
                 state="normal",
                 command=lambda: transcriptor4ai.interface.gui.dialogs.update_modal.show_update_prompt_modal(
                     app, version, result.get("changelog", ""),
-                    result.get("binary_url", ""), "", result.get("download_url", "")
+                    bin_url, pending_path, result.get("download_url", "")
                 )
             )
             sidebar_frame.update_badge.grid(row=5, column=0, padx=20, pady=10)
@@ -180,18 +185,33 @@ def main() -> None:
             if is_manual:
                 transcriptor4ai.interface.gui.dialogs.update_modal.show_update_prompt_modal(
                     app, version, result.get("changelog", ""),
-                    result.get("binary_url", ""), "", result.get("download_url", "")
+                    bin_url, pending_path, result.get("download_url", "")
                 )
         elif is_manual:
             mb.showinfo("Update Check", "Application is already up to date.")
 
-    # Schedule non-blocking update check if enabled
+    # Schedule managed update cycle
+    update_manager = UpdateManager()
+
+    def run_ota_cycle(manual: bool = False) -> None:
+        """Background wrapper for the silent update manager."""
+        try:
+            update_manager.run_silent_cycle(const.CURRENT_CONFIG_VERSION)
+            info = update_manager.update_info.copy()
+            if update_manager.status == UpdateStatus.READY:
+                info["pending_path"] = update_manager.pending_path
+
+            app.after(0, lambda: on_update_checked(info, manual))
+        except Exception as e:
+            logger.error(f"OTA Lifecycle: Background cycle failed: {e}")
+
     if app_state["app_settings"].get("auto_check_updates"):
         threading.Thread(
-            target=threads.check_updates_task,
-            args=(on_update_checked, False),
+            target=run_ota_cycle,
+            args=(False,),
             daemon=True
         ).start()
+
 
     # -----------------------------------------------------------------------------
     # PHASE 6: LIFECYCLE FINALIZATION

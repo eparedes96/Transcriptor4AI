@@ -75,7 +75,6 @@ AI_MODELS: Dict[str, Dict[str, str]] = {
     "Mistral Small 3.2 (2506)": {"id": "mistral-small-2506", "provider": "MISTRAL"},
     "Magistral Medium (Reasoning)": {"id": "magistral-medium-2509", "provider": "MISTRAL"},
     "Magistral Small (Reasoning)": {"id": "magistral-small-2509", "provider": "MISTRAL"},
-    "Mistral OCR": {"id": "mistral-ocr-2512", "provider": "MISTRAL_VISION"},
     "Codestral (2508)": {"id": "codestral-2508", "provider": "MISTRAL"},
     "Devstral (Agents)": {"id": "devstral-2512", "provider": "MISTRAL"},
     "Devstral Medium": {"id": "devstral-medium-2507", "provider": "MISTRAL"},

@@ -12,6 +12,7 @@ flagging an update as ready for installation.
 import logging
 import os
 import shutil
+import zipfile
 from enum import Enum
 from typing import Any, Dict
 
@@ -19,6 +20,7 @@ from transcriptor4ai.infra.fs import get_user_data_dir
 from transcriptor4ai.infra import network
 
 logger = logging.getLogger(__name__)
+
 
 # -----------------------------------------------------------------------------
 # UPDATE STATE DEFINITIONS
@@ -31,6 +33,7 @@ class UpdateStatus(Enum):
     DOWNLOADING = "DOWNLOADING"
     READY = "READY"
     ERROR = "ERROR"
+
 
 # -----------------------------------------------------------------------------
 # UPDATE MANAGER SERVICE
@@ -97,25 +100,53 @@ class UpdateManager:
             self._status = UpdateStatus.DOWNLOADING
             self._update_info = res
             latest_version = res.get("latest_version", "unknown")
-            dest_path = os.path.join(self._temp_dir, f"transcriptor4ai_v{latest_version}.exe")
 
-            success, msg = network.download_binary_stream(res["binary_url"], dest_path)
+            binary_url = res["binary_url"]
+            is_zip = binary_url.lower().endswith(".zip")
+            download_ext = ".zip" if is_zip else ".exe"
+            download_path = os.path.join(self._temp_dir, f"transcriptor4ai_v{latest_version}{download_ext}")
+
+            success, msg = network.download_binary_stream(binary_url, download_path)
             if not success:
                 logger.error(f"Background update download failed: {msg}")
                 self._status = UpdateStatus.ERROR
                 return
 
-            # 4. Cryptographic integrity check
+            # 4. Cryptographic integrity check (Verify the downloaded artifact)
             expected_sha = res.get("sha256")
             if expected_sha:
-                actual_sha = network._calculate_sha256(dest_path)
+                actual_sha = network._calculate_sha256(download_path)
                 if actual_sha.lower() != expected_sha.lower():
                     logger.error("Update integrity breach: Checksum mismatch. Discarding binary.")
                     self._status = UpdateStatus.ERROR
                     return
 
-            # 5. Readiness transition
-            self._pending_binary_path = dest_path
+            # 5. Extraction and Path Resolution
+            if is_zip:
+                logger.info("Unpacking compressed update package...")
+                try:
+                    with zipfile.ZipFile(download_path, 'r') as zf:
+                        exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
+                        if not exe_files:
+                            logger.error("Update failed: No executable found inside the ZIP archive.")
+                            self._status = UpdateStatus.ERROR
+                            return
+
+                        # Prioritize files containing 'transcriptor' or take the first executable found
+                        target_exe_name = next((f for f in exe_files if "transcriptor" in f.lower()), exe_files[0])
+                        zf.extract(target_exe_name, self._temp_dir)
+                        self._pending_binary_path = os.path.join(self._temp_dir, target_exe_name)
+
+                    # Cleanup the original zip
+                    os.remove(download_path)
+                except Exception as e:
+                    logger.error(f"Failed to extract update package: {e}")
+                    self._status = UpdateStatus.ERROR
+                    return
+            else:
+                self._pending_binary_path = download_path
+
+            # 6. Readiness transition
             self._status = UpdateStatus.READY
             logger.info(f"Update v{latest_version} is verified and ready for deployment.")
 

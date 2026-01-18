@@ -32,6 +32,7 @@ from transcriptor4ai.infra.fs import safe_mkdir
 
 logger = logging.getLogger(__name__)
 
+
 # -----------------------------------------------------------------------------
 # PUBLIC API
 # -----------------------------------------------------------------------------
@@ -149,6 +150,7 @@ def transcribe_code(
         },
     }
 
+
 # -----------------------------------------------------------------------------
 # INTERNAL HELPERS: PREPARATION
 # -----------------------------------------------------------------------------
@@ -216,6 +218,7 @@ def _initialize_execution_environment(
 
     return locks, output_paths
 
+
 # -----------------------------------------------------------------------------
 # INTERNAL HELPERS: TASK DISPATCHING
 # -----------------------------------------------------------------------------
@@ -246,7 +249,9 @@ def _execute_parallel_transcription(
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
         for root, dirs, files in os.walk(input_path_abs):
             if cancellation_event and cancellation_event.is_set():
+                logger.info("Filesystem traversal stopped by cancellation signal.")
                 break
+
             dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
             dirs.sort()
             files.sort()
@@ -318,6 +323,7 @@ def _execute_parallel_transcription(
                     rel_path=worker_res["rel_path"],
                     error=worker_res["error"]
                 ))
+
 
 # -----------------------------------------------------------------------------
 # INTERNAL HELPERS: FINALIZATION

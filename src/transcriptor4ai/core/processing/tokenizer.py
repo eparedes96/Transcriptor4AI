@@ -143,7 +143,6 @@ class TiktokenStrategy(TokenizerStrategy):
 # CONCRETE STRATEGIES: REMOTE SDKS
 # -----------------------------------------------------------------------------
 
-# ------ INICIO DE MODIFICACIÓN: REFACTORIZACIÓN ESTRATEGIA GOOGLE ------
 class GoogleApiStrategy(TokenizerStrategy):
     """
     Google Gemini strategy utilizing the new Google GenAI SDK.
@@ -308,8 +307,8 @@ class TokenizerService:
         """
         Determine strategy and calculate token count.
 
-        Handles special cases such as OCR/Vision models and provides
-        robust error handling to prevent pipeline failures.
+        Handles special cases and provides robust error handling
+        to prevent pipeline failures.
 
         Args:
             text: Raw input text.
@@ -323,10 +322,6 @@ class TokenizerService:
 
         model_lower = model.lower()
 
-        # Skip counting for Vision-based models where text context is not applicable
-        if "ocr" in model_lower or "vision" in model_lower:
-            logger.info("Vision model detected. Skipping token counting.")
-            return 0
 
         # Special handling for default model selection
         if "- default model -" in model_lower:

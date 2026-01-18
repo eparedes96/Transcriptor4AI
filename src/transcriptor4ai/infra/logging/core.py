@@ -1,75 +1,38 @@
 from __future__ import annotations
 
 """
-Logging Infrastructure and Configuration Engine.
+Logging Core Orchestrator.
 
-Implements a non-blocking, idempotent logging system designed for high-concurrency 
-environments. Utilizes a Queue-based architecture to decouple logging I/O from 
-the main execution thread, ensuring GUI responsiveness. Supports automatic 
-log rotation, multi-handler synchronization, and persistent diagnostics.
+Maintains the idempotent lifecycle of the logging subsystem. Implements a 
+non-blocking Queue architecture to ensure that I/O operations (file writing) 
+do not interfere with the performance of the main execution thread or the 
+responsiveness of the GUI.
 """
 
 import atexit
 import logging
 import os
-import sys
 import queue
-from dataclasses import dataclass
-from logging.handlers import RotatingFileHandler, QueueHandler, QueueListener
-from typing import Optional, Dict, List
+import sys
+from logging.handlers import QueueHandler, QueueListener
+from typing import List, Optional
 
 from transcriptor4ai.infra.fs import get_user_data_dir
+from transcriptor4ai.infra.logging.config import LoggingConfig, _LEVEL_MAP
+from transcriptor4ai.infra.logging.handlers import (
+    _tag_handler,
+    _is_our_handler,
+    _create_rotating_file_handler,
+)
 
-# -----------------------------------------------------------------------------
-# INTERNAL METADATA AND MAPPINGS
-# -----------------------------------------------------------------------------
-
+# Internal state flags for idempotency and lifecycle tracking
 _CONFIGURED_FLAG_ATTR: str = "_transcriptor4ai_configured"
-_HANDLER_TAG_ATTR: str = "_transcriptor4ai_handler"
 _QUEUE_LISTENER_ATTR: str = "_transcriptor4ai_queue_listener"
 
-_LEVEL_MAP: Dict[str, int] = {
-    "DEBUG": logging.DEBUG,
-    "INFO": logging.INFO,
-    "WARNING": logging.WARNING,
-    "WARN": logging.WARNING,
-    "ERROR": logging.ERROR,
-    "CRITICAL": logging.CRITICAL,
-}
 
-# -----------------------------------------------------------------------------
-# CONFIGURATION MODELS
-# -----------------------------------------------------------------------------
-
-@dataclass(frozen=True)
-class LoggingConfig:
-    """
-    Immutable specification for the logging subsystem initialization.
-
-    Attributes:
-        level: Minimum severity level to capture.
-        console: Flag to enable stderr stream output.
-        log_file: Optional absolute path for persistent file storage.
-        max_bytes: Maximum size per log segment before rotation.
-        backup_count: Number of historical log segments to preserve.
-        console_fmt: Structural format for terminal output.
-        file_fmt: Structural format for file entries.
-        datefmt: Chronological format for timestamp generation.
-    """
-    level: str = "INFO"
-    console: bool = True
-    log_file: Optional[str] = None
-
-    max_bytes: int = 2 * 1024 * 1024  # Default: 2MB
-    backup_count: int = 3
-
-    console_fmt: str = "%(levelname)s | %(message)s"
-    file_fmt: str = "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    datefmt: str = "%Y-%m-%d %H:%M:%S"
-
-# -----------------------------------------------------------------------------
-# PUBLIC API: CONFIGURATION AND ACCESS
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# PUBLIC API
+# ==============================================================================
 
 def get_default_gui_log_path(
         app_name: str = "Transcriptor4AI",
@@ -223,35 +186,16 @@ def get_recent_logs(n_lines: int = 100) -> str:
     except Exception as e:
         return f"Error retrieving logs: {e}"
 
-# -----------------------------------------------------------------------------
-# PRIVATE HELPERS: STATE AND INFRASTRUCTURE
-# -----------------------------------------------------------------------------
+
+# ==============================================================================
+# PRIVATE HELPERS
+# ==============================================================================
 
 def _parse_level(level: str) -> int:
     """Convert a string-based logging level to its numeric constant."""
     if not level:
         return logging.INFO
     return _LEVEL_MAP.get(str(level).strip().upper(), logging.INFO)
-
-
-def _ensure_parent_dir(path: str) -> None:
-    """Safely create the parent directory hierarchy for a target file."""
-    parent = os.path.dirname(os.path.abspath(path))
-    if parent and not os.path.exists(parent):
-        os.makedirs(parent, exist_ok=True)
-
-
-def _tag_handler(handler: logging.Handler) -> None:
-    """Mark a handler as an internally-managed application handler."""
-    try:
-        setattr(handler, _HANDLER_TAG_ATTR, True)
-    except Exception:
-        pass
-
-
-def _is_our_handler(handler: logging.Handler) -> bool:
-    """Verify if a handler was initialized by this diagnostic module."""
-    return bool(getattr(handler, _HANDLER_TAG_ATTR, False))
 
 
 def _remove_our_handlers(root: logging.Logger) -> None:
@@ -288,30 +232,3 @@ def _safe_stop_listener(listener: Optional[QueueListener]) -> None:
             listener.stop()
     except Exception:
         pass
-
-
-def _create_rotating_file_handler(
-        log_file: str,
-        level_int: int,
-        formatter: logging.Formatter,
-        max_bytes: int,
-        backup_count: int,
-) -> Optional[RotatingFileHandler]:
-    """
-    Initialize a RotatingFileHandler with robust error handling.
-    """
-    try:
-        _ensure_parent_dir(log_file)
-        fh = RotatingFileHandler(
-            log_file,
-            maxBytes=int(max_bytes),
-            backupCount=int(backup_count),
-            encoding="utf-8",
-        )
-        fh.setLevel(level_int)
-        fh.setFormatter(formatter)
-        _tag_handler(fh)
-        return fh
-    except Exception as e:
-        sys.stderr.write(f"WARNING: Diagnostic persistence failure at '{log_file}': {e}\n")
-        return None

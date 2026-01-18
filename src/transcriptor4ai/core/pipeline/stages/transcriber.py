@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Parallel Transcription Orchestrator.
 
-Manages the multi-threaded scanning and transcription lifecycle. It coordinates
-filesystem traversal, pattern-based filtering, thread-safe concurrent writing 
-to shared output files, and error aggregation.
+Manages the multi-threaded transcription lifecycle. It coordinates 
+initialization, concurrent task dispatching via the Scanner service, 
+thread-safe writing, and final error aggregation.
 """
 
 import logging
@@ -14,28 +14,23 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
-from transcriptor4ai.core.pipeline.components.filters import (
-    compile_patterns,
-    default_extensions,
-    default_exclude_patterns,
-    default_include_patterns,
-    load_gitignore_patterns,
-    matches_any,
-    matches_include,
-    is_resource_file,
-    is_test
-)
-from transcriptor4ai.core.pipeline.stages.worker import process_file_task
+from transcriptor4ai.core.pipeline.components.filters import default_extensions
 from transcriptor4ai.core.pipeline.components.writer import initialize_output_file
+from transcriptor4ai.core.pipeline.stages.worker import process_file_task
+from transcriptor4ai.core.services.scanner import (
+    finalize_error_reporting,
+    prepare_filtering_rules,
+    yield_project_files,
+)
 from transcriptor4ai.domain.transcription_models import TranscriptionError
 from transcriptor4ai.infra.fs import safe_mkdir
 
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # PUBLIC API
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def transcribe_code(
         input_path: str,
@@ -59,9 +54,8 @@ def transcribe_code(
     """
     Execute parallel transcription of project files into categorized text files.
 
-    This function acts as the high-level orchestrator for the transcription stage.
-    It prepares filtering rules, initializes the thread-safe environment,
-    dispatches tasks to a worker pool, and finalizes the execution report.
+    Acts as the high-level orchestrator. It prepares the environment,
+    delegates file discovery to the Scanner service, and manages worker threads.
 
     Args:
         input_path: Source directory to scan.
@@ -85,10 +79,10 @@ def transcribe_code(
     Returns:
         Dict[str, Any]: Execution summary containing status, generated paths, and counters.
     """
-    logger.info(f"Starting parallel transcription scan in: {input_path}")
+    logger.info(f"Initiating parallel transcription in: {input_path}")
 
-    # 1. Compile and aggregate filtering rules
-    include_rx, exclude_rx = _prepare_filtering_rules(
+    # 1. Delegate filtering rule preparation to Scanner
+    include_rx, exclude_rx = prepare_filtering_rules(
         input_path, include_patterns, exclude_patterns, respect_gitignore
     )
 
@@ -98,7 +92,6 @@ def transcribe_code(
         error_output_path, process_modules, process_tests, process_resources
     )
 
-    # Initialize results container
     results: Dict[str, Any] = {
         "processed": 0,
         "skipped": 0,
@@ -108,7 +101,7 @@ def transcribe_code(
         "errors": []
     }
 
-    # 3. Perform concurrent filesystem traversal and processing
+    # 3. Perform concurrent processing using the Scanner's generator
     _execute_parallel_transcription(
         input_path, extensions or default_extensions(), include_rx, exclude_rx,
         process_modules, process_tests, process_resources,
@@ -116,18 +109,17 @@ def transcribe_code(
         locks, output_paths, results, cancellation_event
     )
 
-    # Check if process was aborted
     if cancellation_event and cancellation_event.is_set():
         logger.warning("Parallel Transcription aborted by user signal.")
         return {"ok": False, "error": "Operation cancelled by user."}
 
-    # 4. Persistence of errors and final summary building
-    actual_error_path = _finalize_error_reporting(
+    # 4. Delegate final reporting to Scanner
+    actual_error_path = finalize_error_reporting(
         save_error_log, error_output_path, results["errors"]
     )
 
     logger.info(
-        f"Parallel Transcription finished. Processed: {results['processed']}. "
+        f"Parallel Transcription finalized. Processed: {results['processed']}. "
         f"Errors: {len(results['errors'])}"
     )
 
@@ -151,32 +143,9 @@ def transcribe_code(
     }
 
 
-# -----------------------------------------------------------------------------
-# INTERNAL HELPERS: PREPARATION
-# -----------------------------------------------------------------------------
-
-def _prepare_filtering_rules(
-        input_path: str,
-        include_patterns: Optional[List[str]],
-        exclude_patterns: Optional[List[str]],
-        respect_gitignore: bool
-) -> Tuple[List[Any], List[Any]]:
-    """
-    Compile and aggregate all patterns into actionable regex objects.
-    """
-    input_path_abs = os.path.abspath(input_path)
-
-    final_includes = include_patterns if include_patterns is not None else default_include_patterns()
-    final_exclusions = list(exclude_patterns) if exclude_patterns is not None else default_exclude_patterns()
-
-    if respect_gitignore:
-        git_patterns = load_gitignore_patterns(input_path_abs)
-        if git_patterns:
-            logger.debug(f"Loaded {len(git_patterns)} patterns from .gitignore")
-            final_exclusions.extend(git_patterns)
-
-    return compile_patterns(final_includes), compile_patterns(final_exclusions)
-
+# ==============================================================================
+# PRIVATE HELPERS
+# ==============================================================================
 
 def _initialize_execution_environment(
         modules_path: str,
@@ -187,9 +156,7 @@ def _initialize_execution_environment(
         process_tests: bool,
         process_resources: bool
 ) -> Tuple[Dict[str, threading.Lock], Dict[str, str]]:
-    """
-    Initialize output directory structure, file headers, and synchronization locks.
-    """
+    """Initialize output directory structure, file headers, and thread locks."""
     for p in [modules_path, tests_path, resources_path, error_path]:
         safe_mkdir(os.path.dirname(os.path.abspath(p)))
 
@@ -208,7 +175,6 @@ def _initialize_execution_environment(
         "error": error_path
     }
 
-    # Prepare files with their respective domain headers
     if process_modules:
         initialize_output_file(modules_path, "SCRIPTS/MODULES:")
     if process_tests:
@@ -218,10 +184,6 @@ def _initialize_execution_environment(
 
     return locks, output_paths
 
-
-# -----------------------------------------------------------------------------
-# INTERNAL HELPERS: TASK DISPATCHING
-# -----------------------------------------------------------------------------
 
 def _execute_parallel_transcription(
         input_path: str,
@@ -239,71 +201,40 @@ def _execute_parallel_transcription(
         results: Dict[str, Any],
         cancellation_event: Optional[threading.Event] = None
 ) -> None:
-    """
-    Walk the filesystem and dispatch transcription tasks to the ThreadPoolExecutor.
-    """
-    input_path_abs = os.path.abspath(input_path)
+    """Consumes the Scanner's generator and dispatches tasks to the worker pool."""
     tasks = []
 
-    # Prune directories in-place for os.walk efficiency
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
-        for root, dirs, files in os.walk(input_path_abs):
+        # Use the decoupled Scanner service to find files
+        for file_data in yield_project_files(
+            input_path=input_path,
+            extensions=extensions,
+            include_rx=include_rx,
+            exclude_rx=exclude_rx,
+            process_modules=process_modules,
+            process_tests=process_tests,
+            process_resources=process_resources
+        ):
             if cancellation_event and cancellation_event.is_set():
-                logger.info("Filesystem traversal stopped by cancellation signal.")
                 break
 
-            dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
-            dirs.sort()
-            files.sort()
+            tasks.append(executor.submit(
+                process_file_task,
+                file_path=file_data["file_path"],
+                rel_path=file_data["rel_path"],
+                ext=file_data["ext"],
+                file_name=file_data["file_name"],
+                process_modules=process_modules,
+                process_tests=process_tests,
+                process_resources=process_resources,
+                enable_sanitizer=enable_sanitizer,
+                mask_user_paths=mask_user_paths,
+                minify_output=minify_output,
+                locks=locks,
+                output_paths=output_paths
+            ))
 
-            for file_name in files:
-                # 1. Global Exclusion check
-                if matches_any(file_name, exclude_rx):
-                    results["skipped"] += 1
-                    continue
-
-                # 2. Inclusion whitelist check
-                if not matches_include(file_name, include_rx):
-                    results["skipped"] += 1
-                    continue
-
-                _, ext = os.path.splitext(file_name)
-                should_process = False
-
-                # 3. Mode-based classification check
-                if process_resources and is_resource_file(file_name):
-                    should_process = True
-                elif process_tests and is_test(file_name):
-                    should_process = True
-                elif process_modules:
-                    if ext in extensions or file_name in extensions:
-                        should_process = True
-
-                if not should_process:
-                    results["skipped"] += 1
-                    continue
-
-                file_path = os.path.join(root, file_name)
-                rel_path = os.path.relpath(file_path, input_path_abs)
-
-                # Dispatch atomic file processing to worker threads
-                tasks.append(executor.submit(
-                    process_file_task,
-                    file_path=file_path,
-                    rel_path=rel_path,
-                    ext=ext,
-                    file_name=file_name,
-                    process_modules=process_modules,
-                    process_tests=process_tests,
-                    process_resources=process_resources,
-                    enable_sanitizer=enable_sanitizer,
-                    mask_user_paths=mask_user_paths,
-                    minify_output=minify_output,
-                    locks=locks,
-                    output_paths=output_paths
-                ))
-
-        # Collect and aggregate results as they complete
+        # Synchronize and aggregate worker results
         for future in as_completed(tasks):
             if cancellation_event and cancellation_event.is_set():
                 continue
@@ -323,30 +254,3 @@ def _execute_parallel_transcription(
                     rel_path=worker_res["rel_path"],
                     error=worker_res["error"]
                 ))
-
-
-# -----------------------------------------------------------------------------
-# INTERNAL HELPERS: FINALIZATION
-# -----------------------------------------------------------------------------
-
-def _finalize_error_reporting(
-        save_error_log: bool,
-        error_output_path: str,
-        errors: List[TranscriptionError]
-) -> str:
-    """
-    Persist collected execution errors to a dedicated log file.
-    """
-    actual_error_path = ""
-    if save_error_log and errors:
-        try:
-            with open(error_output_path, "w", encoding="utf-8") as f:
-                f.write("ERRORS:\n")
-                for err_item in errors:
-                    f.write("-" * 80 + "\n")
-                    f.write(f"{err_item.rel_path}\n")
-                    f.write(f"{err_item.error}\n")
-            actual_error_path = error_output_path
-        except OSError as e:
-            logger.error(f"Failed to save error log: {e}")
-    return actual_error_path

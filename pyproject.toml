@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transcriptor4ai"
-version = "2.0.0"
+version = "2.0.1"
 description = "High-performance context extraction engine featuring parallel streaming, security sanitization, and seamless background OTA updates."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -77,6 +77,10 @@ module = "google.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "google.genai"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
 module = "anthropic"
 ignore_missing_imports = true
 
@@ -119,7 +123,7 @@ indent-style = "space"
 # =============================================================================
 [tool.semantic_release]
 version_variable = [
-    "src/transcriptor4ai/domain/config.py:CURRENT_CONFIG_VERSION",
+    "src/transcriptor4ai/domain/constants.py:CURRENT_CONFIG_VERSION",
     "pyproject.toml:version"
 ]
 branch = "main"

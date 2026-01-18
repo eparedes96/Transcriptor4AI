@@ -1,7 +1,7 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-2.0.0-orange.svg)]()
+[![Version](https://img.shields.io/badge/version-2.0.1-orange.svg)]()
 [![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()

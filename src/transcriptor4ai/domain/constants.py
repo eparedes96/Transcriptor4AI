@@ -14,7 +14,7 @@ from typing import Dict, List
 # SYSTEM VERSIONING
 # -----------------------------------------------------------------------------
 
-CURRENT_CONFIG_VERSION = "2.0.0"
+CURRENT_CONFIG_VERSION = "2.0.1"
 DEFAULT_OUTPUT_PREFIX = "transcription"
 DEFAULT_MODEL_KEY = "- Default Model -"
 

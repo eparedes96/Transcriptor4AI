@@ -35,7 +35,7 @@ def test_get_user_data_dir_windows() -> None:
             with patch("os.makedirs"):
                 path = get_user_data_dir()
                 assert "Transcriptor4AI" in path
-                assert path.startswith(os.path.abspath(mock_appdata))
+                assert path.lower().startswith(os.path.abspath(mock_appdata).lower())
 
 
 def test_get_user_data_dir_unix() -> None:
@@ -46,7 +46,7 @@ def test_get_user_data_dir_unix() -> None:
             with patch("os.makedirs"):
                 path = get_user_data_dir()
                 assert ".transcriptor4ai" in path
-                assert path.startswith(mock_home)
+                assert Path(path).as_posix().endswith("/home/testuser/.transcriptor4ai")
 
 
 def test_normalize_path_expansion() -> None:
@@ -54,12 +54,12 @@ def test_normalize_path_expansion() -> None:
     with patch.dict(os.environ, {"TEST_VAR": "my_folder"}):
         # Test env var expansion
         path = normalize_path("$TEST_VAR/sub", fallback=".")
-        assert path.endswith(os.path.join("my_folder", "sub"))
+        assert path.lower().endswith(os.path.join("my_folder", "sub").lower())
 
         # Test home expansion (~)
         with patch("os.path.expanduser", return_value="/home/user"):
             path = normalize_path("~/code", fallback=".")
-            assert "code" in path
+            assert "code" in Path(path).as_posix()
 
 
 # -----------------------------------------------------------------------------

@@ -66,7 +66,7 @@ def test_transcribe_code_full_integration(tmp_path: Path, complex_project: Path)
     # Verify file content
     mod_content = (out_dir / "mod.txt").read_text(encoding="utf-8")
     assert "class Core" in mod_content
-    assert "[[REDACTED_SENSITIVE]]" in mod_content  # Sanitizer check
+    assert "[[REDACTED_SECRET]]" in mod_content
 
     test_content = (out_dir / "test.txt").read_text(encoding="utf-8")
     assert "def test_core" in test_content

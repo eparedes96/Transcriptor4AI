@@ -49,7 +49,7 @@ def test_wait_for_pid_returns_false_on_timeout():
     """If process persists, loop should exit after timeout."""
     with patch("os.kill", return_value=None):
         with patch("time.time") as mock_time:
-            mock_time.side_effect = [1000, 1050]
+            mock_time.side_effect = [1000, 1000, 2000]
 
             # Using real sleep mock to break loop if needed, but side_effect on time is safer
             result = wait_for_pid(12345, timeout=10)

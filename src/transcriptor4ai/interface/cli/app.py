@@ -39,6 +39,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     Returns:
         int: Process exit code (0 for success, non-zero for failure).
     """
+    if sys.platform == "win32":
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8")
+
     # 1. Argument parsing phase
     parser = cli_args.build_parser()
     args = parser.parse_args(argv)

@@ -53,6 +53,7 @@ def transcribe_code(
         enable_sanitizer: bool = True,
         mask_user_paths: bool = True,
         minify_output: bool = False,
+        cancellation_event: Optional[threading.Event] = None
 ) -> Dict[str, Any]:
     """
     Execute parallel transcription of project files into categorized text files.
@@ -78,6 +79,7 @@ def transcribe_code(
         enable_sanitizer: Enable secret redaction.
         mask_user_paths: Enable local path anonymization.
         minify_output: Enable code minification.
+        cancellation_event: Optional event to signal process termination.
 
     Returns:
         Dict[str, Any]: Execution summary containing status, generated paths, and counters.
@@ -110,8 +112,13 @@ def transcribe_code(
         input_path, extensions or default_extensions(), include_rx, exclude_rx,
         process_modules, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output,
-        locks, output_paths, results
+        locks, output_paths, results, cancellation_event
     )
+
+    # Check if process was aborted
+    if cancellation_event and cancellation_event.is_set():
+        logger.warning("Parallel Transcription aborted by user signal.")
+        return {"ok": False, "error": "Operation cancelled by user."}
 
     # 4. Persistence of errors and final summary building
     actual_error_path = _finalize_error_reporting(
@@ -226,7 +233,8 @@ def _execute_parallel_transcription(
         minify_output: bool,
         locks: Dict[str, threading.Lock],
         output_paths: Dict[str, str],
-        results: Dict[str, Any]
+        results: Dict[str, Any],
+        cancellation_event: Optional[threading.Event] = None
 ) -> None:
     """
     Walk the filesystem and dispatch transcription tasks to the ThreadPoolExecutor.
@@ -237,6 +245,8 @@ def _execute_parallel_transcription(
     # Prune directories in-place for os.walk efficiency
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
         for root, dirs, files in os.walk(input_path_abs):
+            if cancellation_event and cancellation_event.is_set():
+                break
             dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
             dirs.sort()
             files.sort()
@@ -290,6 +300,9 @@ def _execute_parallel_transcription(
 
         # Collect and aggregate results as they complete
         for future in as_completed(tasks):
+            if cancellation_event and cancellation_event.is_set():
+                continue
+
             worker_res = future.result()
             if worker_res["ok"]:
                 results["processed"] += 1

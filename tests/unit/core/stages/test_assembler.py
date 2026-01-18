@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from unittest.mock import patch, MagicMock
 
+from transcriptor4ai.domain.config import get_default_config
 from transcriptor4ai.core.pipeline.stages.assembler import assemble_and_finalize
 
 
@@ -45,12 +46,13 @@ def env_context(tmp_path: Path) -> dict:
 
 def test_assemble_and_finalize_merging(env_context: dict) -> None:
     """TC-01: Verify that staging files are merged correctly into the unified file."""
-    cfg = {
+    cfg = get_default_config()
+    cfg.update({
         "create_unified_file": True,
         "create_individual_files": True,
         "generate_tree": True,
         "target_model": "GPT-4o"
-    }
+    })
     trans_res = {
         "ok": True,
         "generated": {"modules": env_context["paths"]["modules"]},
@@ -73,7 +75,11 @@ def test_assemble_and_finalize_merging(env_context: dict) -> None:
 
 def test_assemble_dry_run_no_move(env_context: dict) -> None:
     """TC-03: Verify that dry_run skips moving files from staging to final."""
-    cfg = {"create_unified_file": True, "create_individual_files": True}
+    cfg = get_default_config()
+    cfg.update({
+        "create_unified_file": True,
+        "create_individual_files": True
+    })
     trans_res = {"ok": True, "generated": {}, "counters": {}}
 
     result = assemble_and_finalize(cfg, trans_res, [], env_context, dry_run=True)

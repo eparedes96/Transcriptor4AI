@@ -82,8 +82,8 @@ def test_worker_identifies_and_locks_tests(
         mock_paths: Dict[str, str]
 ):
     """Verify a test file is classified as 'test' and uses the test lock."""
-    with patch("transcriptor4ai.core.components.worker.stream_file_content") as mock_stream, \
-            patch("transcriptor4ai.core.components.worker.append_entry") as mock_append:
+    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream, \
+            patch("transcriptor4ai.core.pipeline.stages.worker.append_entry") as mock_append:
         mock_stream.return_value = iter(["line1"])
 
         result = process_file_task(
@@ -121,7 +121,7 @@ def test_worker_handles_io_error_gracefully(
     If reading the file raises OSError (e.g. permission denied),
     the worker should return a failure result, NOT crash.
     """
-    with patch("transcriptor4ai.core.components.worker.stream_file_content") as mock_stream:
+    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream:
         # Simulate OS Permission Error
         mock_stream.side_effect = OSError("Permission denied")
 
@@ -150,8 +150,8 @@ def test_worker_identifies_resources(
         mock_paths: Dict[str, str]
 ):
     """Verify resource files (e.g., README.md) are routed correctly."""
-    with patch("transcriptor4ai.core.components.worker.stream_file_content"), \
-            patch("transcriptor4ai.core.components.worker.append_entry"):
+    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content"), \
+            patch("transcriptor4ai.core.pipeline.stages.worker.append_entry"):
         result = process_file_task(
             file_path="/README.md",
             rel_path="README.md",

@@ -10,7 +10,8 @@ Verifies:
 
 from unittest.mock import patch
 import pytest
-from transcriptor4ai.core.processing.tokenizer import count_tokens, HeuristicStrategy
+from transcriptor4ai.core.processing.tokenizer import count_tokens
+from transcriptor4ai.core.processing.strategies.heuristic import HeuristicStrategy
 
 
 def test_token_counter_empty():

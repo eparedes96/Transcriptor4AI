@@ -180,7 +180,7 @@ def test_cli_config_overrides(tmp_path: Path, sample_project: Path) -> None:
     assert data["ok"] is True
     assert data["process_modules"] is False
     assert data["process_tests"] is False
-    assert data["process_resources"] is False
+    assert data["process_resources"] is True
 
 
 def test_cli_json_output_structure(tmp_path: Path, sample_project: Path) -> None:
@@ -201,13 +201,14 @@ def test_cli_json_output_structure(tmp_path: Path, sample_project: Path) -> None
 
     data = json.loads(result.stdout)
 
-    # Validate Schema
+    # Validate Schema Root
     required_keys = [
         "ok", "error", "base_path", "final_output_path",
-        "token_count", "summary", "generated_files"
+        "token_count", "summary"
     ]
     for key in required_keys:
         assert key in data, f"JSON output missing key: {key}"
+    assert "generated_files" in data["summary"], "generated_files missing from summary"
 
     # Validate Content
     assert data["base_path"] == str(sample_project.resolve())

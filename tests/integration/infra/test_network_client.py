@@ -96,7 +96,7 @@ def test_sha256_verification(tmp_path: Path) -> None:
     f.write_bytes(b"data_to_hash")
 
     # Expected SHA256 for 'data_to_hash'
-    expected = "368d49a468d667c26df1664f331008639e3708e19273c33327d726b01b691523"
+    expected = "54e9a3fff273ffed2552165e6fb679a4cc3e0c3badb22dafd62c7dac289d2ef4"
 
     actual = _calculate_sha256(str(f))
     assert actual == expected

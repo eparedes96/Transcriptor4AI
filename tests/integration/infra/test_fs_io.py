@@ -45,8 +45,8 @@ def test_get_user_data_dir_unix() -> None:
         with patch("os.path.expanduser", return_value=mock_home):
             with patch("os.makedirs"):
                 path = get_user_data_dir()
-                assert ".transcriptor4ai" in path
-                assert Path(path).as_posix().endswith("/home/testuser/.transcriptor4ai")
+                normalized_path = path.replace("\\", "/")
+                assert normalized_path.endswith("/home/testuser/.transcriptor4ai")
 
 
 def test_normalize_path_expansion() -> None:
@@ -59,7 +59,7 @@ def test_normalize_path_expansion() -> None:
         # Test home expansion (~)
         with patch("os.path.expanduser", return_value="/home/user"):
             path = normalize_path("~/code", fallback=".")
-            assert "code" in Path(path).as_posix()
+            assert "code" in Path(path).parts
 
 
 # -----------------------------------------------------------------------------

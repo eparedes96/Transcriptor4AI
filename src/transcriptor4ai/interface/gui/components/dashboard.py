@@ -15,7 +15,6 @@ import customtkinter as ctk
 
 from transcriptor4ai.utils.i18n import i18n
 
-
 # ==============================================================================
 # DASHBOARD VIEW COMPONENT
 # ==============================================================================

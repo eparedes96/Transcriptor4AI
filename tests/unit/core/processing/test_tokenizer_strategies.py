@@ -9,13 +9,12 @@ deterministic, and do not require active network connections.
 """
 
 from unittest.mock import MagicMock, patch
-import pytest
 
-from transcriptor4ai.core.processing.strategies.heuristic import HeuristicStrategy
-from transcriptor4ai.core.processing.strategies.openai import TiktokenStrategy
 from transcriptor4ai.core.processing.strategies.anthropic import AnthropicApiStrategy
 from transcriptor4ai.core.processing.strategies.google import GoogleApiStrategy
-from transcriptor4ai.core.processing.strategies.local import MistralStrategy, TransformersStrategy
+from transcriptor4ai.core.processing.strategies.heuristic import HeuristicStrategy
+from transcriptor4ai.core.processing.strategies.local import MistralStrategy
+from transcriptor4ai.core.processing.strategies.openai import TiktokenStrategy
 
 
 def test_heuristic_strategy_math() -> None:
@@ -42,6 +41,7 @@ def test_tiktoken_strategy_encoding(mock_tiktoken: MagicMock) -> None:
 
 
 @patch("transcriptor4ai.core.processing.strategies.anthropic.anthropic")
+@patch("transcriptor4ai.core.processing.strategies.anthropic.ANTHROPIC_AVAILABLE", True)
 @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test-key"})
 def test_anthropic_strategy_api(mock_anthropic: MagicMock) -> None:
     """Verify Anthropic strategy maps models and extracts input_tokens from response."""
@@ -59,6 +59,7 @@ def test_anthropic_strategy_api(mock_anthropic: MagicMock) -> None:
 
 
 @patch("transcriptor4ai.core.processing.strategies.google.genai", create=True)
+@patch("transcriptor4ai.core.processing.strategies.google.GOOGLE_AVAILABLE", True)
 @patch.dict("os.environ", {"GOOGLE_API_KEY": "ai-test-key"})
 def test_google_strategy_api(mock_genai: MagicMock) -> None:
     """Verify Google strategy utilizes the GenAI client correctly."""
@@ -79,6 +80,7 @@ def test_google_strategy_api(mock_genai: MagicMock) -> None:
 
 
 @patch("transcriptor4ai.core.processing.strategies.local.MistralTokenizer")
+@patch("transcriptor4ai.core.processing.strategies.local.MISTRAL_AVAILABLE", True)
 def test_mistral_strategy_local(mock_tokenizer_cls: MagicMock) -> None:
     """Verify Mistral strategy calls the local Tekken tokenizer."""
     mock_tokenizer = MagicMock()

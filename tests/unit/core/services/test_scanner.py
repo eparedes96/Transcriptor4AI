@@ -7,10 +7,9 @@ Verifies the optimized project walking logic, regex-based filtering,
 and correct classification of files into processing categories.
 """
 
-import os
 import re
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

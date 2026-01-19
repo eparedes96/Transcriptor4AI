@@ -9,7 +9,8 @@ Verifies the Strategy Pattern implementation:
 3. Proper handling of default model placeholders.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
 import pytest
 
 from transcriptor4ai.core.processing.tokenizer import TokenizerService, count_tokens
@@ -45,7 +46,8 @@ def test_tokenizer_service_fallback_on_failure(service: TokenizerService) -> Non
 
 def test_tokenizer_service_default_model_handling(service: TokenizerService) -> None:
     """Verify that the '- Default Model -' string triggers Tiktoken/GPT logic."""
-    with patch("transcriptor4ai.core.processing.strategies.openai.TiktokenStrategy.count") as mock_tik:
+    target = "transcriptor4ai.core.processing.strategies.openai.TiktokenStrategy.count"
+    with patch(target) as mock_tik:
         mock_tik.return_value = 100
         count = service.count("some text", "- Default Model -")
         assert count == 100

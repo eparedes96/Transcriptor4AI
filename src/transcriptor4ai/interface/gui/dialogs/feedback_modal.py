@@ -12,7 +12,7 @@ import logging
 import platform
 import threading
 import tkinter.messagebox as mb
-from typing import Tuple, Optional
+from typing import Tuple
 
 import customtkinter as ctk
 
@@ -77,7 +77,12 @@ def show_feedback_window(parent: ctk.CTk) -> None:
     msg.pack(fill="x", pady=(0, 10))
 
     # Privacy/Diagnostic Control
-    chk_logs = ctk.CTkCheckBox(content_frame, text="Include recent logs", onvalue=True, offvalue=False)
+    chk_logs = ctk.CTkCheckBox(
+        content_frame,
+        text="Include recent logs",
+        onvalue=True,
+        offvalue=False
+    )
     chk_logs.select()
     chk_logs.pack(anchor="w", pady=(0, 20))
 
@@ -94,7 +99,8 @@ def show_feedback_window(parent: ctk.CTk) -> None:
         btn_send.configure(state="normal")
 
         if success:
-            mb.showinfo(i18n.t("gui.dialogs.success_title"), "Thank you! Your feedback has been sent.")
+            success_msg = "Thank you! Your feedback has been sent."
+            mb.showinfo(i18n.t("gui.dialogs.success_title"), success_msg)
             toplevel.destroy()
         else:
             status_lbl.configure(text=f"Error: {message}", text_color="#E04F5F")

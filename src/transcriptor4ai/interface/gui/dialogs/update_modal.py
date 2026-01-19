@@ -16,6 +16,7 @@ import customtkinter as ctk
 
 from transcriptor4ai.utils.i18n import i18n
 
+
 # -----------------------------------------------------------------------------
 # PUBLIC DIALOG API
 # -----------------------------------------------------------------------------
@@ -47,15 +48,18 @@ def show_update_prompt_modal(
         bool: True if the user chooses automatic background update, False otherwise.
     """
     # Use system-standard prompt for high-confidence updates
+    message = f"Version v{latest_version} is available.\n\nDownload and install now?"
+
     if not mb.askyesno(
             i18n.t("gui.dialogs.update_title"),
-            f"Version v{latest_version} is available.\n\nDownload and install now?"
+            message
     ):
         return False
 
     # Check for background download capability
     if binary_url and dest_path:
         return True
-    else:
-        webbrowser.open(browser_url)
-        return False
+
+    # Fallback to browser if parameters are missing
+    webbrowser.open(browser_url)
+    return False

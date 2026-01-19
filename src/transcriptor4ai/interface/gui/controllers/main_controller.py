@@ -228,7 +228,13 @@ class AppController:
         # Dispatch execution to background thread to maintain GUI responsiveness
         threading.Thread(
             target=threads.run_pipeline_task,
-            args=(self.config, overwrite, dry_run, self._on_process_complete, self._cancellation_event),
+            args=(
+                self.config,
+                overwrite,
+                dry_run,
+                self._on_process_complete,
+                self._cancellation_event
+            ),
             daemon=True
         ).start()
 
@@ -288,7 +294,11 @@ class AppController:
         self.config["target_model"] = new_model
         self.on_model_selected(new_model)
 
-    def _filter_models_by_provider(self, provider: str, preserve_selection: Optional[str] = None) -> None:
+    def _filter_models_by_provider(
+            self,
+            provider: str,
+            preserve_selection: Optional[str] = None
+    ) -> None:
         """Filter the model ComboBox values based on selected provider."""
         models = sorted([n for n, d in const.AI_MODELS.items() if d.get("provider") == provider])
 
@@ -314,7 +324,9 @@ class AppController:
     def on_tree_toggled(self) -> None:
         """Dynamic UI visibility logic for AST analysis options."""
         if self.dashboard_view.sw_tree.get():
-            self.dashboard_view.frame_ast.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            self.dashboard_view.frame_ast.grid(
+                row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10)
+            )
         else:
             self.dashboard_view.frame_ast.grid_forget()
 

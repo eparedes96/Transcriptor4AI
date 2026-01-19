@@ -10,16 +10,17 @@ threads while maintaining communication via thread-safe callbacks.
 """
 
 import logging
-import threading
 import os
+import threading
 import zipfile
-from typing import Dict, Any, Callable, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from transcriptor4ai.core.pipeline.engine import run_pipeline
 from transcriptor4ai.domain import constants as const
 from transcriptor4ai.infra import network
 
 logger = logging.getLogger(__name__)
+
 
 # -----------------------------------------------------------------------------
 # PIPELINE EXECUTION WORKERS
@@ -59,7 +60,9 @@ def run_pipeline_task(
         )
 
         if cancellation_event and cancellation_event.is_set():
-            logger.info("Pipeline Thread: Execution completed but results discarded due to cancellation.")
+            logger.info(
+                "Pipeline Thread: Execution completed but results discarded due to cancellation."
+            )
             return
 
         # Synchronize results with the UI controller
@@ -68,6 +71,7 @@ def run_pipeline_task(
     except Exception as e:
         logger.critical(f"Pipeline Thread: Critical failure detected: {e}", exc_info=True)
         on_complete(e)
+
 
 # -----------------------------------------------------------------------------
 # NETWORK AND UPDATE WORKERS
@@ -124,7 +128,10 @@ def download_update_task(
                 if not exe_files:
                     raise ValueError("Malformed update package: Executable missing.")
 
-                target_exe = next((f for f in exe_files if "transcriptor" in f.lower()), exe_files[0])
+                target_exe = next(
+                    (f for f in exe_files if "transcriptor" in f.lower()),
+                    exe_files[0]
+                )
 
                 zf.extract(target_exe, base_dir)
                 extracted_full_path = os.path.join(base_dir, target_exe)
@@ -149,6 +156,7 @@ def download_update_task(
             msg = f"Extraction failure: {e}"
 
     on_complete((success, msg))
+
 
 # -----------------------------------------------------------------------------
 # TELEMETRY AND REPORTING WORKERS

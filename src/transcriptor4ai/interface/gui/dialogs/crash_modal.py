@@ -72,8 +72,13 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     textbox.configure(state="disabled")
     textbox.pack(fill="both", expand=True, padx=20, pady=10)
 
-    # User Qualitative Context
-    ctk.CTkLabel(toplevel, text="What were you doing? (Optional):", anchor="w").pack(fill="x", padx=20)
+    # User Qualitative Context (Formatted to < 100 chars)
+    ctk.CTkLabel(
+        toplevel,
+        text="What were you doing? (Optional):",
+        anchor="w"
+    ).pack(fill="x", padx=20)
+
     user_comment = ctk.CTkTextbox(toplevel, height=60)
     user_comment.pack(fill="x", padx=20, pady=(0, 10))
 

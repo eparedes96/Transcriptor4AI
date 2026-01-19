@@ -1,9 +1,10 @@
 # Transcriptor4AI
 
 [![Python Version](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-2.0.1-orange.svg)]()
-[![Status](https://img.shields.io/badge/status-stable-green.svg)]()
+[![Version](https://img.shields.io/badge/version-2.0.2-orange.svg)]()
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Checked with mypy](https://img.shields.io/badge/mypy-checked-blue.svg)](http://mypy-lang.org/)
+[![Status](https://img.shields.io/badge/status-stable-green.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)]()
 
 **Transcriptor4AI** is a professional Context Engineering Engine designed to transform complex local codebases into optimized, secure, and structured input for Large Language Models (LLMs) like **GPT-4o**, **Claude 3.5**, or **Gemini 1.5**.

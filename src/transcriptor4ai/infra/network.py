@@ -3,9 +3,10 @@ from __future__ import annotations
 """
 Network Communication Infrastructure.
 
-Orchestrates external HTTP interactions, including remote version 
-synchronization via GitHub API, binary stream acquisition for OTA 
-updates, and secure transmission of telemetry and crash reports.
+Orchestrates external HTTP interactions, including remote version
+synchronization via GitHub API, binary stream acquisition for OTA
+updates, real-time pricing synchronization, and secure transmission 
+of telemetry and crash reports.
 """
 
 import hashlib
@@ -25,7 +26,8 @@ GITHUB_REPO = "Transcriptor4AI"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 TIMEOUT = 10
-USER_AGENT = "Transcriptor4AI-Client/2.0.0"
+PRICING_TIMEOUT = 2
+USER_AGENT = "Transcriptor4AI-Client/2.1.0"
 CHUNK_SIZE = 8192
 
 # -----------------------------------------------------------------------------
@@ -89,6 +91,42 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
         result["error"] = msg
 
     return result
+
+
+def fetch_pricing_data(url: str) -> Optional[Dict[str, Any]]:
+    """
+    Synchronize model pricing data from a remote repository.
+
+    Implements a strict timeout to ensure that network latency does not
+    degrade the application startup experience.
+
+    Args:
+        url: Remote URL pointing to the pricing JSON resource.
+
+    Returns:
+        Optional[Dict[str, Any]]: Fresh pricing data or None if the request fails.
+    """
+    headers = {"User-Agent": USER_AGENT}
+    logger.debug(f"Syncing live pricing from: {url}")
+
+    try:
+        response = requests.get(url, headers=headers, timeout=PRICING_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+
+        if not isinstance(data, dict):
+            logger.warning("Network: Received malformed pricing data (not a dictionary).")
+            return None
+
+        logger.info("Network: Live pricing data synchronized successfully.")
+        return data
+
+    except requests.exceptions.Timeout:
+        logger.warning(f"Network: Pricing sync timed out after {PRICING_TIMEOUT}s.")
+    except Exception as e:
+        logger.error(f"Network: Unexpected error during pricing sync: {e}")
+
+    return None
 
 
 def download_binary_stream(

@@ -3,10 +3,11 @@ from __future__ import annotations
 """
 Background Worker Threads for GUI Operations.
 
-Orchestrates long-running tasks such as pipeline execution, update checks, 
-and remote telemetry submission. Prevents the graphical user interface from 
-freezing by delegating CPU-bound and I/O-bound operations to separate daemon 
-threads while maintaining communication via thread-safe callbacks.
+Orchestrates long-running tasks such as pipeline execution, update checks,
+remote pricing synchronization, and remote telemetry submission. Prevents 
+the graphical user interface from freezing by delegating CPU-bound and 
+I/O-bound operations to separate daemon threads while maintaining 
+communication via thread-safe callbacks.
 """
 
 import logging
@@ -95,6 +96,22 @@ def check_updates_task(
         logger.error(f"Update Task: Check failed during network call: {e}")
         on_complete({"has_update": False, "error": str(e)}, is_manual)
 
+def run_pricing_update_task(
+        on_complete: Callable[[Optional[Dict[str, Any]]], None]
+) -> None:
+    """
+    Synchronize LLM pricing data from the remote repository.
+
+    Args:
+        on_complete: Callback to handle the retrieved pricing dictionary.
+    """
+    try:
+        logger.debug("Pricing Task: Initiating remote sync...")
+        pricing_data = network.fetch_pricing_data(const.PRICING_DATA_URL)
+        on_complete(pricing_data)
+    except Exception as e:
+        logger.error(f"Pricing Task: Sync failed: {e}")
+        on_complete(None)
 
 def download_update_task(
         binary_url: str,
@@ -110,7 +127,7 @@ def download_update_task(
 
     Args:
         binary_url: Remote source URL.
-        dest_path: Local target path for binary storage.
+        dest_path: Local target path for binary staging.
         on_progress: Callback to update UI progress bars (0.0 - 100.0).
         on_complete: Callback to report final task status.
     """
@@ -171,7 +188,6 @@ def submit_feedback_task(
     """
     success, msg = network.submit_feedback(payload)
     on_complete((success, msg))
-
 
 def submit_error_report_task(
         payload: Dict[str, Any],

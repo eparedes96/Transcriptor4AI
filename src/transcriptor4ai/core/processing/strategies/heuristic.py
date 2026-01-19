@@ -11,7 +11,7 @@ import math
 
 from transcriptor4ai.core.processing.strategies.base import TokenizerStrategy
 
-# Industry standard ratio for code/prose: approximately 4 characters per token
+# Industry standard ratio for code/prose: approx 4 characters per token
 CHARS_PER_TOKEN_AVG: int = 4
 
 

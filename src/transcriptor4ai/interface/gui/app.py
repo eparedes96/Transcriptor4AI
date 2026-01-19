@@ -12,23 +12,23 @@ import logging
 import queue
 import threading
 from logging.handlers import QueueHandler
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 import customtkinter as ctk
 
+from transcriptor4ai.core.services.updater import UpdateManager
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.domain import constants as const
-from transcriptor4ai.core.services.updater import UpdateManager
 from transcriptor4ai.infra.logging import (
-    configure_logging,
     LoggingConfig,
+    configure_logging,
     get_default_gui_log_path
 )
 from transcriptor4ai.interface.gui.components.dashboard import DashboardFrame
 from transcriptor4ai.interface.gui.components.logs_console import LogsFrame
+from transcriptor4ai.interface.gui.components.main_window import create_main_window
 from transcriptor4ai.interface.gui.components.settings import SettingsFrame
 from transcriptor4ai.interface.gui.components.sidebar import SidebarFrame
-from transcriptor4ai.interface.gui.components.main_window import create_main_window
 from transcriptor4ai.interface.gui.controllers.main_controller import AppController
 from transcriptor4ai.interface.gui.controllers.update_controller import UpdateController
 from transcriptor4ai.interface.gui.dialogs.feedback_modal import show_feedback_window
@@ -117,12 +117,20 @@ def main() -> None:
     controller.sync_view_from_config()
 
     # Link Dashboard Triggers
-    dashboard_frame.btn_process.configure(command=lambda: controller.start_processing(dry_run=False))
-    dashboard_frame.btn_simulate.configure(command=lambda: controller.start_processing(dry_run=True))
+    dashboard_frame.btn_process.configure(
+        command=lambda: controller.start_processing(dry_run=False)
+    )
+    dashboard_frame.btn_simulate.configure(
+        command=lambda: controller.start_processing(dry_run=True)
+    )
     dashboard_frame.sw_tree.configure(command=controller.on_tree_toggled)
 
     dashboard_frame.btn_browse_in.configure(
-        command=lambda: _browse_folder(app, dashboard_frame.entry_input, linked_entry=dashboard_frame.entry_output)
+        command=lambda: _browse_folder(
+            app,
+            dashboard_frame.entry_input,
+            linked_entry=dashboard_frame.entry_output
+        )
     )
     dashboard_frame.btn_browse_out.configure(
         command=lambda: _browse_folder(app, dashboard_frame.entry_output)

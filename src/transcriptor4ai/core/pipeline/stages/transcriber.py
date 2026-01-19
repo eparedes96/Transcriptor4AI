@@ -10,6 +10,7 @@ thread-safe writing, and final error aggregation.
 
 import logging
 import os
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
@@ -188,8 +189,8 @@ def _initialize_execution_environment(
 def _execute_parallel_transcription(
         input_path: str,
         extensions: List[str],
-        include_rx: List[Any],
-        exclude_rx: List[Any],
+        include_rx: List[re.Pattern],
+        exclude_rx: List[re.Pattern],
         process_modules: bool,
         process_tests: bool,
         process_resources: bool,
@@ -218,21 +219,26 @@ def _execute_parallel_transcription(
             if cancellation_event and cancellation_event.is_set():
                 break
 
-            tasks.append(executor.submit(
-                process_file_task,
-                file_path=file_data["file_path"],
-                rel_path=file_data["rel_path"],
-                ext=file_data["ext"],
-                file_name=file_data["file_name"],
-                process_modules=process_modules,
-                process_tests=process_tests,
-                process_resources=process_resources,
-                enable_sanitizer=enable_sanitizer,
-                mask_user_paths=mask_user_paths,
-                minify_output=minify_output,
-                locks=locks,
-                output_paths=output_paths
-            ))
+            if file_data.get("status") == "skipped":
+                results["skipped"] += 1
+                continue
+
+            if file_data.get("status") == "process":
+                tasks.append(executor.submit(
+                    process_file_task,
+                    file_path=file_data["file_path"],
+                    rel_path=file_data["rel_path"],
+                    ext=file_data["ext"],
+                    file_name=file_data["file_name"],
+                    process_modules=process_modules,
+                    process_tests=process_tests,
+                    process_resources=process_resources,
+                    enable_sanitizer=enable_sanitizer,
+                    mask_user_paths=mask_user_paths,
+                    minify_output=minify_output,
+                    locks=locks,
+                    output_paths=output_paths
+                ))
 
         # Synchronize and aggregate worker results
         for future in as_completed(tasks):

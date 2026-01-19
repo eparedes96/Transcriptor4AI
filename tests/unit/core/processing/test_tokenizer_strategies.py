@@ -58,7 +58,7 @@ def test_anthropic_strategy_api(mock_anthropic: MagicMock) -> None:
     mock_client.beta.messages.count_tokens.assert_called()
 
 
-@patch("transcriptor4ai.core.processing.strategies.google.genai")
+@patch("transcriptor4ai.core.processing.strategies.google.genai", create=True)
 @patch.dict("os.environ", {"GOOGLE_API_KEY": "ai-test-key"})
 def test_google_strategy_api(mock_genai: MagicMock) -> None:
     """Verify Google strategy utilizes the GenAI client correctly."""

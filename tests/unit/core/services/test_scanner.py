@@ -37,6 +37,7 @@ def mock_fs_structure(tmp_path: Path) -> Path:
     # Create files
     (root / "src" / "main.py").write_text("print('hello')", encoding="utf-8")
     (root / "src" / "utils.py").write_text("def helper(): pass", encoding="utf-8")
+    (root / "src" / "exclude_me.tmp").write_text("trash", encoding="utf-8")
     (root / "tests" / "test_main.py").write_text("def test(): pass", encoding="utf-8")
     (root / "README.md").write_text("# Project", encoding="utf-8")
     (root / "node_modules" / "lib.js").write_text("var x = 1;", encoding="utf-8")
@@ -65,7 +66,8 @@ def test_prepare_filtering_rules_integration(mock_fs_structure: Path) -> None:
 def test_yield_project_files_classification(mock_fs_structure: Path) -> None:
     """Verify that files are correctly marked for processing or skipping."""
     inc = [re.compile(r".*")]
-    exc = [re.compile(r"node_modules"), re.compile(r"\.git")]
+    # Include exclude_me.tmp explicitly in exclusions
+    exc = [re.compile(r"node_modules"), re.compile(r"\.git"), re.compile(r"exclude_me\.tmp")]
     exts = [".py"]
 
     files = list(yield_project_files(
@@ -84,8 +86,12 @@ def test_yield_project_files_classification(mock_fs_structure: Path) -> None:
 
     # main.py, utils.py, test_main.py, README.md, config.json should be processed
     assert len(processed) == 5
-    # node_modules content should be skipped by directory prune or explicit regex
-    assert any("node_modules" in f["rel_path"] for f in skipped)
+
+    # 1. node_modules/lib.js should NOT be in processed because of directory pruning
+    assert not any("node_modules" in f["rel_path"] for f in processed)
+
+    # 2. exclude_me.tmp should be yielded as SKIPPED because its parent dir was visited
+    assert any("exclude_me.tmp" in f["rel_path"] for f in skipped)
 
 
 def test_finalize_error_reporting_persistence(tmp_path: Path) -> None:

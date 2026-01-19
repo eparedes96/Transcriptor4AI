@@ -11,15 +11,11 @@ Verifies:
 """
 
 import json
-import os
 from unittest.mock import patch
+
 import pytest
 
-from transcriptor4ai.domain.config import (
-    load_app_state,
-    get_default_app_state,
-    get_default_config
-)
+from transcriptor4ai.domain.config import get_default_config, load_app_state
 from transcriptor4ai.domain.constants import CURRENT_CONFIG_VERSION
 
 

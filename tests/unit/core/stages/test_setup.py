@@ -6,9 +6,7 @@ Unit tests for the Pipeline Setup stage.
 Validates path normalization, staging area initialization, and collision detection.
 """
 
-import os
 from pathlib import Path
-import pytest
 
 from transcriptor4ai.core.pipeline.stages.setup import prepare_environment
 
@@ -16,7 +14,9 @@ from transcriptor4ai.core.pipeline.stages.setup import prepare_environment
 def test_prepare_environment_invalid_input(tmp_path: Path) -> None:
     """TC-01: Verify that non-existent input directory returns an error result."""
     cfg = {"input_path": str(tmp_path / "void")}
-    result, context = prepare_environment(cfg, overwrite=False, dry_run=False, tree_output_path=None)
+    result, context = prepare_environment(
+        cfg, overwrite=False, dry_run=False, tree_output_path=None
+    )
 
     assert result is not None
     assert result.ok is False
@@ -47,7 +47,9 @@ def test_prepare_environment_collision_detection(tmp_path: Path) -> None:
         "save_error_log": False
     }
 
-    result, context = prepare_environment(cfg, overwrite=False, dry_run=False, tree_output_path=None)
+    result, context = prepare_environment(
+        cfg, overwrite=False, dry_run=False, tree_output_path=None
+    )
 
     assert result is not None
     assert "Naming collision detected" in result.error
@@ -73,7 +75,9 @@ def test_prepare_environment_staging_logic(tmp_path: Path) -> None:
         "save_error_log": False
     }
 
-    result, context = prepare_environment(cfg, overwrite=True, dry_run=True, tree_output_path=None)
+    result, context = prepare_environment(
+        cfg, overwrite=True, dry_run=True, tree_output_path=None
+    )
 
     assert result is None
     assert context["temp_dir_obj"] is not None

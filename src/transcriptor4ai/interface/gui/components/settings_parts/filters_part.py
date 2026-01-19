@@ -7,7 +7,7 @@ Handles the visual layout and widget registration for extension whitelists,
 regex-based inclusion/exclusion patterns, and gitignore compliance logic.
 """
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 import customtkinter as ctk
 

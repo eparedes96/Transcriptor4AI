@@ -57,8 +57,9 @@ def test_tiktoken_integration_gpt() -> None:
     """
     try:
         import tiktoken
-    except ImportError:
-        pytest.skip("tiktoken not installed in current test environment")
+        tiktoken.get_encoding("cl100k_base")
+    except (ImportError, Exception):
+        pytest.skip("tiktoken not installed or unavailable in current test environment")
 
     text = "def main(): print('hello')"
     count = count_tokens(text, model="GPT-4o")

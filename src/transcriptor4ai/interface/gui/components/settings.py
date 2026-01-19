@@ -16,7 +16,9 @@ import customtkinter as ctk
 from transcriptor4ai.domain import constants as const
 from transcriptor4ai.interface.gui.components.settings_parts.ai_model_part import AIModelSection
 from transcriptor4ai.interface.gui.components.settings_parts.filters_part import FiltersSection
-from transcriptor4ai.interface.gui.components.settings_parts.formatting_part import FormattingSection
+from transcriptor4ai.interface.gui.components.settings_parts.formatting_part import (
+    FormattingSection,
+)
 from transcriptor4ai.interface.gui.components.settings_parts.profiles_part import ProfilesSection
 from transcriptor4ai.utils.i18n import i18n
 
@@ -35,7 +37,13 @@ class SettingsFrame(ctk.CTkFrame):
     settings, utilizing a scrollable layout.
     """
 
-    def __init__(self, master: Any, config: Dict[str, Any], profile_names: List[str], **kwargs: Any):
+    def __init__(
+            self,
+            master: Any,
+            config: Dict[str, Any],
+            profile_names: List[str],
+            **kwargs: Any
+    ):
         """
         Initialize the settings view and its modular sub-components.
 

@@ -9,7 +9,8 @@ same key structure and dot-notation resolution works as expected.
 
 import json
 import os
-from typing import Dict, Any, Set
+from typing import Any, Dict, Set
+
 import pytest
 
 from transcriptor4ai.utils.i18n import I18n
@@ -30,9 +31,9 @@ def _get_flat_keys(d: Dict[str, Any], prefix: str = "") -> Set[str]:
 def test_locales_key_parity() -> None:
     """TC-01: Verify that EN and ES locales have identical keys."""
     base_path = os.path.dirname(os.path.abspath(__file__))
-    # Adjust path to find src/transcriptor4ai/interface/locales/
-    locales_dir = os.path.abspath(
-        os.path.join(base_path, "..", "..", "..", "src", "transcriptor4ai", "interface", "locales"))
+    # Path to find src/transcriptor4ai/interface/locales/
+    loc_rel = os.path.join("..", "..", "..", "src", "transcriptor4ai", "interface", "locales")
+    locales_dir = os.path.abspath(os.path.join(base_path, loc_rel))
 
     en_path = os.path.join(locales_dir, "en.json")
     es_path = os.path.join(locales_dir, "es.json")
@@ -50,7 +51,9 @@ def test_locales_key_parity() -> None:
     extra_in_es = es_keys - en_keys
 
     if missing_in_es and len(es_keys) < 20:
-        pytest.skip(f"ES locale is incomplete (Missing {len(missing_in_es)} keys). Pending translation.")
+        msg = f"ES locale is incomplete ({len(missing_in_es)} keys). Pending translation."
+        pytest.skip(msg)
+
     assert not missing_in_es, f"Keys present in EN but missing in ES: {missing_in_es}"
     assert not extra_in_es, f"Keys present in ES but missing in EN: {extra_in_es}"
 

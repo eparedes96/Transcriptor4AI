@@ -8,8 +8,8 @@ directory preparation, and cryptographic verification of downloaded binaries.
 """
 
 import os
-import shutil
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from transcriptor4ai.core.services.updater import UpdateManager, UpdateStatus
@@ -58,9 +58,9 @@ def test_run_silent_cycle_success(
     mock_download.return_value = (True, "Success")
     mock_hash.return_value = "correct_hash"
 
-    # Execute
-    with patch("transcriptor4ai.core.services.updater.get_user_data_dir", return_value=str(tmp_path)):
-        # Re-init to use the mock temp dir
+    # Execute with partitioned patch to respect E501
+    target_fs = "transcriptor4ai.core.services.updater.get_user_data_dir"
+    with patch(target_fs, return_value=str(tmp_path)):
         updater._temp_dir = os.path.join(str(tmp_path), "updates")
         updater.run_silent_cycle("1.0.0")
 
@@ -88,7 +88,8 @@ def test_run_silent_cycle_integrity_failure(
     mock_download.return_value = (True, "Success")
     mock_hash.return_value = "wrong_hash"
 
-    with patch("transcriptor4ai.core.services.updater.get_user_data_dir", return_value=str(tmp_path)):
+    target_fs = "transcriptor4ai.core.services.updater.get_user_data_dir"
+    with patch(target_fs, return_value=str(tmp_path)):
         updater._temp_dir = os.path.join(str(tmp_path), "updates")
         updater.run_silent_cycle("1.0.0")
 

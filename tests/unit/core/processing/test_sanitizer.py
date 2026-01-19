@@ -13,12 +13,11 @@ Verifies:
 import os
 from pathlib import Path
 from unittest.mock import patch
-import pytest
 
 from transcriptor4ai.core.processing.sanitizer import (
-    sanitize_text,
+    _get_user_info,
     mask_local_paths,
-    _get_user_info
+    sanitize_text,
 )
 
 
@@ -82,8 +81,12 @@ def test_mask_local_paths_anonymizes_home_linux():
 
     _get_user_info.cache_clear()
 
+    # Split patch calls to respect line length limits
     with patch("transcriptor4ai.core.processing.sanitizer.Path.home", return_value=Path(fake_home)):
-        with patch("transcriptor4ai.core.processing.sanitizer.os.getlogin", return_value="testuser"):
+        with patch(
+            "transcriptor4ai.core.processing.sanitizer.os.getlogin",
+            return_value="testuser"
+        ):
             masked = mask_local_paths(text)
             assert fake_home not in masked
             assert "<USER_HOME>/documents/project" in masked
@@ -96,9 +99,12 @@ def test_mask_local_paths_anonymizes_home_windows():
 
     _get_user_info.cache_clear()
 
-    # Simulamos el comportamiento de normalización de barras
+    # Simulate the bar normalization behavior
     with patch("transcriptor4ai.core.processing.sanitizer.Path.home", return_value=Path(fake_home)):
-        with patch("transcriptor4ai.core.processing.sanitizer.os.getlogin", return_value="testuser"):
+        with patch(
+            "transcriptor4ai.core.processing.sanitizer.os.getlogin",
+            return_value="testuser"
+        ):
             masked = mask_local_paths(text)
 
             # El sanitizer convierte \ a / y luego aplica patrones.
@@ -115,7 +121,10 @@ def test_mask_local_paths_anonymizes_standalone_username():
     _get_user_info.cache_clear()
 
     with patch("transcriptor4ai.core.processing.sanitizer.os.getlogin", return_value="testuser"):
-        with patch("transcriptor4ai.core.processing.sanitizer.Path.home", return_value=Path("/home/testuser")):
+        with patch(
+            "transcriptor4ai.core.processing.sanitizer.Path.home",
+            return_value=Path("/home/testuser")
+        ):
             masked = mask_local_paths(text)
 
             assert "testuser" not in masked

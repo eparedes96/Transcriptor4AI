@@ -9,7 +9,6 @@ filesystem validation utilities. Acts as an abstraction over the 'os' and
 """
 
 import os
-import platform
 from typing import List, Optional, Tuple
 
 # -----------------------------------------------------------------------------

@@ -9,7 +9,7 @@ namespaces into domain-compatible configuration overrides.
 """
 
 import argparse
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.utils.i18n import i18n
 

@@ -9,7 +9,7 @@ Verifies:
 3. Handling of boolean flags (store_true).
 """
 
-from transcriptor4ai.interface.cli.args import build_parser, args_to_overrides
+from transcriptor4ai.interface.cli.args import args_to_overrides, build_parser
 
 
 def parse_args(arg_list):

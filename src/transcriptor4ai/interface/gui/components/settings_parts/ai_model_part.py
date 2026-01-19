@@ -7,7 +7,7 @@ Manages the provider-to-model mapping interface, allowing users to
 select specific LLM architectures for tokenization and context optimization.
 """
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 import customtkinter as ctk
 

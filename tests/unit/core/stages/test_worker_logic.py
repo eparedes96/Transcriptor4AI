@@ -12,6 +12,7 @@ Verifies the decision-making process of `process_file_task`:
 
 from typing import Dict
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from transcriptor4ai.core.pipeline.stages.worker import process_file_task

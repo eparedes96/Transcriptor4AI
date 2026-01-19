@@ -7,7 +7,7 @@ Provides the visual components and widget registration for loading,
 saving, and deleting configuration presets within the settings view.
 """
 
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 import customtkinter as ctk
 

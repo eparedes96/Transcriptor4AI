@@ -10,7 +10,7 @@ modal triggering.
 
 import logging
 import tkinter.messagebox as mb
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import customtkinter as ctk
 

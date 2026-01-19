@@ -8,7 +8,7 @@ execution results between the pipeline engine and interface layers (CLI/GUI).
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 # -----------------------------------------------------------------------------
 # CORE DATA MODELS

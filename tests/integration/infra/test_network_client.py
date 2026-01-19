@@ -7,20 +7,15 @@ Utilizes mocking to verify GitHub API update checks, binary streaming,
 and telemetry submission without making real network calls.
 """
 
-import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
-import requests
+from unittest.mock import MagicMock, patch
 
 from transcriptor4ai.infra.network import (
+    _calculate_sha256,
     check_for_updates,
     download_binary_stream,
     submit_feedback,
-    _calculate_sha256
 )
-
 
 # -----------------------------------------------------------------------------
 # UPDATE & DOWNLOAD TESTS
@@ -61,7 +56,10 @@ def test_download_binary_stream_success(tmp_path: Path) -> None:
 
     with patch("requests.get", return_value=mock_response):
         progress_calls = []
-        callback = lambda p: progress_calls.append(p)
+
+        def callback(p: float) -> None:
+            """Track progress updates without using lambda."""
+            progress_calls.append(p)
 
         success, msg = download_binary_stream("https://host/app.exe", str(dest_path), callback)
 

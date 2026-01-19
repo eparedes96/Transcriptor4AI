@@ -13,7 +13,7 @@ import os
 import platform
 import subprocess
 from tkinter import messagebox as mb
-from typing import Optional, List
+from typing import List, Optional
 
 from transcriptor4ai.utils.i18n import i18n
 

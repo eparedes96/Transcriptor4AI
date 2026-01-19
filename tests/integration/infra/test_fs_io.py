@@ -8,19 +8,15 @@ and naming collision detection across different OS environments.
 """
 
 import os
-import platform
-from unittest.mock import patch
 from pathlib import Path
-
-import pytest
+from unittest.mock import patch
 
 from transcriptor4ai.infra.fs import (
+    check_existing_output_files,
     get_user_data_dir,
     normalize_path,
-    check_existing_output_files,
-    safe_mkdir
+    safe_mkdir,
 )
-
 
 # -----------------------------------------------------------------------------
 # PATH RESOLUTION TESTS

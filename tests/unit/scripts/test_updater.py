@@ -11,10 +11,9 @@ Verifies:
 3. Update integrity verification flow.
 """
 
-import sys
 import os
-from unittest.mock import patch, MagicMock
-import pytest
+import sys
+from unittest.mock import patch
 
 # Add 'scripts' to path for import, as it is outside 'src'
 scripts_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts"))

@@ -8,8 +8,10 @@ global theme attributes, and establishes the primary structural
 grid for navigation and content rendering.
 """
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 import customtkinter as ctk
+
 from transcriptor4ai.domain import constants as const
 
 # -----------------------------------------------------------------------------

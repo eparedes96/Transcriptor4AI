@@ -9,6 +9,7 @@ and the concurrent writing of categorized artifacts to disk.
 
 import os
 from pathlib import Path
+
 import pytest
 
 from transcriptor4ai.core.pipeline.stages.transcriber import transcribe_code

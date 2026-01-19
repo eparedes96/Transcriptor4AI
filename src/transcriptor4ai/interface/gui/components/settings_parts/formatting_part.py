@@ -7,7 +7,7 @@ Manages output strategies (individual vs. unified), secret redaction
 (sanitization), local path masking, and code optimization (minification).
 """
 
-from typing import Any, Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict
 
 import customtkinter as ctk
 

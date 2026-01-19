@@ -11,7 +11,7 @@ mechanism for offline or unsupported scenarios.
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from transcriptor4ai.core.processing.strategies.anthropic import AnthropicApiStrategy
 from transcriptor4ai.core.processing.strategies.base import DEFAULT_MODEL, TokenizerStrategy

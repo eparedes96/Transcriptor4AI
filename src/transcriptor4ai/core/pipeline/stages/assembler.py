@@ -16,10 +16,7 @@ import shutil
 from typing import Any, Dict, List
 
 from transcriptor4ai.core.processing.tokenizer import count_tokens
-from transcriptor4ai.domain.pipeline_models import (
-    PipelineResult,
-    create_success_result
-)
+from transcriptor4ai.domain.pipeline_models import PipelineResult, create_success_result
 
 logger = logging.getLogger(__name__)
 

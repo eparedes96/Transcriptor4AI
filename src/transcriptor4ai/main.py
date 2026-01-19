@@ -8,10 +8,10 @@ and implements a robust global exception handling mechanism to
 ensure fatal crashes are captured and reported across all interfaces.
 """
 
+import logging
 import os
 import sys
 import traceback
-import logging
 from typing import Any
 
 # -----------------------------------------------------------------------------

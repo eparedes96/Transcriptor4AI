@@ -10,15 +10,16 @@ Verifies:
 """
 
 import re
+
 from transcriptor4ai.core.pipeline.components.filters import (
+    _gitignore_to_regex,
     compile_patterns,
+    default_exclude_patterns,
+    is_resource_file,
+    is_test,
+    load_gitignore_patterns,
     matches_any,
     matches_include,
-    is_test,
-    is_resource_file,
-    load_gitignore_patterns,
-    default_exclude_patterns,
-    _gitignore_to_regex
 )
 
 

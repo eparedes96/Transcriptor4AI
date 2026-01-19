@@ -6,13 +6,13 @@ Unit tests for the Pipeline Assembler.
 Verifies artifact merging, token estimation, and staging-to-final atomic deployment.
 """
 
-import os
 from pathlib import Path
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from transcriptor4ai.domain.config import get_default_config
+import pytest
+
 from transcriptor4ai.core.pipeline.stages.assembler import assemble_and_finalize
+from transcriptor4ai.domain.config import get_default_config
 
 
 @pytest.fixture
@@ -84,5 +84,6 @@ def test_assemble_dry_run_no_move(env_context: dict) -> None:
 
     result = assemble_and_finalize(cfg, trans_res, [], env_context, dry_run=True)
 
+    assert result.ok is True
     final_dir = Path(env_context["final_output_path"])
     assert len(list(final_dir.iterdir())) == 0, "Dry run should not write to final path."

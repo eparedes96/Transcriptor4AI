@@ -9,9 +9,9 @@ delegation while respecting thread synchronization locks.
 """
 
 import threading
-from typing import Dict, Any
+from typing import Any, Dict
 
-from transcriptor4ai.core.pipeline.components.filters import is_test, is_resource_file
+from transcriptor4ai.core.pipeline.components.filters import is_resource_file, is_test
 from transcriptor4ai.core.pipeline.components.reader import stream_file_content
 from transcriptor4ai.core.pipeline.components.writer import append_entry
 

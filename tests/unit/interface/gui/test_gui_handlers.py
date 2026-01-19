@@ -8,16 +8,17 @@ ensuring data flows correctly from widgets to the internal configuration model.
 Includes OS-specific interaction tests for system explorers.
 """
 
-import os
-import platform
-import subprocess
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from transcriptor4ai.interface.gui.controllers.main_controller import AppController
-from transcriptor4ai.interface.gui.utils.tk_helpers import open_file_explorer, parse_list_from_string
+from transcriptor4ai.interface.gui.utils.tk_helpers import (
+    open_file_explorer,
+    parse_list_from_string,
+)
+
 
 @pytest.mark.gui
 def test_parse_list_from_string_gui() -> None:

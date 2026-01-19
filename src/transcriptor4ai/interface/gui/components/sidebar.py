@@ -10,6 +10,7 @@ and dynamic update notifications. Acts as the anchor for the global UI state.
 
 import logging
 from typing import Any
+
 import customtkinter as ctk
 
 from transcriptor4ai.domain import constants as const

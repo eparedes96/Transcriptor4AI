@@ -12,8 +12,8 @@ import os
 import platform
 import shutil
 import sys
-import PyInstaller.__main__
 
+import PyInstaller.__main__
 
 # -----------------------------------------------------------------------------
 # ARTIFACT MANAGEMENT
@@ -106,7 +106,7 @@ def build() -> None:
     else:
         print("[!] WARNING: Icon not found. Using default.")
 
-    print(f"[*] Running PyInstaller with configured paths...")
+    print("[*] Running PyInstaller with configured paths...")
     try:
         PyInstaller.__main__.run(args)
         print("\n[+] Build Successful! Executable located in 'dist/' folder.")

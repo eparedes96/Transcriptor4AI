@@ -7,7 +7,6 @@ Verifies the extraction of classes, functions, and methods from Python source co
 Ensures robustness against syntax errors and empty files.
 """
 
-import pytest
 from transcriptor4ai.core.analysis.ast_parser import extract_definitions
 
 

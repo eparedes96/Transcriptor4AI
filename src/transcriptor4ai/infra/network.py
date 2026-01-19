@@ -10,8 +10,7 @@ updates, and secure transmission of telemetry and crash reports.
 
 import hashlib
 import logging
-import os
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import requests
 

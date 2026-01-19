@@ -10,9 +10,9 @@ Verifies:
 """
 
 from transcriptor4ai.domain.pipeline_models import (
-    create_success_result,
+    PipelineResult,
     create_error_result,
-    PipelineResult
+    create_success_result,
 )
 from transcriptor4ai.domain.transcription_models import TranscriptionError
 from transcriptor4ai.domain.tree_models import FileNode

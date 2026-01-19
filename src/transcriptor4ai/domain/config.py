@@ -14,8 +14,8 @@ import logging
 import os
 from typing import Any, Dict
 
-from transcriptor4ai.infra.fs import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 from transcriptor4ai.domain import constants as const
+from transcriptor4ai.infra.fs import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 
 logger = logging.getLogger(__name__)
 

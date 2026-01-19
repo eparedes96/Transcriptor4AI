@@ -11,7 +11,7 @@ masking, and sanitization) to maintain a low memory footprint.
 from typing import Iterator
 
 from transcriptor4ai.core.processing.minifier import minify_code_stream
-from transcriptor4ai.core.processing.sanitizer import sanitize_text_stream, mask_local_paths_stream
+from transcriptor4ai.core.processing.sanitizer import mask_local_paths_stream, sanitize_text_stream
 
 # -----------------------------------------------------------------------------
 # FILE OUTPUT MANAGEMENT

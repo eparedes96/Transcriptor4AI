@@ -16,11 +16,11 @@ from typing import Callable, List, Optional, Tuple
 from transcriptor4ai.core.analysis.tree_renderer import render_tree_structure
 from transcriptor4ai.core.pipeline.components.filters import (
     compile_patterns,
-    default_extensions,
     default_exclude_patterns,
+    default_extensions,
     default_include_patterns,
-    load_gitignore_patterns,
     is_test,
+    load_gitignore_patterns,
     matches_any,
     matches_include,
 )

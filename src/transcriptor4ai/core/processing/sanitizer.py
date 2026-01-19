@@ -9,10 +9,10 @@ Additionally, provides anonymization for local system paths to protect
 user identity when sharing codebase contexts with AI providers.
 """
 
+import functools
 import logging
 import os
 import re
-import functools
 from pathlib import Path
 from typing import Final, Iterator, Optional, Tuple
 

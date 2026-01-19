@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Any, Dict
+from typing import Any, Dict, List
 
 import pytest
 

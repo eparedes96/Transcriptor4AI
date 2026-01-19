@@ -42,11 +42,11 @@ def yield_project_files(
         process_resources: bool,
 ) -> Iterable[Dict[str, str]]:
     """
-    Traverse the filesystem and yield files that satisfy the filtering criteria.
+    Traverse the filesystem and yield files with their processing status.
 
-    Performs an optimized walk of the directory tree, pruning excluded
-    directories early and classifying each file to determine its eligibility
-    for processing.
+    Performs an optimized walk of the directory tree. Prunes excluded
+    directories early and classifies each file to determine if it should
+    be processed or skipped based on the current configuration.
 
     Args:
         input_path: Absolute path to the project root.
@@ -58,8 +58,9 @@ def yield_project_files(
         process_resources: Flag to allow non-code resource files.
 
     Yields:
-        Dict[str, str]: Metadata for each valid file found, including:
-                        - file_path: Absolute path.
+        Dict[str, str]: Metadata for each file found, including:
+                        - status: "process" or "skipped".
+                        - file_path: Absolute path (if processing).
                         - rel_path: Relative path from root.
                         - ext: File extension.
                         - file_name: Base filename.
@@ -67,22 +68,29 @@ def yield_project_files(
     input_path_abs = os.path.abspath(input_path)
 
     for root, dirs, files in os.walk(input_path_abs):
-        # In-place directory pruning to optimize traversal
+        # In-place directory pruning to optimize traversal performance
         dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
         dirs.sort()
         files.sort()
 
         for file_name in files:
-            if matches_any(file_name, exclude_rx):
-                continue
-
-            if not matches_include(file_name, include_rx):
-                continue
-
+            file_path = os.path.join(root, file_name)
+            rel_path = os.path.relpath(file_path, input_path_abs)
             _, ext = os.path.splitext(file_name)
+
+            # 1. Evaluate Exclusion Rules (Highest Priority)
+            if matches_any(file_name, exclude_rx):
+                yield {"status": "skipped", "rel_path": rel_path}
+                continue
+
+            # 2. Evaluate Inclusion Rules
+            if not matches_include(file_name, include_rx):
+                yield {"status": "skipped", "rel_path": rel_path}
+                continue
+
+            # 3. Classify and determine processing eligibility
             should_process = False
 
-            # Classification logic
             if process_resources and is_resource_file(file_name):
                 should_process = True
             elif process_tests and is_test(file_name):
@@ -92,12 +100,12 @@ def yield_project_files(
                     should_process = True
 
             if not should_process:
+                yield {"status": "skipped", "rel_path": rel_path}
                 continue
 
-            file_path = os.path.join(root, file_name)
-            rel_path = os.path.relpath(file_path, input_path_abs)
-
+            # 4. Signal valid file for processing
             yield {
+                "status": "process",
                 "file_path": file_path,
                 "rel_path": rel_path,
                 "ext": ext,
@@ -128,8 +136,15 @@ def prepare_filtering_rules(
     """
     input_path_abs = os.path.abspath(input_path)
 
-    final_includes = include_patterns if include_patterns is not None else default_include_patterns()
-    final_exclusions = list(exclude_patterns) if exclude_patterns is not None else default_exclude_patterns()
+    if include_patterns is not None:
+        final_includes = include_patterns
+    else:
+        final_includes = default_include_patterns()
+
+    if exclude_patterns is not None:
+        final_exclusions = list(exclude_patterns)
+    else:
+        final_exclusions = default_exclude_patterns()
 
     if respect_gitignore:
         git_patterns = load_gitignore_patterns(input_path_abs)

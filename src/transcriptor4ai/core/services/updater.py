@@ -16,8 +16,8 @@ import zipfile
 from enum import Enum
 from typing import Any, Dict
 
-from transcriptor4ai.infra.fs import get_user_data_dir
 from transcriptor4ai.infra import network
+from transcriptor4ai.infra.fs import get_user_data_dir
 
 logger = logging.getLogger(__name__)
 

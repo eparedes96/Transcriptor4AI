@@ -16,9 +16,9 @@ import customtkinter as ctk
 from transcriptor4ai.utils.i18n import i18n
 
 
-# -----------------------------------------------------------------------------
-# DASHBOARD VIEW CLASS
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# DASHBOARD VIEW COMPONENT
+# ==============================================================================
 
 class DashboardFrame(ctk.CTkFrame):
     """
@@ -42,21 +42,17 @@ class DashboardFrame(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
-        # -----------------------------------------------------------------------------
-        # LAYOUT: MAIN SCROLLABLE CONTAINER
-        # -----------------------------------------------------------------------------
+        # --- 1. MAIN SCROLLABLE CONTAINER ---
         self.scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.scroll.grid(row=0, column=0, sticky="nsew")
         self.scroll.grid_columnconfigure(0, weight=1)
 
-        # -----------------------------------------------------------------------------
-        # SECTION: I/O PATH MANAGEMENT
-        # -----------------------------------------------------------------------------
+        # --- 2. SECTION: I/O PATH MANAGEMENT ---
         self.frame_io = ctk.CTkFrame(self.scroll)
         self.frame_io.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         self.frame_io.grid_columnconfigure(0, weight=1)
 
-        # Source Path Input
+        # Source Path Header
         ctk.CTkLabel(
             self.frame_io,
             text=i18n.t("gui.dashboard.source_header"),
@@ -64,6 +60,7 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=("gray40", "gray60")
         ).grid(row=0, column=0, columnspan=2, padx=10, pady=(10, 0), sticky="w")
 
+        # Source Input Field
         self.entry_input = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/project")
         self.entry_input.insert(0, config.get("input_path", ""))
         self.entry_input.configure(state="readonly")
@@ -76,7 +73,7 @@ class DashboardFrame(ctk.CTkFrame):
         )
         self.btn_browse_in.grid(row=1, column=1, padx=10, pady=10)
 
-        # Destination Path Input
+        # Destination Path Header
         ctk.CTkLabel(
             self.frame_io,
             text=i18n.t("gui.dashboard.dest_header"),
@@ -84,6 +81,7 @@ class DashboardFrame(ctk.CTkFrame):
             text_color=("gray40", "gray60")
         ).grid(row=2, column=0, columnspan=2, padx=10, pady=(10, 0), sticky="w")
 
+        # Destination Input Field
         self.entry_output = ctk.CTkEntry(self.frame_io, placeholder_text="/path/to/output")
         self.entry_output.insert(0, config.get("output_base_dir", ""))
         self.entry_output.configure(state="readonly")
@@ -96,9 +94,7 @@ class DashboardFrame(ctk.CTkFrame):
         )
         self.btn_browse_out.grid(row=3, column=1, padx=10, pady=10)
 
-        # -----------------------------------------------------------------------------
-        # SECTION: ARTIFACT NAMING (SUBDIR & PREFIX)
-        # -----------------------------------------------------------------------------
+        # --- 3. SECTION: ARTIFACT NAMING (SUBDIR & PREFIX) ---
         self.frame_sub_headers = ctk.CTkFrame(self.frame_io, fg_color="transparent")
         self.frame_sub_headers.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10)
 
@@ -127,55 +123,63 @@ class DashboardFrame(ctk.CTkFrame):
         self.entry_prefix.insert(0, config.get("output_prefix", ""))
         self.entry_prefix.pack(side="left")
 
-        # -----------------------------------------------------------------------------
-        # SECTION: CONTENT PROCESSING TOGGLES
-        # -----------------------------------------------------------------------------
+        # --- 4. SECTION: CONTENT PROCESSING TOGGLES ---
         self.frame_opts = ctk.CTkFrame(self.scroll)
         self.frame_opts.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         self.frame_opts.grid_columnconfigure((0, 1, 2), weight=1)
 
+        # Modules Toggle
         self.sw_modules = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.modules"))
-        if config.get("process_modules"): self.sw_modules.select()
+        if config.get("process_modules"):
+            self.sw_modules.select()
         self.sw_modules.grid(row=0, column=0, padx=20, pady=15, sticky="w")
 
+        # Tests Toggle
         self.sw_tests = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.tests"))
-        if config.get("process_tests"): self.sw_tests.select()
+        if config.get("process_tests"):
+            self.sw_tests.select()
         self.sw_tests.grid(row=0, column=1, padx=20, pady=15, sticky="w")
 
+        # Resources Toggle
         self.sw_resources = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.resources"))
-        if config.get("process_resources"): self.sw_resources.select()
+        if config.get("process_resources"):
+            self.sw_resources.select()
         self.sw_resources.grid(row=0, column=2, padx=20, pady=15, sticky="w")
 
+        # Tree Generation Toggle
         self.sw_tree = ctk.CTkSwitch(self.frame_opts, text=i18n.t("gui.checkboxes.gen_tree"))
-        if config.get("generate_tree"): self.sw_tree.select()
+        if config.get("generate_tree"):
+            self.sw_tree.select()
         self.sw_tree.grid(row=1, column=0, padx=20, pady=15, sticky="w")
 
-        # -----------------------------------------------------------------------------
-        # SECTION: STATIC ANALYSIS (AST) PARAMETERS
-        # -----------------------------------------------------------------------------
+        # --- 5. SECTION: STATIC ANALYSIS (AST) PARAMETERS ---
         self.frame_ast = ctk.CTkFrame(self.scroll, fg_color="transparent")
 
+        # Function signatures
         self.chk_func = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_func"))
-        if config.get("show_functions"): self.chk_func.select()
+        if config.get("show_functions"):
+            self.chk_func.select()
         self.chk_func.pack(side="left", padx=20)
 
+        # Class hierarchies
         self.chk_class = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_class"))
-        if config.get("show_classes"): self.chk_class.select()
+        if config.get("show_classes"):
+            self.chk_class.select()
         self.chk_class.pack(side="left", padx=20)
 
+        # Method details
         self.chk_meth = ctk.CTkCheckBox(self.frame_ast, text=i18n.t("gui.dashboard.ast_meth"))
-        if config.get("show_methods"): self.chk_meth.select()
+        if config.get("show_methods"):
+            self.chk_meth.select()
         self.chk_meth.pack(side="left", padx=20)
 
-        # -----------------------------------------------------------------------------
-        # SECTION: PIPELINE EXECUTION TRIGGERS
-        # -----------------------------------------------------------------------------
+        # --- 6. SECTION: PIPELINE EXECUTION TRIGGERS ---
         self.btn_process = ctk.CTkButton(
             self.scroll,
             text=i18n.t("gui.dashboard.btn_start"),
             height=50,
             font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#007ACC"
+            fg_color="#1f538d"
         )
         self.btn_process.grid(row=3, column=0, sticky="ew", pady=20, padx=10)
 

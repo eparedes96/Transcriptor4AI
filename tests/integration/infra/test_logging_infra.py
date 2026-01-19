@@ -8,20 +8,14 @@ of configuration, and log file rotation logic.
 """
 
 import logging
-import os
 import time
 from pathlib import Path
-from logging.handlers import QueueListener
 
 import pytest
 
-from transcriptor4ai.infra.logging import (
-    configure_logging,
-    LoggingConfig,
-    _HANDLER_TAG_ATTR,
-    _QUEUE_LISTENER_ATTR,
-    _safe_stop_listener
-)
+from transcriptor4ai.infra.logging import LoggingConfig, configure_logging
+from transcriptor4ai.infra.logging.core import _QUEUE_LISTENER_ATTR, _safe_stop_listener
+from transcriptor4ai.infra.logging.handlers import _HANDLER_TAG_ATTR
 
 
 @pytest.fixture(autouse=True)
@@ -71,7 +65,7 @@ def test_log_rotation(tmp_path: Path) -> None:
     logger = logging.getLogger("test_rotate")
 
     # Write enough data to trigger rotation
-    for i in range(10):
+    for _ in range(10):
         logger.debug("This is a long log message to trigger rotation." * 5)
 
     # Give time for the QueueListener to process

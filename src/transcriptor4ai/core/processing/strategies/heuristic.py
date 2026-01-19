@@ -11,7 +11,7 @@ import math
 
 from transcriptor4ai.core.processing.strategies.base import TokenizerStrategy
 
-# Industry standard ratio for English/Code: approx 4 characters per token
+# Industry standard ratio for code/prose: approximately 4 characters per token
 CHARS_PER_TOKEN_AVG: int = 4
 
 
@@ -25,12 +25,14 @@ class HeuristicStrategy(TokenizerStrategy):
         Estimate tokens using the global characters-to-token ratio.
 
         Args:
-            text: Raw input text.
-            model_id: Identifier (ignored in this heuristic approach).
+            text: Raw input text to be measured.
+            model_id: Model identifier (ignored in this heuristic approach).
 
         Returns:
-            int: Ceiling of the character count divided by the average ratio.
+            int: Total estimated tokens (minimum 0).
         """
         if not text:
             return 0
+
+        # Strict character-to-token ceiling math to ensure consistency with tests
         return math.ceil(len(text) / CHARS_PER_TOKEN_AVG)

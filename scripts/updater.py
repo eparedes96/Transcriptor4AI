@@ -22,9 +22,9 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger("updater")
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # PROCESS AND INTEGRITY HELPERS
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def wait_for_pid(pid: int, timeout: int = 30) -> bool:
     """
@@ -71,9 +71,9 @@ def calculate_sha256(file_path: str) -> str:
         return ""
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # CORE UPDATE LIFECYCLE
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def run_update(
         old_exe: str,
@@ -116,7 +116,6 @@ def run_update(
             sys.exit(1)
 
         time.sleep(1)
-
         logger.info(f"Updating {old_exe}...")
 
         # Rotate backup file
@@ -127,7 +126,7 @@ def run_update(
             except OSError:
                 pass
 
-        # Implement robust rename to handle OS file locks (Antivirus/Indexing)
+        # Robust rename to handle OS file locks (Antivirus/Indexing)
         _retry_rename(old_exe, backup_exe)
 
         try:
@@ -162,9 +161,9 @@ def run_update(
         sys.exit(1)
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # PRIVATE HELPERS
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def _retry_rename(src: str, dst: str, max_retries: int = 5) -> None:
     """
@@ -194,26 +193,40 @@ def _retry_rename(src: str, dst: str, max_retries: int = 5) -> None:
 
             wait_time = 1.5 ** i
             logger.warning(
-                f"File system lock detected (attempt {i + 1}/{max_retries}). "
+                f"FS lock detected (attempt {i + 1}/{max_retries}). "
                 f"Retrying in {wait_time:.2f}s... Error: {e}"
             )
             time.sleep(wait_time)
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # SCRIPT INTERFACE
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def main() -> None:
     """Parse CLI arguments and initiate the update lifecycle."""
     parser = argparse.ArgumentParser(description="Transcriptor4AI Sidecar Updater")
-    parser.add_argument("--pid", type=int, required=True, help="PID of the process to wait for")
-    parser.add_argument("--old", type=str, required=True, help="Path to the current executable")
-    parser.add_argument("--new", type=str, required=True, help="Path to the new executable")
-    parser.add_argument("--sha256", type=str, help="Expected SHA-256 hash for integrity verification")
+
+    parser.add_argument(
+        "--pid", type=int, required=True,
+        help="PID of the process to wait for"
+    )
+    parser.add_argument(
+        "--old", type=str, required=True,
+        help="Path to the current executable"
+    )
+    parser.add_argument(
+        "--new", type=str, required=True,
+        help="Path to the new executable"
+    )
+    parser.add_argument(
+        "--sha256", type=str,
+        help="Expected SHA-256 hash for integrity verification"
+    )
 
     args = parser.parse_args()
 
+    # Small delay to ensure the parent process starts closing
     time.sleep(0.5)
 
     run_update(args.old, args.new, args.pid, args.sha256)

@@ -15,21 +15,19 @@ import os
 import tempfile
 from typing import Any, Dict, List, Optional, Tuple
 
-from transcriptor4ai.domain.pipeline_models import (
-    PipelineResult,
-    create_error_result
-)
+from transcriptor4ai.domain.pipeline_models import PipelineResult, create_error_result
 from transcriptor4ai.infra.fs import (
     check_existing_output_files,
-    normalize_path,
     get_real_output_path,
+    normalize_path,
 )
 
 logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------------------------
+
+# ==============================================================================
 # ENVIRONMENT PREPARATION LOGIC
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def prepare_environment(
         cfg: Dict[str, Any],
@@ -54,7 +52,7 @@ def prepare_environment(
             A PipelineResult object if setup fails, else None and the
             environment context dictionary.
     """
-    # 1. Path Normalization and Validation
+    # --- 1. Path Normalization and Validation ---
     fallback_base = os.getcwd()
     base_path = normalize_path(cfg.get("input_path", ""), fallback_base)
 
@@ -68,9 +66,7 @@ def prepare_environment(
     final_output_path = get_real_output_path(output_base_dir, cfg["output_subdir_name"])
     prefix = cfg["output_prefix"]
 
-    # -----------------------------------------------------------------------------
-    # 2. COLLISION DETECTION (OVERWRITE CHECK)
-    # -----------------------------------------------------------------------------
+    # --- 2. Collision Detection (Overwrite Check) ---
     files_to_check: List[str] = []
 
     # Map possible files based on configuration flags
@@ -101,9 +97,7 @@ def prepare_environment(
             summary_extra={"existing_files": list(existing_files)}
         ), {}
 
-    # -----------------------------------------------------------------------------
-    # 3. DIRECTORY AND STAGING INITIALIZATION
-    # -----------------------------------------------------------------------------
+    # --- 3. Directory and Staging Initialization ---
     if not dry_run:
         try:
             os.makedirs(final_output_path, exist_ok=True)
@@ -121,12 +115,16 @@ def prepare_environment(
     else:
         staging_dir = final_output_path
 
-    # Define intermediate file paths
+    # Define intermediate file paths (Fixed E501 by breaking long join)
+    tree_path = tree_output_path
+    if not tree_path:
+        tree_path = os.path.join(staging_dir, f"{prefix}_tree.txt")
+
     paths = {
         "modules": os.path.join(staging_dir, f"{prefix}_modules.txt"),
         "tests": os.path.join(staging_dir, f"{prefix}_tests.txt"),
         "resources": os.path.join(staging_dir, f"{prefix}_resources.txt"),
-        "tree": tree_output_path if tree_output_path else os.path.join(staging_dir, f"{prefix}_tree.txt"),
+        "tree": tree_path,
         "errors": os.path.join(staging_dir, f"{prefix}_errors.txt"),
         "unified": os.path.join(staging_dir, f"{prefix}_full_context.txt"),
     }

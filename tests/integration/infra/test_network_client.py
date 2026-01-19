@@ -4,16 +4,20 @@ from __future__ import annotations
 Integration tests for Network Infrastructure.
 
 Utilizes mocking to verify GitHub API update checks, binary streaming,
-and telemetry submission without making real network calls.
+pricing synchronization, and telemetry submission without making real 
+network calls.
 """
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from transcriptor4ai.infra.network import (
     _calculate_sha256,
     check_for_updates,
     download_binary_stream,
+    fetch_pricing_data,
     submit_feedback,
 )
 
@@ -67,6 +71,46 @@ def test_download_binary_stream_success(tmp_path: Path) -> None:
         assert dest_path.read_bytes() == b"chunk1chunk2chunk3"
         assert len(progress_calls) > 0
         assert progress_calls[-1] == 100.0
+
+
+# -----------------------------------------------------------------------------
+# PRICING SYNCHRONIZATION TESTS
+# -----------------------------------------------------------------------------
+
+def test_fetch_pricing_data_success() -> None:
+    """TC-01: Verify successful retrieval and parsing of remote pricing JSON."""
+    mock_data = {"Model-A": {"input_cost_1k": 0.01}}
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = mock_data
+
+    with patch("requests.get", return_value=mock_resp) as mock_get:
+        result = fetch_pricing_data("http://fake.url/pricing.json")
+
+        assert result == mock_data
+        mock_get.assert_called_once()
+
+        # Verify infrastructure constraints (NFR-01: 2s timeout)
+        _, kwargs = mock_get.call_args
+        assert kwargs["timeout"] == 2
+
+
+def test_fetch_pricing_data_timeout() -> None:
+    """TC-02: Verify that the function returns None on network timeout."""
+    with patch("requests.get", side_effect=requests.exceptions.Timeout):
+        result = fetch_pricing_data("http://slow.url")
+        assert result is None
+
+
+def test_fetch_pricing_data_malformed_json() -> None:
+    """TC-03: Verify resilience when remote source returns a list instead of dict."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = ["not", "a", "dict"]
+
+    with patch("requests.get", return_value=mock_resp):
+        result = fetch_pricing_data("http://broken.url")
+        assert result is None
 
 
 # -----------------------------------------------------------------------------

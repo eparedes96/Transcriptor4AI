@@ -24,6 +24,7 @@ from transcriptor4ai.infra.logging import (
     configure_logging,
     get_default_gui_log_path,
 )
+from transcriptor4ai.interface.gui import threads
 from transcriptor4ai.interface.gui.components.dashboard import DashboardFrame
 from transcriptor4ai.interface.gui.components.logs_console import LogsFrame
 from transcriptor4ai.interface.gui.components.main_window import create_main_window
@@ -169,6 +170,17 @@ def main() -> None:
             kwargs={"manual": False},
             daemon=True
         ).start()
+
+    # Financial Pricing Synchronization
+    threading.Thread(
+        target=threads.run_pricing_update_task,
+        kwargs={
+            "on_complete": lambda data: app.after(
+                0, lambda: controller.on_pricing_updated(data)
+            )
+        },
+        daemon=True
+    ).start()
 
     # --- PHASE 6: LIFECYCLE FINALIZATION ---
     def on_closing() -> None:

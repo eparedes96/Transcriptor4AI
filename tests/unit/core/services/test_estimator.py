@@ -7,13 +7,15 @@ Verifies mathematical precision, fallback logic from live to static data,
 and resilience against malformed pricing structures.
 """
 
+from typing import Any, Dict
+
 import pytest
 
-from transcriptor4ai.domain.estimator import CostEstimator
+from transcriptor4ai.core.services.estimator import CostEstimator
 
 
 @pytest.fixture
-def sample_live_pricing() -> dict:
+def sample_live_pricing() -> Dict[str, Any]:
     """Provide a sample dynamic pricing dictionary."""
     return {
         "GPT-4o": {"input_cost_1k": 0.005, "output_cost_1k": 0.015},
@@ -30,7 +32,7 @@ def test_calculate_cost_with_static_fallback() -> None:
     assert cost == pytest.approx(0.005)
 
 
-def test_calculate_cost_with_live_overrides(sample_live_pricing: dict) -> None:
+def test_calculate_cost_with_live_overrides(sample_live_pricing: Dict[str, Any]) -> None:
     """TC-02: Verify that live pricing overrides domain constants."""
     estimator = CostEstimator(live_pricing=sample_live_pricing)
 
@@ -62,7 +64,7 @@ def test_calculate_cost_malformed_data() -> None:
     assert cost == 0.0
 
 
-def test_update_live_pricing(sample_live_pricing: dict) -> None:
+def test_update_live_pricing(sample_live_pricing: Dict[str, Any]) -> None:
     """TC-06: Verify dynamic update of the pricing table."""
     estimator = CostEstimator()
     estimator.update_live_pricing(sample_live_pricing)

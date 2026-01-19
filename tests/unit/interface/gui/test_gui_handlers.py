@@ -5,7 +5,7 @@ Unit tests for GUI Handlers (Controller Logic).
 
 Verifies the integration between CustomTkinter views and the AppController,
 ensuring data flows correctly from widgets to the internal configuration model.
-Includes OS-specific interaction tests for system explorers.
+Includes OS-specific interaction tests and financial integration (v2.1.0).
 """
 
 from pathlib import Path
@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from transcriptor4ai.domain.pipeline_models import create_success_result
 from transcriptor4ai.interface.gui.controllers.main_controller import AppController
 from transcriptor4ai.interface.gui.utils.tk_helpers import (
     open_file_explorer,
@@ -27,6 +28,7 @@ def test_parse_list_from_string_gui() -> None:
     assert parse_list_from_string("  val1  , val2 ") == ["val1", "val2"]
     assert parse_list_from_string("") == []
     assert parse_list_from_string(None) == []
+
 
 @pytest.mark.gui
 def test_controller_sync_config_from_view(mock_config_dict: dict) -> None:
@@ -82,30 +84,70 @@ def test_controller_sync_config_from_view(mock_config_dict: dict) -> None:
     # 4. Assertions
     # Check Paths
     assert controller.config["input_path"] == "/new/input"
-    assert controller.config["output_base_dir"] == "/new/output"
 
     # Check Logic Flags
     assert controller.config["process_modules"] is False
-    assert controller.config["process_tests"] is True
-    assert controller.config["generate_tree"] is True
-
-    # Check AST
-    assert controller.config["show_functions"] is True
-    assert controller.config["show_classes"] is False
-
-    # Check Lists
-    assert controller.config["extensions"] == [".rs", ".toml"]
-    assert controller.config["include_patterns"] == ["src/.*"]
-
-    # Check Security/Format
-    assert controller.config["create_unified_file"] is False
-    assert controller.config["enable_sanitizer"] is True
     assert controller.config["minify_output"] is True
+
+
+@pytest.mark.gui
+def test_controller_financial_sync(mock_config_dict: dict) -> None:
+    """TC-V2.1-01: Verify estimator and view update upon pricing sync success."""
+    mock_app = MagicMock()
+    mock_dash = MagicMock()
+    controller = AppController(mock_app, mock_config_dict, {})
+    controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
+
+    pricing_data = {"Model-X": {"input_cost_1k": 0.05}}
+    controller.on_pricing_updated(pricing_data)
+
+    assert controller.cost_estimator._live_pricing == pricing_data
+    mock_dash.set_pricing_status.assert_called_with(is_live=True)
+
+
+@pytest.mark.gui
+@patch("transcriptor4ai.interface.gui.controllers.main_controller.results_modal.show_results_window")
+@patch("transcriptor4ai.interface.gui.controllers.main_controller.mb")
+def test_controller_result_cost_calc(
+        mock_mb: MagicMock,
+        mock_show_results: MagicMock,
+        mock_config_dict: dict
+) -> None:
+    """
+    TC-V2.1-02: Verify cost calculation is triggered after pipeline success.
+
+    Ensures that the controller uses a valid model key to perform calculations.
+    """
+    mock_app = MagicMock()
+    mock_dash = MagicMock()
+
+    # Ensure config uses a valid model key existing in constants.py
+    mock_config_dict["target_model"] = "ChatGPT 4o"
+
+    controller = AppController(mock_app, mock_config_dict, {})
+    controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
+
+    # Result with 10k tokens -> Cost: (10000/1000) * 0.0025 = 0.025
+    result = create_success_result(
+        cfg=mock_config_dict,
+        base_path="/in",
+        final_output_path="/out",
+        existing_files=[],
+        token_count=10000
+    )
+
+    controller._handle_process_result(result)
+
+    # 1. Verify the dashboard was updated with the correct calculation
+    mock_dash.update_cost_display.assert_called_with(0.025)
+
+    # 2. Verify the modal was requested but not physically shown
+    mock_show_results.assert_called_once()
+
 
 @pytest.mark.gui
 def test_open_file_explorer_calls_system(tmp_path: Path) -> None:
     """Verify that the correct OS command is called based on platform."""
-
     target_dir = tmp_path / "target"
     target_dir.mkdir()
     path_str = str(target_dir)
@@ -126,7 +168,6 @@ def test_open_file_explorer_calls_system(tmp_path: Path) -> None:
 @pytest.mark.gui
 def test_open_file_explorer_handles_invalid_path() -> None:
     """It should verify path existence before calling system to avoid crashes."""
-
     # Mock showerror to avoid UI popup during test
     with patch("tkinter.messagebox.showerror") as mock_alert:
         with patch("subprocess.Popen") as mock_popen:

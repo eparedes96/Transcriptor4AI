@@ -4,16 +4,19 @@ from __future__ import annotations
 Dashboard UI Component.
 
 Constructs the primary workspace for the application. Manages input/output
-path selection, processing mode toggles (modules, tests, resources),
-and execution triggers. Implements a scrollable layout to ensure
-usability across different window dimensions.
+path selection, processing mode toggles, and execution triggers. 
+Introduces a financial estimation panel to display 
+real-time transcription costs.
 """
 
+import logging
 from typing import Any, Dict
 
 import customtkinter as ctk
 
 from transcriptor4ai.utils.i18n import i18n
+
+logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # DASHBOARD VIEW COMPONENT
@@ -24,8 +27,7 @@ class DashboardFrame(ctk.CTkFrame):
     Main execution dashboard for Transcriptor4AI.
 
     Provides an interactive interface for filesystem path resolution and
-    core transcription parameters. Encapsulated within a scrollable frame
-    to handle complex widget hierarchies.
+    core transcription parameters. Encapsulated within a scrollable frame.
     """
 
     def __init__(self, master: Any, config: Dict[str, Any], **kwargs: Any):
@@ -93,24 +95,7 @@ class DashboardFrame(ctk.CTkFrame):
         )
         self.btn_browse_out.grid(row=3, column=1, padx=10, pady=10)
 
-        # --- 3. SECTION: ARTIFACT NAMING (SUBDIR & PREFIX) ---
-        self.frame_sub_headers = ctk.CTkFrame(self.frame_io, fg_color="transparent")
-        self.frame_sub_headers.grid(row=4, column=0, columnspan=2, sticky="ew", padx=10)
-
-        ctk.CTkLabel(
-            self.frame_sub_headers,
-            text=i18n.t("gui.labels.subdir"),
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color=("gray40", "gray60")
-        ).pack(side="left", padx=(0, 100))
-
-        ctk.CTkLabel(
-            self.frame_sub_headers,
-            text=i18n.t("gui.labels.prefix"),
-            font=ctk.CTkFont(size=11, weight="bold"),
-            text_color=("gray40", "gray60")
-        ).pack(side="left")
-
+        # --- 3. SECTION: ARTIFACT NAMING ---
         self.frame_sub = ctk.CTkFrame(self.frame_io, fg_color="transparent")
         self.frame_sub.grid(row=5, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
 
@@ -151,7 +136,7 @@ class DashboardFrame(ctk.CTkFrame):
             self.sw_tree.select()
         self.sw_tree.grid(row=1, column=0, padx=20, pady=15, sticky="w")
 
-        # --- 5. SECTION: STATIC ANALYSIS (AST) PARAMETERS ---
+        # --- 5. SECTION: STATIC ANALYSIS (AST) ---
         self.frame_ast = ctk.CTkFrame(self.scroll, fg_color="transparent")
 
         # Function signatures
@@ -172,7 +157,34 @@ class DashboardFrame(ctk.CTkFrame):
             self.chk_meth.select()
         self.chk_meth.pack(side="left", padx=20)
 
-        # --- 6. SECTION: PIPELINE EXECUTION TRIGGERS ---
+        # --- 6. SECTION: TRANSCRIPTION ECONOMICS (v2.1.0) ---
+        self.frame_cost = ctk.CTkFrame(self.scroll)
+        self.frame_cost.grid(row=3, column=0, sticky="ew", pady=(10, 10))
+        self.frame_cost.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            self.frame_cost,
+            text=i18n.t("gui.dashboard.cost_label", default="Estimated Cost:"),
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).grid(row=0, column=0, padx=10, pady=10, sticky="w")
+
+        self.lbl_cost_val = ctk.CTkLabel(
+            self.frame_cost,
+            text="$0.0000",
+            font=ctk.CTkFont(family="Consolas", size=14, weight="bold"),
+            text_color="green"
+        )
+        self.lbl_cost_val.grid(row=0, column=1, padx=10, pady=10, sticky="w")
+
+        self.lbl_pricing_status = ctk.CTkLabel(
+            self.frame_cost,
+            text="Initializing...",
+            font=ctk.CTkFont(size=10),
+            text_color="gray"
+        )
+        self.lbl_pricing_status.grid(row=0, column=2, padx=10, pady=10, sticky="e")
+
+        # --- 7. SECTION: EXECUTION TRIGGERS ---
         self.btn_process = ctk.CTkButton(
             self.scroll,
             text=i18n.t("gui.dashboard.btn_start"),
@@ -180,7 +192,7 @@ class DashboardFrame(ctk.CTkFrame):
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#1f538d"
         )
-        self.btn_process.grid(row=3, column=0, sticky="ew", pady=20, padx=10)
+        self.btn_process.grid(row=4, column=0, sticky="ew", pady=(10, 5), padx=10)
 
         self.btn_simulate = ctk.CTkButton(
             self.scroll,
@@ -189,4 +201,35 @@ class DashboardFrame(ctk.CTkFrame):
             border_width=1,
             text_color=("gray10", "#DCE4EE")
         )
-        self.btn_simulate.grid(row=4, column=0, sticky="ew", padx=10)
+        self.btn_simulate.grid(row=5, column=0, sticky="ew", padx=10, pady=(0, 20))
+
+    # -------------------------------------------------------------------------
+    # PUBLIC API (CONTROLLED BY MAIN_CONTROLLER)
+    # -------------------------------------------------------------------------
+
+    def update_cost_display(self, cost: float) -> None:
+        """
+        Update the visual cost amount.
+
+        Args:
+            cost: Calculated cost value in USD.
+        """
+        self.lbl_cost_val.configure(text=f"${cost:.4f}")
+        logger.debug(f"UI: Dashboard cost display updated to ${cost:.4f}")
+
+    def set_pricing_status(self, is_live: bool) -> None:
+        """
+        Update the indicator showing the source of pricing data.
+
+        Args:
+            is_live: True if data is from network, False if from local cache.
+        """
+        if is_live:
+            text = f"{i18n.t('gui.dashboard.status_live', default='Live Pricing')} 🟢"
+            color = "green"
+        else:
+            text = f"{i18n.t('gui.dashboard.status_cached', default='Default Pricing')} 🟠"
+            color = "#D4AC0D"
+
+        self.lbl_pricing_status.configure(text=text, text_color=color)
+        logger.debug(f"UI: Pricing status updated (Live={is_live})")

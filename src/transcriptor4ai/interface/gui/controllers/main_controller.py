@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Main Application Controller.
 
-Bridges the View (UI Components) and the Model (Core Logic). 
-Handles user interactions, configuration sync, and process execution. 
-Acts as a Facade for specialized sub-controllers (Profiles, Feedback), 
+Bridges the View (UI Components) and the Model (Core Logic).
+Handles user interactions, configuration sync, and process execution.
+Acts as a Facade for specialized sub-controllers (Profiles, Feedback),
 managing the asynchronous lifecycle of the transcription pipeline.
 """
 
@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import customtkinter as ctk
 
+from transcriptor4ai.core.services.estimator import CostEstimator
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.domain import constants as const
 from transcriptor4ai.domain.pipeline_models import PipelineResult
@@ -29,7 +30,6 @@ from transcriptor4ai.interface.gui.utils.binder import FormBinder
 from transcriptor4ai.utils.i18n import i18n
 
 logger = logging.getLogger(__name__)
-
 
 # ==============================================================================
 # PRIMARY APPLICATION CONTROLLER
@@ -68,8 +68,9 @@ class AppController:
         self.logs_view: Any = None
         self.sidebar_view: Any = None
 
-        # Technical Helpers
+        # Core Services
         self.binder = FormBinder()
+        self.cost_estimator = CostEstimator()
 
         # Initialize Sub-Controllers (Delegation Pattern)
         self.profile_controller = ProfileController(self)
@@ -154,6 +155,10 @@ class AppController:
         self.settings_view.combo_provider.set(current_provider)
 
         self._filter_models_by_provider(current_provider, preserve_selection=target_model)
+
+        # Reset financial display on config sync
+        if self.dashboard_view and hasattr(self.dashboard_view, "update_cost_display"):
+            self.dashboard_view.update_cost_display(0.0)
 
     def sync_config_from_view(self) -> None:
         """
@@ -265,9 +270,15 @@ class AppController:
             fg_color="#1f538d"
         )
 
-        # Result orchestration
+        # Result orchestration and Financial Calculation
         if isinstance(result, PipelineResult):
             if result.ok:
+                target_model = self.config.get("target_model", const.DEFAULT_MODEL_KEY)
+                cost = self.cost_estimator.calculate_cost(result.token_count, target_model)
+
+                if self.dashboard_view and hasattr(self.dashboard_view, "update_cost_display"):
+                    self.dashboard_view.update_cost_display(cost)
+
                 results_modal.show_results_window(self.app, result)
             else:
                 if self._cancellation_event.is_set() and "cancelled" in result.error.lower():
@@ -282,6 +293,26 @@ class AppController:
         state = "disabled" if disabled else "normal"
         self.dashboard_view.btn_process.configure(state=state)
         self.dashboard_view.btn_simulate.configure(state=state)
+
+    # -------------------------------------------------------------------------
+    # PRICING SYNCHRONIZATION
+    # -------------------------------------------------------------------------
+
+    def on_pricing_updated(self, data: Optional[Dict[str, Any]]) -> None:
+        """
+        Handle remote pricing data delivery from the network thread.
+
+        Args:
+            data: Retrieved pricing dictionary or None if sync failed.
+        """
+        if data:
+            self.cost_estimator.update_live_pricing(data)
+            if self.dashboard_view and hasattr(self.dashboard_view, "set_pricing_status"):
+                self.dashboard_view.set_pricing_status(is_live=True)
+        else:
+            logger.warning("Controller: Pricing sync failed. Fallback to cached constants active.")
+            if self.dashboard_view and hasattr(self.dashboard_view, "set_pricing_status"):
+                self.dashboard_view.set_pricing_status(is_live=False)
 
     # -------------------------------------------------------------------------
     # UI EVENT HANDLERS

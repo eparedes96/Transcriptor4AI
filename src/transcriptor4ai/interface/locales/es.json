@@ -1,206 +1,209 @@
 {
   "app": {
     "name": "Transcriptor4AI",
-    "description": "Code transcription tool (Tests/Modules/Resources) with directory tree generation support."
+    "description": "Herramienta de transcripción de código (Tests/Módulos/Recursos) con soporte para generación de árbol de directorios."
   },
   "cli": {
     "args": {
-      "input": "Path to the source directory to process.",
-      "output_base": "Base output directory.",
-      "subdir": "Name of the output subdirectory.",
-      "prefix": "Prefix for generated files.",
-      "tree": "Generate directory tree.",
-      "tree_file": "Path to save the tree file (overrides default).",
-      "print_tree": "Print the tree to console.",
-      "func": "Show functions in tree.",
-      "cls": "Show classes in tree.",
-      "meth": "Show methods in tree.",
-      "ext": "Comma-separated extensions (e.g. .py,.txt).",
-      "inc": "Regex inclusion patterns.",
-      "exc": "Regex exclusion patterns.",
-      "overwrite": "Overwrite existing files without prompting.",
-      "dry_run": "Simulate execution without writing files.",
-      "no_log": "Do not generate the error log file.",
-      "defaults": "Ignore config.json and use defaults.",
-      "dump": "Print final config in JSON and exit.",
-      "json": "Output result in JSON format.",
-      "no_modules": "Do not include source code modules.",
-      "no_tests": "Do not include test files.",
-      "resources": "Include resource files (docs, config, data).",
-      "no_gitignore": "Do not read .gitignore files.",
-      "unified_only": "Generate ONLY the unified context file.",
-      "individual_only": "Generate ONLY individual files."
+      "input": "Ruta al directorio fuente a procesar.",
+      "output_base": "Directorio base de salida.",
+      "subdir": "Nombre del subdirectorio de salida.",
+      "prefix": "Prefijo para los archivos generados.",
+      "tree": "Generar árbol de directorios.",
+      "tree_file": "Ruta para guardar el archivo del árbol (anula el valor por defecto).",
+      "print_tree": "Imprimir el árbol en la consola.",
+      "func": "Mostrar funciones en el árbol.",
+      "cls": "Mostrar clases en el árbol.",
+      "meth": "Mostrar métodos en el árbol.",
+      "ext": "Extensiones separadas por comas (ej. .py,.txt).",
+      "inc": "Patrones de inclusión por Regex.",
+      "exc": "Patrones de exclusión por Regex.",
+      "overwrite": "Sobrescribir archivos existentes sin preguntar.",
+      "dry_run": "Simular la ejecución sin escribir archivos.",
+      "no_log": "No generar el archivo de registro de errores.",
+      "defaults": "Ignorar config.json y usar valores por defecto.",
+      "dump": "Imprimir configuración final en JSON y salir.",
+      "json": "Resultado de la salida en formato JSON.",
+      "no_modules": "No incluir módulos de código fuente.",
+      "no_tests": "No incluir archivos de prueba.",
+      "resources": "Incluir archivos de recursos (docs, config, datos).",
+      "no_gitignore": "No leer archivos .gitignore.",
+      "unified_only": "Generar SOLAMENTE el archivo de contexto unificado.",
+      "individual_only": "Generar SOLAMENTE archivos individuales."
     },
     "errors": {
-      "path_not_exist": "Input path does not exist: {path}",
-      "path_not_dir": "Input path is not a directory: {path}",
-      "pipeline_fail": "Unhandled exception in pipeline: {error}"
+      "path_not_exist": "La ruta de entrada no existe: {path}",
+      "path_not_dir": "La ruta de entrada no es un directorio: {path}",
+      "pipeline_fail": "Excepción no controlada en el pipeline: {error}"
     },
     "status": {
-      "interrupted": "Operation cancelled by user (SIGINT).",
-      "success": "SUCCESS",
-      "output_dir": "Output Directory: {path}",
-      "generated": "Generated Files:"
+      "interrupted": "Operación cancelada por el usuario (SIGINT).",
+      "success": "ÉXITO",
+      "output_dir": "Directorio de salida: {path}",
+      "generated": "Archivos generados:"
     }
   },
   "gui": {
     "sidebar": {
-      "dashboard": "Dashboard",
-      "settings": "Settings",
-      "logs": "System Logs",
-      "update": "Update Ready"
+      "dashboard": "Panel Central",
+      "settings": "Configuración",
+      "logs": "Registros del Sistema",
+      "update": "Actualización Lista"
     },
     "dashboard": {
-      "source_header": "Source Directory Path",
-      "dest_header": "Destination Directory",
-      "ast_func": "Show Functions",
-      "ast_class": "Show Classes",
-      "ast_meth": "Show Methods",
-      "btn_start": "START PROCESSING",
-      "btn_simulating": "SIMULATING..."
+      "source_header": "Ruta del Directorio Fuente",
+      "dest_header": "Directorio de Destino",
+      "ast_func": "Mostrar Funciones",
+      "ast_class": "Mostrar Clases",
+      "ast_meth": "Mostrar Métodos",
+      "cost_label": "Coste Estimado:",
+      "status_live": "Precios en Vivo",
+      "status_cached": "Precios por Defecto",
+      "btn_start": "INICIAR PROCESAMIENTO",
+      "btn_simulating": "SIMULANDO..."
     },
     "sections": {
-      "input": "Source Directory:",
-      "output": "Base Output Directory (a subdirectory will be created inside):",
-      "sub_output": "Output Subdirectory:",
-      "prefix": "File Prefix:",
-      "content": "Content Selection:",
-      "format": "Output Format:",
-      "filters": "Filters:",
-      "actions": "Actions:"
+      "input": "Directorio Fuente:",
+      "output": "Directorio Base de Salida (se creará un subdirectorio dentro):",
+      "sub_output": "Subdirectorio de Salida:",
+      "prefix": "Prefijo de Archivo:",
+      "content": "Selección de Contenido:",
+      "format": "Formato de Salida:",
+      "filters": "Filtros:",
+      "actions": "Acciones:"
     },
     "labels": {
-      "subdir": "Output Subdirectory",
-      "prefix": "Filename Prefix",
-      "extensions": "Extensions (comma-separated):",
-      "include": "Include Patterns (Regex):",
-      "exclude": "Exclude Patterns (Regex):",
-      "stack": "Extension Stack:",
-      "target_model": "Target AI Model:",
-      "profile": "Profile:"
+      "subdir": "Subdirectorio de Salida",
+      "prefix": "Prefijo de Archivo",
+      "extensions": "Extensiones (separadas por comas):",
+      "include": "Patrones de Inclusión (Regex):",
+      "exclude": "Patrones de Exclusión (Regex):",
+      "stack": "Stack de Extensiones:",
+      "target_model": "Modelo de IA Objetivo:",
+      "profile": "Perfil:"
     },
     "tooltips": {
-      "input": "Root folder containing the source code.",
-      "output": "Parent folder where results will be saved.",
-      "subdir": "Name of the final folder.",
-      "prefix": "Example: project_v1 -> project_v1_modules.txt",
-      "ext": "Example: .py, .js, .java",
-      "inc": "Only process files matching these patterns.",
-      "exc": "Ignore files/folders matching these patterns."
+      "input": "Carpeta raíz que contiene el código fuente.",
+      "output": "Carpeta padre donde se guardarán los resultados.",
+      "subdir": "Nombre de la carpeta final.",
+      "prefix": "Ejemplo: proyecto_v1 -> proyecto_v1_modules.txt",
+      "ext": "Ejemplo: .py, .js, .java",
+      "inc": "Solo procesar archivos que coincidan con estos patrones.",
+      "exc": "Ignorar archivos/carpetas que coincidan con estos patrones."
     },
     "checkboxes": {
-      "modules": "Include Modules (Source)",
-      "tests": "Include Tests",
-      "resources": "Include Resources (.md, .json, etc.)",
-      "gen_tree": "Include Directory Tree",
-      "individual": "Individual Files (.txt separated)",
-      "unified": "Unified Context File (single .txt)",
-      "func": "Show functions",
-      "cls": "Show classes",
-      "meth": "Show methods",
-      "print_tree": "Print tree to console",
-      "log_err": "Save error log",
-      "gitignore": "Respect .gitignore rules",
-      "overwrite": "Overwrite existing files"
+      "modules": "Incluir Módulos (Lógica)",
+      "tests": "Incluir Pruebas",
+      "resources": "Incluir Recursos (.md, .json, etc.)",
+      "gen_tree": "Incluir Árbol de Directorios",
+      "individual": "Archivos Individuales (separados .txt)",
+      "unified": "Archivo de Contexto Unificado (un solo .txt)",
+      "func": "Mostrar funciones",
+      "cls": "Mostrar clases",
+      "meth": "Mostrar métodos",
+      "print_tree": "Imprimir árbol en consola",
+      "log_err": "Guardar registro de errores",
+      "gitignore": "Respetar reglas de .gitignore",
+      "overwrite": "Sobrescribir archivos existentes"
     },
     "buttons": {
-      "explore": "Browse",
-      "examine": "Browse",
-      "simulate": "SIMULATE",
-      "process": "PROCESS",
-      "save": "Save Session",
-      "reset": "Reset Config",
-      "exit": "Exit"
+      "explore": "Explorar",
+      "examine": "Examinar",
+      "simulate": "SIMULAR",
+      "process": "PROCESAR",
+      "save": "Guardar Sesión",
+      "reset": "Restablecer Config",
+      "exit": "Salir"
     },
     "profiles": {
-      "load": "Load",
-      "save": "Save As...",
-      "del": "Del",
-      "prompt_name": "Enter name for new profile:",
-      "saved": "Profile '{name}' saved!",
-      "deleted": "Profile deleted.",
-      "confirm_delete": "Delete profile '{name}'?",
-      "confirm_overwrite_title": "Profile Exists",
-      "confirm_overwrite_msg": "The profile '{name}' already exists. Overwrite?",
-      "error_select": "Please select a valid profile from the list.",
-      "no_selection": "-- No Profile --"
+      "load": "Cargar",
+      "save": "Guardar Como...",
+      "del": "Eliminar",
+      "prompt_name": "Introduce el nombre para el nuevo perfil:",
+      "saved": "¡Perfil '{name}' guardado!",
+      "deleted": "Perfil eliminado.",
+      "confirm_delete": "¿Eliminar el perfil '{name}'?",
+      "confirm_overwrite_title": "El Perfil ya Existe",
+      "confirm_overwrite_msg": "El perfil '{name}' ya existe. ¿Sobrescribir?",
+      "error_select": "Por favor, selecciona un perfil válido de la lista.",
+      "no_selection": "-- Sin Perfil --"
     },
     "settings": {
-      "stack_header": "Quick Stack Presets",
-      "output_strat": "Output Strategy",
-      "security": "Security & Optimization",
-      "provider_label": "AI Provider",
-      "model_label": "Target AI Model"
+      "stack_header": "Ajustes Preestablecidos",
+      "output_strat": "Estrategia de Salida",
+      "security": "Seguridad y Optimización",
+      "provider_label": "Proveedor de IA",
+      "model_label": "Modelo de IA Objetivo"
     },
     "combos": {
-      "select_stack": "-- Select Stack --",
-      "no_profile": "-- No Profile --"
+      "select_stack": "-- Seleccionar Stack --",
+      "no_profile": "-- Sin Perfil --"
     },
     "logs": {
-      "copy": "Copy Logs",
-      "api_warning": "Model '{model}' selected. Note: API inference is not active; performing Token Estimation only."
+      "copy": "Copiar Registros",
+      "api_warning": "Modelo '{model}' seleccionado. Nota: La inferencia por API no está activa; solo se realiza la Estimación de Tokens."
     },
     "feedback": {
-      "type_label": "Report Type:",
+      "type_label": "Tipo de Informe:",
       "types": {
-        "bug": "Bug Report",
-        "feature": "Feature Request",
-        "other": "Other"
+        "bug": "Error (Bug)",
+        "feature": "Solicitud de Función",
+        "other": "Otro"
       }
     },
     "status": {
-      "processing": "⏳ Processing... Please wait.",
-      "success": "Session saved successfully.",
-      "reset": "Configuration reset to defaults."
+      "processing": "⏳ Procesando... Por favor, espera.",
+      "success": "Sesión guardada con éxito.",
+      "reset": "Configuración restablecida a los valores por defecto."
     },
     "dialogs": {
       "error_title": "Error",
-      "success_title": "Success",
-      "saved_title": "Saved",
-      "confirm_title": "Confirm",
-      "invalid_input": "Invalid Input Directory",
-      "pipeline_failed": "Pipeline Failed",
-      "sending_feedback": "Sending feedback in background...",
-      "update_title": "Update Available",
-      "up_to_date": "App is up to date."
+      "success_title": "Éxito",
+      "saved_title": "Guardado",
+      "confirm_title": "Confirmar",
+      "invalid_input": "Directorio de Entrada Inválido",
+      "pipeline_failed": "Fallo en el Pipeline",
+      "sending_feedback": "Enviando comentarios en segundo plano...",
+      "update_title": "Actualización Disponible",
+      "up_to_date": "La aplicación está actualizada."
     },
     "crash": {
-      "title": "Critical Error",
-      "header": "CRITICAL ERROR DETECTED"
+      "title": "Error Crítico",
+      "header": "SE HA DETECTADO UN ERROR CRÍTICO"
     },
     "popups": {
-      "title_result": "Result",
-      "dry_run_title": "=== SIMULATION COMPLETE ===",
-      "dry_run_msg": "No files were written to disk.\nSimulation would have generated: {files}",
-      "success_title": "=== PROCESS COMPLETED SUCCESSFULLY ===",
-      "output_path": "Output: {path}",
-      "stats": "Processed: {proc}\nSkipped: {skip}\nRead Errors: {err}",
-      "generated_files": "\nGenerated Files:",
-      "error_save": "Could not save configuration:\n{error}",
-      "error_path": "Path does not exist:\n{path}",
-      "error_dir": "Path is not a directory:\n{path}",
-      "error_process": "Process Error:\n{error}",
-      "error_critical": "Critical Thread Error:\n{error}",
-      "overwrite_msg": "The following files will be overwritten:\n\n{files}\n\nDo you want to continue?",
-      "overwrite_title": "Overwrite Warning"
+      "title_result": "Resultado",
+      "dry_run_title": "=== SIMULACIÓN COMPLETADA ===",
+      "dry_run_msg": "No se han escrito archivos en el disco.\nLa simulación habría generado: {files}",
+      "success_title": "=== PROCESO COMPLETADO CON ÉXITO ===",
+      "output_path": "Salida: {path}",
+      "stats": "Procesados: {proc}\nOmitidos: {skip}\nErrores de Lectura: {err}",
+      "generated_files": "\nArchivos Generados:",
+      "error_save": "No se pudo guardar la configuración:\n{error}",
+      "error_path": "La ruta no existe:\n{path}",
+      "error_dir": "La ruta no es un directorio:\n{path}",
+      "error_process": "Error en el Proceso:\n{error}",
+      "error_critical": "Error Crítico de Hilo:\n{error}",
+      "overwrite_msg": "Se sobrescribirán los siguientes archivos:\n\n{files}\n\n¿Deseas continuar?",
+      "overwrite_title": "Advertencia de Sobrescritura"
     },
     "results_window": {
-      "title": "Result",
-      "dry_run_header": "SIMULATION COMPLETE",
-      "success_header": "PROCESS COMPLETED",
-      "stats_processed": "Processed",
-      "stats_skipped": "Skipped",
-      "stats_errors": "Errors",
-      "stats_tokens": "Est. Tokens",
-      "files_label": "Generated Files:",
-      "btn_open": "Open Folder",
-      "btn_copy": "Copy Unified Output",
-      "btn_close": "Close",
-      "copied_msg": "Copied to clipboard!"
+      "title": "Resultado",
+      "dry_run_header": "SIMULACIÓN COMPLETADA",
+      "success_header": "PROCESO COMPLETADO",
+      "stats_processed": "Procesados",
+      "stats_skipped": "Omitidos",
+      "stats_errors": "Errores",
+      "stats_tokens": "Tokens Est.",
+      "files_label": "Archivos Generados:",
+      "btn_open": "Abrir Carpeta",
+      "btn_copy": "Copiar Salida Unificada",
+      "btn_close": "Cerrar",
+      "copied_msg": "¡Copiado al portapapeles!"
     },
     "errors": {
-      "tokenizer_api": "Tokenizer API Error (using estimate)",
-      "dnd_invalid": "Invalid path dropped"
+      "tokenizer_api": "Error en la API del Tokenizador (usando estimación)",
+      "dnd_invalid": "Ruta soltada no válida"
     }
   }
 }

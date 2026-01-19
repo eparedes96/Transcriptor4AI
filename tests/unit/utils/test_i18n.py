@@ -58,6 +58,28 @@ def test_locales_key_parity() -> None:
     assert not extra_in_es, f"Keys present in ES but missing in EN: {extra_in_es}"
 
 
+def test_new_economic_keys_presence() -> None:
+    """TC-V2.1-01: Ensure all new financial keys are present in all locales."""
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    loc_rel = os.path.join("..", "..", "..", "src", "transcriptor4ai", "interface", "locales")
+    locales_path = os.path.abspath(os.path.join(base_path, loc_rel))
+
+    required_keys = [
+        "gui.dashboard.cost_label",
+        "gui.dashboard.status_live",
+        "gui.dashboard.status_cached"
+    ]
+
+    for lang in ["en", "es"]:
+        file_path = os.path.join(locales_path, f"{lang}.json")
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            flat_keys = _get_flat_keys(data)
+
+            for key in required_keys:
+                assert key in flat_keys, f"Key '{key}' is missing in {lang}.json"
+
+
 def test_i18n_resolution_logic(tmp_path: pytest.TempPathFactory) -> None:
     """TC-02: Verify dot-notation resolution and interpolation."""
     # Create a dummy locale file

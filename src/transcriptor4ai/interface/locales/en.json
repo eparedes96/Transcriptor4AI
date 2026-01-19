@@ -56,6 +56,9 @@
       "ast_func": "Show Functions",
       "ast_class": "Show Classes",
       "ast_meth": "Show Methods",
+      "cost_label": "Estimated Cost:",
+      "status_live": "Live Pricing",
+      "status_cached": "Default Pricing",
       "btn_start": "START PROCESSING",
       "btn_simulating": "SIMULATING..."
     },

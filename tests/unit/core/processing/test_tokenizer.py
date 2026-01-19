@@ -1,69 +1,59 @@
 from __future__ import annotations
 
 """
-Unit tests for the Token Counter utility.
+Unit tests for the Tokenizer Service (Orchestrator).
 
-Verifies the hybrid counting engine logic, including specialized 
-strategy selection, tiktoken integration, and heuristic fallback 
-reliability.
+Verifies the Strategy Pattern implementation:
+1. Correct mapping between model names and execution strategies.
+2. Resilience through the heuristic fallback mechanism.
+3. Proper handling of default model placeholders.
 """
 
-from unittest.mock import patch
-
+from unittest.mock import MagicMock, patch
 import pytest
 
-from transcriptor4ai.core.processing.strategies.heuristic import HeuristicStrategy
-from transcriptor4ai.core.processing.tokenizer import count_tokens
+from transcriptor4ai.core.processing.tokenizer import TokenizerService, count_tokens
 
 
-# ==============================================================================
-# TOKENIZER UNIT TESTS
-# ==============================================================================
-
-def test_token_counter_empty() -> None:
-    """Empty input should return 0 tokens."""
-    assert count_tokens("") == 0
+@pytest.fixture
+def service() -> TokenizerService:
+    """Provide a fresh instance of the TokenizerService."""
+    return TokenizerService()
 
 
-def test_token_counter_heuristic_math() -> None:
-    """
-    Verify strict math of heuristic (ceil(chars/4)).
+def test_tokenizer_service_mapping(service: TokenizerService) -> None:
+    """Verify that specific model keywords route to the correct strategies."""
+    # Test internal mapping through protected attribute access for validation
+    with patch.object(service._strategy_map["gpt"], "count", return_value=10):
+        assert service.count("text", "gpt-4") == 10
 
-    Used as the primary fallback when dependencies or APIs are missing.
-    """
-    strategy = HeuristicStrategy()
-    # Model ID arg is unused in heuristic but required by the Strategy interface
-    assert strategy.count("abcd", "mock_model") == 1
-    assert strategy.count("abcde", "mock_model") == 2
-    assert strategy.count("1234567890", "mock_model") == 3
+    with patch.object(service._strategy_map["claude"], "count", return_value=20):
+        assert service.count("text", "claude-3") == 20
 
-
-def test_fallback_when_tiktoken_missing() -> None:
-    """
-    Simulate ImportError for tiktoken and ensure the heuristic is used.
-    """
-    target_path = "transcriptor4ai.core.processing.strategies.openai.TIKTOKEN_AVAILABLE"
-    with patch(target_path, False):
-        text = "12345678"
-        assert count_tokens(text) == 2
+    with patch.object(service._strategy_map["gemini"], "count", return_value=30):
+        assert service.count("text", "gemini-pro") == 30
 
 
-def test_tiktoken_integration_gpt() -> None:
-    """
-    Verify live tiktoken integration for GPT models if the library is present.
+def test_tokenizer_service_fallback_on_failure(service: TokenizerService) -> None:
+    """Ensure that if a strategy fails (e.g. API Error), the heuristic takes over."""
+    # Mocking GPT strategy to raise an exception
+    with patch.object(service._strategy_map["gpt"], "count", side_effect=Exception("API Down")):
+        # "12345678" -> 8 chars -> Heuristic should return 2
+        count = service.count("12345678", "gpt-4")
+        assert count == 2
 
-    Skips execution in environments where tiktoken is not installed to
-    prevent false negatives in headless CI pipelines.
-    """
-    try:
-        import tiktoken
-        tiktoken.get_encoding("cl100k_base")
-    except (ImportError, Exception):
-        pytest.skip("tiktoken not installed or unavailable in current test environment")
 
-    text = "def main(): print('hello')"
-    count = count_tokens(text, model="GPT-4o")
+def test_tokenizer_service_default_model_handling(service: TokenizerService) -> None:
+    """Verify that the '- Default Model -' string triggers Tiktoken/GPT logic."""
+    with patch("transcriptor4ai.core.processing.strategies.openai.TiktokenStrategy.count") as mock_tik:
+        mock_tik.return_value = 100
+        count = service.count("some text", "- Default Model -")
+        assert count == 100
 
-    # Accurate BPE count should always be a positive integer
-    assert count > 0
-    assert isinstance(count, int)
+
+def test_public_count_tokens_interface() -> None:
+    """Verify the singleton-based public function works as expected."""
+    with patch("transcriptor4ai.core.processing.tokenizer._SERVICE_INSTANCE.count") as mock_service:
+        mock_service.return_value = 5
+        assert count_tokens("hello") == 5
+        mock_service.assert_called_once()

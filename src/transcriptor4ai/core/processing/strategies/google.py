@@ -7,8 +7,9 @@ Utilizes the Google GenAI SDK to perform remote token counting.
 Requires an active internet connection and a valid GOOGLE_API_KEY.
 """
 
-import os
 import logging
+import os
+
 from transcriptor4ai.core.processing.strategies.base import TokenizerStrategy
 
 logger = logging.getLogger(__name__)

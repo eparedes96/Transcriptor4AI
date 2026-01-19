@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Dashboard UI Component.
 
-Constructs the primary workspace for the application. Manages input/output 
-path selection, processing mode toggles (modules, tests, resources), 
-and execution triggers. Implements a scrollable layout to ensure 
+Constructs the primary workspace for the application. Manages input/output
+path selection, processing mode toggles (modules, tests, resources),
+and execution triggers. Implements a scrollable layout to ensure
 usability across different window dimensions.
 """
 

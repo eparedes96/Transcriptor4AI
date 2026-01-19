@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 GUI Entrypoint and Application Lifecycle Orchestrator.
 
-Initializes the CustomTkinter environment, coordinates persistent state loading, 
-assembles the visual component hierarchy, and bridges UI events with the 
+Initializes the CustomTkinter environment, coordinates persistent state loading,
+assembles the visual component hierarchy, and bridges UI events with the
 AppController. Manages asynchronous log polling and background update cycles.
 """
 
@@ -22,7 +22,7 @@ from transcriptor4ai.domain import constants as const
 from transcriptor4ai.infra.logging import (
     LoggingConfig,
     configure_logging,
-    get_default_gui_log_path
+    get_default_gui_log_path,
 )
 from transcriptor4ai.interface.gui.components.dashboard import DashboardFrame
 from transcriptor4ai.interface.gui.components.logs_console import LogsFrame

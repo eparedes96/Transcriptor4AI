@@ -8,8 +8,9 @@ the beta messages endpoint. Requires an active internet connection
 and a valid ANTHROPIC_API_KEY.
 """
 
-import os
 import logging
+import os
+
 from transcriptor4ai.core.processing.strategies.base import TokenizerStrategy
 
 logger = logging.getLogger(__name__)

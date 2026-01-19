@@ -18,11 +18,11 @@ from logging.handlers import QueueHandler, QueueListener
 from typing import List, Optional
 
 from transcriptor4ai.infra.fs import get_user_data_dir
-from transcriptor4ai.infra.logging.config import LoggingConfig, _LEVEL_MAP
+from transcriptor4ai.infra.logging.config import _LEVEL_MAP, LoggingConfig
 from transcriptor4ai.infra.logging.handlers import (
-    _tag_handler,
-    _is_our_handler,
     _create_rotating_file_handler,
+    _is_our_handler,
+    _tag_handler,
 )
 
 # Internal state flags for idempotency and lifecycle tracking

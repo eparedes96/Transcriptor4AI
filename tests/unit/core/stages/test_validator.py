@@ -14,7 +14,7 @@ import pytest
 from transcriptor4ai.core.pipeline.stages.validator import validate_config
 
 
-def test_validate_none_returns_defaults():
+def test_validate_none_returns_defaults() -> None:
     """Passing None should return the full default configuration."""
     cfg, warnings = validate_config(None)
 
@@ -27,7 +27,7 @@ def test_validate_none_returns_defaults():
     assert len(warnings) > 0
 
 
-def test_validate_empty_dict_returns_defaults():
+def test_validate_empty_dict_returns_defaults() -> None:
     """Passing an empty dict should merge with defaults."""
     cfg, warnings = validate_config({})
 
@@ -36,7 +36,7 @@ def test_validate_empty_dict_returns_defaults():
     assert len(warnings) == 0
 
 
-def test_validate_converts_strings_to_bools():
+def test_validate_converts_strings_to_bools() -> None:
     """
     Verify coercion of CLI/GUI string inputs ('true', 'yes', '1')
     to native Booleans.
@@ -62,7 +62,7 @@ def test_validate_converts_strings_to_bools():
     assert len(warnings) == 6
 
 
-def test_validate_normalizes_csv_strings_to_lists():
+def test_validate_normalizes_csv_strings_to_lists() -> None:
     """Verify 'py,txt' strings are converted to lists."""
     raw = {
         "extensions": "py, txt, .js",
@@ -78,7 +78,7 @@ def test_validate_normalizes_csv_strings_to_lists():
     assert cfg["include_patterns"][0] == "test.*"
 
 
-def test_validate_extensions_adds_dots():
+def test_validate_extensions_adds_dots() -> None:
     """Extensions without dots should have them added automatically."""
     raw = {"extensions": ["py", "java"]}
     cfg, _ = validate_config(raw)
@@ -87,18 +87,19 @@ def test_validate_extensions_adds_dots():
     assert ".java" in cfg["extensions"]
 
 
-def test_strict_raises_on_bad_type():
+def test_strict_raises_on_bad_type() -> None:
     """
     Strict mode should raise TypeError on mismatch instead of coercing.
     This is useful for internal calls or API usage.
     """
-    raw = {"generate_tree": "not_a_bool"}
-
+    # 1. Invalid boolean type
     with pytest.raises(TypeError):
-        validate_config(raw, strict=True)
+        validate_config({"generate_tree": "not_a_bool"}, strict=True)
 
-    raw2 = {"process_modules": 123}
-
-    raw3 = {"extensions": 123}
+    # 2. Invalid field value (number instead of bool)
     with pytest.raises(TypeError):
-        validate_config(raw3, strict=True)
+        validate_config({"process_modules": 123}, strict=True)
+
+    # 3. Invalid list container (number instead of list)
+    with pytest.raises(TypeError):
+        validate_config({"extensions": 123}, strict=True)

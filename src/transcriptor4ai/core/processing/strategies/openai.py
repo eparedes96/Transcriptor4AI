@@ -8,6 +8,7 @@ Supports modern o-series and GPT-4 architectures as well as legacy models.
 """
 
 import logging
+
 from transcriptor4ai.core.processing.strategies.base import TokenizerStrategy
 
 logger = logging.getLogger(__name__)

@@ -104,7 +104,8 @@ class UpdateManager:
             binary_url = res["binary_url"]
             is_zip = binary_url.lower().endswith(".zip")
             download_ext = ".zip" if is_zip else ".exe"
-            download_path = os.path.join(self._temp_dir, f"transcriptor4ai_v{latest_version}{download_ext}")
+            filename = f"transcriptor4ai_v{latest_version}{download_ext}"
+            download_path = os.path.join(self._temp_dir, filename)
 
             success, msg = network.download_binary_stream(binary_url, download_path)
             if not success:
@@ -128,12 +129,15 @@ class UpdateManager:
                     with zipfile.ZipFile(download_path, 'r') as zf:
                         exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
                         if not exe_files:
-                            logger.error("Update failed: No executable found inside the ZIP archive.")
+                            logger.error("Update failed: No executable found inside the ZIP.")
                             self._status = UpdateStatus.ERROR
                             return
 
-                        # Prioritize files containing 'transcriptor' or take the first executable found
-                        target_exe_name = next((f for f in exe_files if "transcriptor" in f.lower()), exe_files[0])
+                        # Prioritize files containing 'transcriptor' or take the first one
+                        target_exe_name = next(
+                            (f for f in exe_files if "transcriptor" in f.lower()),
+                            exe_files[0]
+                        )
                         zf.extract(target_exe_name, self._temp_dir)
                         self._pending_binary_path = os.path.join(self._temp_dir, target_exe_name)
 

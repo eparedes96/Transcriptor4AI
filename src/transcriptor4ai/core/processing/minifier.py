@@ -48,7 +48,11 @@ def minify_code(text: str, extension: str = ".py") -> str:
     optimized_len = len(result)
     if original_len > 0:
         reduction = 100 - (optimized_len * 100 / original_len)
-        logger.debug(f"Minified {extension}: {original_len} -> {optimized_len} chars ({reduction:.1f}% reduction)")
+        msg = (
+            f"Minified {extension}: {original_len} -> {optimized_len} "
+            f"chars ({reduction:.1f}% reduction)"
+        )
+        logger.debug(msg)
 
     # Preserve leading indentation but remove trailing global artifacts
     return result.rstrip()
@@ -78,7 +82,9 @@ def minify_code_stream(lines: Iterator[str], extension: str = ".py") -> Iterator
         # 1. Regex-based comment stripping (Language aware)
         if ext_lower in ('.py', '.yaml', '.yml', '.sh', '.bash'):
             processed = _PYTHON_COMMENT_PATTERN.sub("", processed)
-        elif ext_lower in ('.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go'):
+        elif ext_lower in (
+            '.js', '.ts', '.jsx', '.tsx', '.java', '.c', '.cpp', '.h', '.hpp', '.cs', '.go'
+        ):
             processed = _C_STYLE_COMMENT_PATTERN.sub("", processed)
 
         # 2. Horizontal whitespace optimization

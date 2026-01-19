@@ -12,9 +12,9 @@ import logging
 from typing import Any, Dict, List, Tuple
 
 from transcriptor4ai.core.pipeline.components.filters import (
+    default_exclude_patterns,
     default_extensions,
     default_include_patterns,
-    default_exclude_patterns,
 )
 from transcriptor4ai.domain.config import get_default_config
 
@@ -150,7 +150,13 @@ def _as_bool(value: Any, fallback: bool, field: str, warnings: List[str], strict
     return fallback
 
 
-def _as_list_str(value: Any, fallback: List[str], field: str, warnings: List[str], strict: bool) -> List[str]:
+def _as_list_str(
+        value: Any,
+        fallback: List[str],
+        field: str,
+        warnings: List[str],
+        strict: bool
+) -> List[str]:
     """Ensure input is a list of sanitized strings, supporting CSV parsing."""
     if value is None:
         return list(fallback)

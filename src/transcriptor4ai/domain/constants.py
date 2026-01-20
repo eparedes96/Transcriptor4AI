@@ -10,16 +10,26 @@ and system versioning.
 
 from typing import Any, Dict, List
 
+# Versioning and File Metadata
 CURRENT_CONFIG_VERSION = "2.1.0"
 DEFAULT_OUTPUT_PREFIX = "transcription"
 DEFAULT_MODEL_KEY = "- Default Model -"
 
-# URL for live pricing synchronization
+# -----------------------------------------------------------------------------
+# PRICING AND NETWORK CONFIGURATION
+# -----------------------------------------------------------------------------
+# URL pointing to LiteLLM's community-maintained model pricing repository
 PRICING_DATA_URL = (
-    "https://raw.githubusercontent.com/eparedes96/Transcriptor4AI/"
-    "main/resources/pricing.json"
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/"
+    "model_prices_and_context_window.json"
 )
 
+# Local cache filename for offline pricing fallback
+LOCAL_PRICING_FILENAME = "pricing_cache.json"
+
+# -----------------------------------------------------------------------------
+# FILE STACKS AND EXTENSIONS
+# -----------------------------------------------------------------------------
 DEFAULT_STACKS: Dict[str, List[str]] = {
     "Python Data": [".py", ".ipynb", ".json", ".csv", ".yaml"],
     "Web Fullstack": [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json"],

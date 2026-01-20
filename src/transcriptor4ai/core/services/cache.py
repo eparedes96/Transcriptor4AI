@@ -6,7 +6,7 @@ Local Cache Persistence Service.
 Provides a thread-safe, SQLite-backed caching mechanism to skip redundant
 processing of files. Implements a composite hashing strategy (File Metadata +
 Configuration Context) to ensure cache validity across session changes.
-Designed to fail silently (Fail-Safe) to avoid blocking the main pipeline.
+Now persists token counts to ensure cost estimation integrity on cache hits.
 """
 
 import hashlib
@@ -15,7 +15,7 @@ import os
 import sqlite3
 import threading
 import time
-from typing import Optional
+from typing import Optional, Tuple
 
 from transcriptor4ai.infra.fs import get_user_data_dir
 
@@ -26,12 +26,11 @@ class CacheService:
     """
     Manages the persistent storage of processed file artifacts.
 
-    Uses a local SQLite database to store the result of CPU-intensive
-    operations (minification, sanitization, tokenization).
+    Uses a local SQLite database to store results and metadata of
+    processed files to optimize performance and cost estimation.
     """
 
     DB_FILENAME = "cache.db"
-    SCHEMA_VERSION = 1
 
     def __init__(self) -> None:
         """
@@ -45,14 +44,15 @@ class CacheService:
 
     def _init_db(self) -> None:
         """
-        Create the database table if it does not exist.
+        Create the database table if it does not exist and handle migrations.
         """
         try:
             with self._lock:
                 with sqlite3.connect(self._db_path) as conn:
                     cursor = conn.cursor()
-                    # WAL mode improves concurrency performance
                     cursor.execute("PRAGMA journal_mode=WAL;")
+
+                    # Create core table
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS file_cache (
                             composite_hash TEXT PRIMARY KEY,
@@ -62,23 +62,30 @@ class CacheService:
                             created_at REAL
                         )
                     """)
+
+                    cursor.execute("PRAGMA table_info(file_cache)")
+                    columns = [info[1] for info in cursor.fetchall()]
+                    if "token_count" not in columns:
+                        logger.info("CacheService: Migrating database to include token_count...")
+                        cursor.execute("ALTER TABLE file_cache ADD COLUMN token_count INTEGER DEFAULT 0")
+
                     conn.commit()
             logger.debug(f"CacheService: Database initialized at {self._db_path}")
 
         except sqlite3.Error as e:
-            msg = f"CacheService: Failed to initialize database. Caching disabled. Error: {e}"
+            msg = f"CacheService: Initialization failure. Caching disabled. Error: {e}"
             logger.warning(msg)
             self._enabled = False
 
-    def get_entry(self, composite_hash: str) -> Optional[str]:
+    def get_entry(self, composite_hash: str) -> Optional[Tuple[str, int]]:
         """
-        Retrieve processed content from the cache if available.
+        Retrieve processed content and its token count from the cache.
 
         Args:
-            composite_hash: Unique identifier for the file state + config context.
+            composite_hash: Unique identifier for the file state.
 
         Returns:
-            Optional[str]: The cached content string, or None on miss/error.
+            Optional[Tuple[str, int]]: (Content, TokenCount) or None on miss.
         """
         if not self._enabled:
             return None
@@ -88,13 +95,13 @@ class CacheService:
                 with sqlite3.connect(self._db_path) as conn:
                     cursor = conn.cursor()
                     cursor.execute(
-                        "SELECT content FROM file_cache WHERE composite_hash = ?",
+                        "SELECT content, token_count FROM file_cache WHERE composite_hash = ?",
                         (composite_hash,)
                     )
                     row = cursor.fetchone()
 
                     if row:
-                        return str(row[0])
+                        return str(row[0]), int(row[1] or 0)
 
             return None
 
@@ -102,14 +109,15 @@ class CacheService:
             logger.warning(f"CacheService: Read error for hash {composite_hash[:8]}: {e}")
             return None
 
-    def set_entry(self, composite_hash: str, file_path: str, content: str) -> None:
+    def set_entry(self, composite_hash: str, file_path: str, content: str, token_count: int) -> None:
         """
         Store or update a processed entry in the cache.
 
         Args:
             composite_hash: Unique identifier.
-            file_path: Original file path (for debugging/audit).
-            content: The final processed string to store.
+            file_path: Original file path.
+            content: The processed string.
+            token_count: Number of tokens calculated for this content.
         """
         if not self._enabled:
             return
@@ -121,59 +129,36 @@ class CacheService:
                     cursor = conn.cursor()
                     cursor.execute("""
                         INSERT OR REPLACE INTO file_cache 
-                        (composite_hash, file_path, content, last_access, created_at)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (composite_hash, file_path, content, now, now))
+                        (composite_hash, file_path, content, token_count, last_access, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (composite_hash, file_path, content, token_count, now, now))
                     conn.commit()
 
         except sqlite3.Error as e:
             logger.warning(f"CacheService: Write error for {os.path.basename(file_path)}: {e}")
 
     def purge_all(self) -> None:
-        """
-        Clear all cached entries effectively resetting the storage.
-
-        Executes VACUUM outside of the transaction block to reclaim disk space.
-        """
+        """Clear all cached entries effectively resetting the storage."""
         if not self._enabled:
             return
 
         try:
             with self._lock:
-                conn = sqlite3.connect(self._db_path)
-                # First delete all data and commit transaction
-                conn.execute("DELETE FROM file_cache")
+                with sqlite3.connect(self._db_path) as conn:
+                    conn.execute("DELETE FROM file_cache")
+                    conn.execute("VACUUM")
                 conn.commit()
-                # VACUUM must be executed outside of an active transaction
-                conn.execute("VACUUM")
-                conn.close()
-
             logger.info("CacheService: Storage successfully purged.")
-
         except sqlite3.Error as e:
             logger.error(f"CacheService: Failed to purge database: {e}")
 
     @staticmethod
     def compute_composite_hash(
-        file_path: str,
-        mtime: float,
-        file_size: int,
-        config_hash: str
+            file_path: str,
+            mtime: float,
+            file_size: int,
+            config_hash: str
     ) -> str:
-        """
-        Generate a deterministic SHA-256 hash combining file state and configuration.
-
-        This ensures that if the file changes OR the configuration changes (e.g.,
-        enabling comments or sanitization), the cache is automatically invalidated.
-
-        Args:
-            file_path: Absolute path of the file.
-            mtime: Modification timestamp.
-            file_size: Size in bytes.
-            config_hash: A hash representing the current settings state.
-
-        Returns:
-            str: Hexadecimal SHA-256 hash string.
-        """
+        """Generate a deterministic SHA-256 hash combining file state and configuration."""
         raw_key = f"{file_path}|{mtime}|{file_size}|{config_hash}"
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()

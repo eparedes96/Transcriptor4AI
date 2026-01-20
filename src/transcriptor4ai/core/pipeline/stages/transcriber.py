@@ -104,6 +104,7 @@ def transcribe_code(
         "processed": 0,
         "cached": 0,
         "skipped": 0,
+        "total_tokens": 0,
         "tests_written": 0,
         "modules_written": 0,
         "resources_written": 0,
@@ -154,6 +155,7 @@ def transcribe_code(
             "processed": results["processed"],
             "cached": results["cached"],
             "skipped": results["skipped"],
+            "total_tokens": results["total_tokens"],
             "tests_written": results["tests_written"],
             "modules_written": results["modules_written"],
             "resources_written": results["resources_written"],
@@ -262,11 +264,13 @@ def _execute_parallel_transcription(
                     comp_hash = cache_service.compute_composite_hash(
                         f_path, stat.st_mtime, stat.st_size, config_hash
                     )
-                    cached_content = cache_service.get_entry(comp_hash)
+                    cached_entry = cache_service.get_entry(comp_hash)
 
-                    if cached_content is not None:
+                    if cached_entry is not None:
+                        content, t_count = cached_entry
+
                         _write_cached_content(
-                            cached_content,
+                            content,
                             file_data,
                             locks,
                             output_paths,
@@ -276,6 +280,10 @@ def _execute_parallel_transcription(
                         )
                         results["processed"] += 1
                         results["cached"] += 1
+                        results["total_tokens"] += t_count
+
+                        # Increment specific counters for reporting
+                        _increment_mode_counters(file_data, results, processing_depth, process_tests, process_resources)
                         continue
 
                 except OSError:
@@ -307,6 +315,7 @@ def _execute_parallel_transcription(
             worker_res = future.result()
             if worker_res["ok"]:
                 results["processed"] += 1
+                results["total_tokens"] += worker_res.get("token_count", 0)
                 mode = worker_res.get("mode")
 
                 # Update Cache if worker returned content + hash
@@ -314,7 +323,8 @@ def _execute_parallel_transcription(
                     cache_service.set_entry(
                         worker_res["composite_hash"],
                         worker_res["file_path"],
-                        worker_res["processed_content"]
+                        worker_res["processed_content"],
+                        worker_res.get("token_count", 0)
                     )
 
                 if mode == "test":
@@ -328,6 +338,28 @@ def _execute_parallel_transcription(
                     rel_path=worker_res["rel_path"],
                     error=worker_res["error"]
                 ))
+
+
+def _increment_mode_counters(
+        file_data: Dict[str, Any],
+        results: Dict[str, Any],
+        depth: str,
+        p_tests: bool,
+        p_resources: bool
+) -> None:
+    """Helper to increment transcription counters for cached hits."""
+    from transcriptor4ai.core.pipeline.components.filters import is_resource_file, is_test
+
+    file_name = file_data["file_name"]
+    if depth == "tree_only":
+        return
+
+    if is_test(file_name) and p_tests:
+        results["tests_written"] += 1
+    elif is_resource_file(file_name) and p_resources:
+        results["resources_written"] += 1
+    else:
+        results["modules_written"] += 1
 
 
 def _write_cached_content(

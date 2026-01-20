@@ -25,6 +25,7 @@ GITHUB_OWNER = "eparedes96"
 GITHUB_REPO = "Transcriptor4AI"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
+
 TIMEOUT = 10
 PRICING_TIMEOUT = 2
 USER_AGENT = "Transcriptor4AI-Client/2.1.0"
@@ -123,6 +124,8 @@ def fetch_pricing_data(url: str) -> Optional[Dict[str, Any]]:
 
     except requests.exceptions.Timeout:
         logger.warning(f"Network: Pricing sync timed out after {PRICING_TIMEOUT}s.")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network: Connection error during pricing sync: {e}")
     except Exception as e:
         logger.error(f"Network: Unexpected error during pricing sync: {e}")
 

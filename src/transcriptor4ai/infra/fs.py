@@ -19,6 +19,7 @@ DEFAULT_OUTPUT_SUBDIR = "transcript"
 APP_DIR_NAME = "Transcriptor4AI"
 UNIX_APP_DIR_NAME = ".transcriptor4ai"
 
+
 # -----------------------------------------------------------------------------
 # PATH RESOLUTION API
 # -----------------------------------------------------------------------------
@@ -63,6 +64,22 @@ def get_user_data_dir() -> str:
     return os.path.abspath(path)
 
 
+def get_pricing_cache_path() -> str:
+    """
+    Resolve the absolute path for the local pricing cache file.
+
+    This file stores the last successfully downloaded pricing data from
+    external providers to allow offline estimation.
+
+    Returns:
+        str: Absolute path to the pricing cache JSON file.
+    """
+    from transcriptor4ai.domain.constants import LOCAL_PRICING_FILENAME
+
+    base_dir = get_user_data_dir()
+    return os.path.join(base_dir, LOCAL_PRICING_FILENAME)
+
+
 def normalize_path(path: Optional[str], fallback: str) -> str:
     """
     Normalize a directory path string into an absolute filesystem path.
@@ -100,6 +117,7 @@ def get_real_output_path(output_base_dir: str, output_subdir_name: str) -> str:
     """
     sub = (output_subdir_name or "").strip() or DEFAULT_OUTPUT_SUBDIR
     return os.path.join(output_base_dir, sub)
+
 
 # -----------------------------------------------------------------------------
 # FILESYSTEM VALIDATION API

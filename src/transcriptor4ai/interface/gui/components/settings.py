@@ -3,9 +3,10 @@ from __future__ import annotations
 """
 Advanced Settings UI Component.
 
-Constructs the configuration management panel using a modular approach. 
-Acts as a layout orchestrator that assembles specialized sub-sections 
+Constructs the configuration management panel using a modular approach.
+Acts as a layout orchestrator that assembles specialized sub-sections
 imported from the settings_parts package.
+Adds Cache Management controls (Purge Button).
 """
 
 import logging
@@ -69,20 +70,30 @@ class SettingsFrame(ctk.CTkFrame):
         FiltersSection(self, self.scroll, config)
         FormattingSection(self, self.scroll, config)
 
-        # --- Global Action Footer ---
+        # Actions Footer
+        frame_actions = ctk.CTkFrame(self.scroll, fg_color="transparent")
+        frame_actions.grid(row=5, column=0, sticky="ew", pady=20, padx=10)
+        frame_actions.grid_columnconfigure((0, 1), weight=1)
+
+        self.btn_purge = ctk.CTkButton(
+            frame_actions,
+            text="Purge Cache",
+            fg_color="#A51F1F",  # Warning Red
+            hover_color="#7A1616",
+            text_color="white",
+            width=140
+        )
+        self.btn_purge.grid(row=0, column=0, padx=10, sticky="e")
+
         self.btn_reset = ctk.CTkButton(
-            self.scroll,
+            frame_actions,
             text=i18n.t("gui.buttons.reset"),
             fg_color="transparent",
             border_width=1,
-            text_color=("gray10", "#DCE4EE")
+            text_color=("gray10", "#DCE4EE"),
+            width=140
         )
-        self.btn_reset.grid(row=5, column=0, pady=20, padx=10)
-
-
-# ==============================================================================
-# PRIVATE LAYOUT HELPERS
-# ==============================================================================
+        self.btn_reset.grid(row=0, column=1, padx=10, sticky="w")
 
 class _StackSection:
     """

@@ -48,6 +48,7 @@ def main() -> None:
     Executes the six-phase startup sequence: Logging Setup, State Recovery,
     UI Construction, Controller Binding, Task Scheduling, and Loop Entry.
     """
+
     # --- PHASE 1: DIAGNOSTIC INFRASTRUCTURE ---
     log_path = get_default_gui_log_path()
 
@@ -117,7 +118,7 @@ def main() -> None:
     # Scrape configuration into widget initial values
     controller.sync_view_from_config()
 
-    # Link Dashboard Triggers
+    # --- EVENT BINDING ---
     dashboard_frame.btn_process.configure(
         command=lambda: controller.start_processing(dry_run=False)
     )
@@ -141,6 +142,10 @@ def main() -> None:
     settings_frame.btn_load.configure(command=controller.load_profile)
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
+
+    # Bind Cache Purge Action
+    settings_frame.btn_purge.configure(command=controller.purge_cache)
+
     settings_frame.combo_stack.configure(command=controller.on_stack_selected)
     settings_frame.combo_provider.configure(command=controller.on_provider_selected)
     settings_frame.combo_model.configure(command=controller.on_model_selected)

@@ -3,9 +3,10 @@ from __future__ import annotations
 """
 Atomic Transcription Worker.
 
-Encapsulates the processing logic for a single file unit. Handles classification 
-(logic vs. test vs. resource), stream initialization, and concurrent write 
-delegation while respecting thread synchronization locks.
+Encapsulates the processing logic for a single file unit. Handles classification
+(logic vs. test vs. resource), stream initialization, and concurrent write
+delegation while respecting thread synchronization locks. Captures processed 
+content for caching and returns it to the orchestrator.
 """
 
 import threading
@@ -13,11 +14,12 @@ from typing import Any, Dict
 
 from transcriptor4ai.core.pipeline.components.filters import is_resource_file, is_test
 from transcriptor4ai.core.pipeline.components.reader import stream_file_content
-from transcriptor4ai.core.pipeline.components.writer import append_entry
+from transcriptor4ai.core.processing.minifier import minify_code_stream
+from transcriptor4ai.core.processing.sanitizer import (
+    mask_local_paths_stream,
+    sanitize_text_stream,
+)
 
-# -----------------------------------------------------------------------------
-# TASK EXECUTION LOGIC
-# -----------------------------------------------------------------------------
 
 def process_file_task(
         file_path: str,
@@ -31,14 +33,16 @@ def process_file_task(
         mask_user_paths: bool,
         minify_output: bool,
         locks: Dict[str, threading.Lock],
-        output_paths: Dict[str, str]
+        output_paths: Dict[str, str],
+        composite_hash: str = ""
 ) -> Dict[str, Any]:
     """
     Execute the full processing lifecycle for a single file.
 
     This function is designed to be executed within a ThreadPoolExecutor.
-    It classifies the file, opens a resilient stream, and appends the
-    transformed content to the appropriate consolidated file using locks.
+    It classifies the file, opens a resilient stream, applies transformations,
+    and appends the content to the appropriate consolidated file.
+    It returns the processed content string to enable caching updates.
 
     Args:
         file_path: Absolute filesystem path.
@@ -53,10 +57,13 @@ def process_file_task(
         minify_output: Flag for code minification.
         locks: Thread synchronization locks for shared output files.
         output_paths: Target paths for different transcription categories.
+        composite_hash: Unique identifier for cache tracking (optional).
 
     Returns:
-        Dict[str, Any]: Task result status, including target mode and error details.
+        Dict[str, Any]: Task result status, including target mode, error details,
+                        and the processed content for caching.
     """
+
     # 1. Classification Phase
     file_is_test = is_test(file_name)
     file_is_resource = is_resource_file(file_name)
@@ -86,10 +93,20 @@ def process_file_task(
 
     # 2. Transcription Phase
     try:
-        # Initialize resilient stream reader
-        line_iterator = stream_file_content(file_path)
+        processed_stream = stream_file_content(file_path)
 
-        # Retrieve the synchronization lock for the target file
+        if minify_output:
+            processed_stream = minify_code_stream(processed_stream, ext)
+
+        if enable_sanitizer:
+            processed_stream = sanitize_text_stream(processed_stream)
+
+        if mask_user_paths:
+            processed_stream = mask_local_paths_stream(processed_stream)
+
+        # Materialize stream to string for cache compatibility and atomic writing
+        processed_content = "".join(list(processed_stream))
+
         lock = locks.get(target_mode)
         if not lock:
             return {
@@ -99,18 +116,32 @@ def process_file_task(
                 "mode": target_mode
             }
 
-        # Thread-safe write operation
+        output_path = output_paths.get(target_mode)
+        if not output_path:
+            return {
+                "ok": False,
+                "rel_path": rel_path,
+                "error": f"No output path found for mode: {target_mode}",
+                "mode": target_mode
+            }
+
+        # Write to disk under thread lock
+        separator = "-" * 200
         with lock:
-            append_entry(
-                output_path=output_paths[target_mode],
-                rel_path=rel_path,
-                line_iterator=line_iterator,
-                extension=ext,
-                enable_sanitizer=enable_sanitizer,
-                mask_user_paths=mask_user_paths,
-                minify_output=minify_output
-            )
-        return {"ok": True, "mode": target_mode, "rel_path": rel_path}
+            with open(output_path, "a", encoding="utf-8") as out:
+                out.write(f"{separator}\n")
+                out.write(f"{rel_path}\n")
+                out.write(processed_content)
+                out.write("\n")
+
+        return {
+            "ok": True,
+            "mode": target_mode,
+            "rel_path": rel_path,
+            "file_path": file_path,
+            "processed_content": processed_content,
+            "composite_hash": composite_hash
+        }
 
     except (OSError, UnicodeDecodeError) as e:
         # Capture I/O or encoding errors without crashing the executor

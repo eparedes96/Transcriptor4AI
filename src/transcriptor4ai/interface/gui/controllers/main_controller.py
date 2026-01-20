@@ -7,6 +7,7 @@ Bridges the View (UI Components) and the Model (Core Logic).
 Handles user interactions, configuration sync, and process execution.
 Acts as a Facade for specialized sub-controllers (Profiles, Feedback),
 managing the asynchronous lifecycle of the transcription pipeline.
+Integrates CacheService management (Purge) and Financial Cost logic.
 """
 
 import logging
@@ -17,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import customtkinter as ctk
 
+from transcriptor4ai.core.services.cache import CacheService
 from transcriptor4ai.core.services.estimator import CostEstimator
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.domain import constants as const
@@ -71,6 +73,7 @@ class AppController:
         # Core Services
         self.binder = FormBinder()
         self.cost_estimator = CostEstimator()
+        self.cache_service = CacheService()
 
         # Initialize Sub-Controllers (Delegation Pattern)
         self.profile_controller = ProfileController(self)
@@ -258,7 +261,7 @@ class AppController:
         """Process pipeline result, managing collisions and error reporting."""
         if isinstance(result, PipelineResult) and not result.ok:
             if result.existing_files:
-                msg = i18n.t("gui.popups.overwrite_msg", files="\n".join(result.existing_files))
+                msg = i18n.t("gui.popups.overwrite_msg", files="/n".join(result.existing_files))
                 if mb.askyesno(i18n.t("gui.popups.overwrite_title"), msg):
                     self.start_processing(dry_run=False, overwrite=True)
                     return
@@ -267,7 +270,7 @@ class AppController:
         self._toggle_ui(disabled=False)
         self.dashboard_view.btn_process.configure(
             text=i18n.t("gui.dashboard.btn_start"),
-            fg_color="#1f538d"
+            fg_color="#1F6AA5"
         )
 
         # Result orchestration and Financial Calculation
@@ -369,6 +372,21 @@ class AppController:
             self.sync_view_from_config()
             mb.showinfo(i18n.t("gui.dialogs.success_title"), "Settings have been reset.")
 
+    def purge_cache(self) -> None:
+        """
+        Manually clear the local cache database.
+
+        Invoked by the user via Settings to resolve potential cache corruption
+        or force a fresh processing cycle.
+        """
+        if mb.askyesno("Purge Cache", "Are you sure you want to clear the local processing cache?"):
+            try:
+                self.cache_service.purge_all()
+                mb.showinfo("Cache Cleared", "Local cache has been successfully purged.")
+            except Exception as e:
+                logger.error(f"Controller: Failed to purge cache: {e}")
+                mb.showerror("Error", f"Failed to purge cache:/n{e}")
+
     def on_model_selected(self, model_name: str) -> None:
         """Update session state and perform security key verification."""
         self.config["target_model"] = model_name
@@ -398,7 +416,7 @@ class AppController:
             logger.warning(f"Selected {model_name} but API key is missing.")
             mb.showwarning(
                 i18n.t("gui.dialogs.warning_title"),
-                "Missing API Key for accurate token count.\nUsing heuristic fallback."
+                "Missing API Key for accurate token count./nUsing heuristic fallback."
             )
 
     # -------------------------------------------------------------------------

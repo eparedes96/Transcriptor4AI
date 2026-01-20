@@ -3,11 +3,14 @@ from __future__ import annotations
 """
 Parallel Transcription Orchestrator.
 
-Manages the multi-threaded transcription lifecycle. It coordinates 
-initialization, concurrent task dispatching via the Scanner service, 
+Manages the multi-threaded transcription lifecycle. It coordinates
+initialization, concurrent task dispatching via the Scanner service,
 thread-safe writing, and final error aggregation.
+Integrates CacheService to skip processing of unchanged files.
 """
 
+import hashlib
+import json
 import logging
 import os
 import re
@@ -18,6 +21,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from transcriptor4ai.core.pipeline.components.filters import default_extensions
 from transcriptor4ai.core.pipeline.components.writer import initialize_output_file
 from transcriptor4ai.core.pipeline.stages.worker import process_file_task
+from transcriptor4ai.core.services.cache import CacheService
 from transcriptor4ai.core.services.scanner import (
     finalize_error_reporting,
     prepare_filtering_rules,
@@ -56,7 +60,8 @@ def transcribe_code(
     Execute parallel transcription of project files into categorized text files.
 
     Acts as the high-level orchestrator. It prepares the environment,
-    delegates file discovery to the Scanner service, and manages worker threads.
+    delegates file discovery to the Scanner service, manages worker threads,
+    and handles the caching strategy to optimize re-runs.
 
     Args:
         input_path: Source directory to scan.
@@ -95,6 +100,7 @@ def transcribe_code(
 
     results: Dict[str, Any] = {
         "processed": 0,
+        "cached": 0,
         "skipped": 0,
         "tests_written": 0,
         "modules_written": 0,
@@ -102,12 +108,20 @@ def transcribe_code(
         "errors": []
     }
 
-    # 3. Perform concurrent processing using the Scanner's generator
+    # Initialize Cache Service and compute config hash
+    cache_service = CacheService()
+    config_hash = _generate_config_hash(
+        process_modules, process_tests, process_resources,
+        enable_sanitizer, mask_user_paths, minify_output
+    )
+
     _execute_parallel_transcription(
         input_path, extensions or default_extensions(), include_rx, exclude_rx,
         process_modules, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output,
-        locks, output_paths, results, cancellation_event
+        locks, output_paths, results,
+        cache_service, config_hash,
+        cancellation_event
     )
 
     if cancellation_event and cancellation_event.is_set():
@@ -120,7 +134,8 @@ def transcribe_code(
     )
 
     logger.info(
-        f"Parallel Transcription finalized. Processed: {results['processed']}. "
+        f"Parallel Transcription finalized. "
+        f"Processed: {results['processed']} (Cached: {results['cached']}). "
         f"Errors: {len(results['errors'])}"
     )
 
@@ -135,6 +150,7 @@ def transcribe_code(
         },
         "counters": {
             "processed": results["processed"],
+            "cached": results["cached"],
             "skipped": results["skipped"],
             "tests_written": results["tests_written"],
             "modules_written": results["modules_written"],
@@ -186,6 +202,12 @@ def _initialize_execution_environment(
     return locks, output_paths
 
 
+def _generate_config_hash(*args: Any) -> str:
+    """Generate a unique fingerprint for the current processing configuration."""
+    raw = json.dumps(args, sort_keys=True)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
 def _execute_parallel_transcription(
         input_path: str,
         extensions: List[str],
@@ -200,21 +222,23 @@ def _execute_parallel_transcription(
         locks: Dict[str, threading.Lock],
         output_paths: Dict[str, str],
         results: Dict[str, Any],
+        cache_service: CacheService,
+        config_hash: str,
         cancellation_event: Optional[threading.Event] = None
 ) -> None:
-    """Consumes the Scanner's generator and dispatches tasks to the worker pool."""
+    """Consumes the Scanner's generator, manages Caching, and dispatches workers."""
     tasks = []
 
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
-        # Use the decoupled Scanner service to find files
+
         for file_data in yield_project_files(
-            input_path=input_path,
-            extensions=extensions,
-            include_rx=include_rx,
-            exclude_rx=exclude_rx,
-            process_modules=process_modules,
-            process_tests=process_tests,
-            process_resources=process_resources
+                input_path=input_path,
+                extensions=extensions,
+                include_rx=include_rx,
+                exclude_rx=exclude_rx,
+                process_modules=process_modules,
+                process_tests=process_tests,
+                process_resources=process_resources
         ):
             if cancellation_event and cancellation_event.is_set():
                 break
@@ -224,9 +248,37 @@ def _execute_parallel_transcription(
                 continue
 
             if file_data.get("status") == "process":
+                f_path = file_data["file_path"]
+
+                # Cache Hit Check
+                try:
+                    stat = os.stat(f_path)
+                    comp_hash = cache_service.compute_composite_hash(
+                        f_path, stat.st_mtime, stat.st_size, config_hash
+                    )
+                    cached_content = cache_service.get_entry(comp_hash)
+
+                    if cached_content is not None:
+                        _write_cached_content(
+                            cached_content,
+                            file_data,
+                            locks,
+                            output_paths,
+                            process_modules,
+                            process_tests,
+                            process_resources
+                        )
+                        results["processed"] += 1
+                        results["cached"] += 1
+                        continue
+
+                except OSError:
+                    comp_hash = ""
+
+                # Dispatch Worker
                 tasks.append(executor.submit(
                     process_file_task,
-                    file_path=file_data["file_path"],
+                    file_path=f_path,
                     rel_path=file_data["rel_path"],
                     ext=file_data["ext"],
                     file_name=file_data["file_name"],
@@ -237,7 +289,8 @@ def _execute_parallel_transcription(
                     mask_user_paths=mask_user_paths,
                     minify_output=minify_output,
                     locks=locks,
-                    output_paths=output_paths
+                    output_paths=output_paths,
+                    composite_hash=comp_hash
                 ))
 
         # Synchronize and aggregate worker results
@@ -249,6 +302,15 @@ def _execute_parallel_transcription(
             if worker_res["ok"]:
                 results["processed"] += 1
                 mode = worker_res.get("mode")
+
+                # Update Cache if worker returned content + hash
+                if worker_res.get("processed_content") and worker_res.get("composite_hash"):
+                    cache_service.set_entry(
+                        worker_res["composite_hash"],
+                        worker_res["file_path"],
+                        worker_res["processed_content"]
+                    )
+
                 if mode == "test":
                     results["tests_written"] += 1
                 elif mode == "module":
@@ -260,3 +322,48 @@ def _execute_parallel_transcription(
                     rel_path=worker_res["rel_path"],
                     error=worker_res["error"]
                 ))
+
+
+def _write_cached_content(
+        content: str,
+        file_data: Dict[str, Any],
+        locks: Dict[str, threading.Lock],
+        output_paths: Dict[str, str],
+        process_modules: bool,
+        process_tests: bool,
+        process_resources: bool
+) -> None:
+    """Helper to write retrieved cache content respecting headers and locks."""
+    from transcriptor4ai.core.pipeline.components.filters import is_resource_file, is_test
+
+    file_name = file_data["file_name"]
+    file_is_test = is_test(file_name)
+    file_is_resource = is_resource_file(file_name)
+    target_mode = "skip"
+
+    if file_is_test:
+        if process_tests:
+            target_mode = "test"
+    elif file_is_resource:
+        if process_resources:
+            target_mode = "resource"
+        elif process_modules:
+            target_mode = "module"
+    else:
+        if process_modules:
+            target_mode = "module"
+
+    if target_mode == "skip":
+        return
+
+    separator = "-" * 200
+    lock = locks.get(target_mode)
+    out_path = output_paths.get(target_mode)
+
+    if lock and out_path:
+        with lock:
+            with open(out_path, "a", encoding="utf-8") as out:
+                out.write(f"{separator}/n")
+                out.write(f"{file_data['rel_path']}/n")
+                out.write(content)
+                out.write("/n")

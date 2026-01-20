@@ -7,11 +7,13 @@ Verifies the decision-making process of `process_file_task`:
 1. File classification (Module vs Test vs Resource).
 2. Skipping logic based on configuration.
 3. Lock acquisition corresponding to the file type.
-4. Error handling and result dictionary formation.
+4. Correct writing to disk via materialized content.
+5. Integration with the caching data flow (processed_content).
+6. Error handling and result dictionary formation.
 """
 
 from typing import Dict
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -42,7 +44,9 @@ def mock_locks() -> Dict[str, MagicMock]:
 
 @pytest.fixture
 def mock_paths() -> Dict[str, str]:
-    """Return dummy output paths."""
+    """
+    Return dummy output paths for categorized transcription files.
+    """
     return {
         "module": "/out/modules.txt",
         "test": "/out/tests.txt",
@@ -54,14 +58,16 @@ def mock_paths() -> Dict[str, str]:
 def test_worker_skips_modules_if_configured(
         mock_locks: Dict[str, MagicMock],
         mock_paths: Dict[str, str]
-):
-    """If process_modules is False, a standard code file should be skipped."""
+) -> None:
+    """
+    Verify that a standard code file is skipped if process_modules is False.
+    """
     result = process_file_task(
         file_path="/src/main.py",
         rel_path="main.py",
         ext=".py",
         file_name="main.py",
-        process_modules=False,  # <--- Disabled
+        process_modules=False,
         process_tests=True,
         process_resources=True,
         enable_sanitizer=False,
@@ -81,11 +87,16 @@ def test_worker_skips_modules_if_configured(
 def test_worker_identifies_and_locks_tests(
         mock_locks: Dict[str, MagicMock],
         mock_paths: Dict[str, str]
-):
-    """Verify a test file is classified as 'test' and uses the test lock."""
+) -> None:
+    """
+    Verify a test file is classified as 'test', uses the correct lock,
+    writes to disk, and returns content for caching.
+    """
+    test_content = ["def test_api(): pass\n"]
+
     with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream, \
-            patch("transcriptor4ai.core.pipeline.stages.worker.append_entry") as mock_append:
-        mock_stream.return_value = iter(["line1"])
+            patch("builtins.open", mock_open()) as mocked_file:
+        mock_stream.return_value = iter(test_content)
 
         result = process_file_task(
             file_path="/tests/test_api.py",
@@ -99,28 +110,37 @@ def test_worker_identifies_and_locks_tests(
             mask_user_paths=False,
             minify_output=False,
             locks=mock_locks,
-            output_paths=mock_paths
+            output_paths=mock_paths,
+            composite_hash="hash_123"
         )
 
+        # 1. Verify Logical Result
         assert result["ok"] is True
         assert result["mode"] == "test"
+        assert result["processed_content"] == "".join(test_content)
+        assert result["composite_hash"] == "hash_123"
 
-        # Verify correct lock usage (Test lock acquired, Module lock ignored)
+        # 2. Verify Lock Usage
         mock_locks["test"].__enter__.assert_called_once()
         mock_locks["module"].__enter__.assert_not_called()
 
-        # Verify writer call
-        mock_append.assert_called_once()
-        assert mock_append.call_args[1]["output_path"] == "/out/tests.txt"
+        # 3. Verify File System Interaction
+        mocked_file.assert_called_once_with("/out/tests.txt", "a", encoding="utf-8")
+
+        # Verify content written includes path and the materialized stream
+        handle = mocked_file()
+        written_calls = [call.args[0] for call in handle.write.call_args_list]
+        full_output = "".join(written_calls)
+        assert "tests/test_api.py" in full_output
+        assert "def test_api()" in full_output
 
 
 def test_worker_handles_io_error_gracefully(
         mock_locks: Dict[str, MagicMock],
         mock_paths: Dict[str, str]
-):
+) -> None:
     """
-    If reading the file raises OSError (e.g. permission denied),
-    the worker should return a failure result, NOT crash.
+    Verify that OSError during file streaming returns failure instead of crashing.
     """
     with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream:
         # Simulate OS Permission Error
@@ -149,10 +169,14 @@ def test_worker_handles_io_error_gracefully(
 def test_worker_identifies_resources(
         mock_locks: Dict[str, MagicMock],
         mock_paths: Dict[str, str]
-):
-    """Verify resource files (e.g., README.md) are routed correctly."""
-    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content"), \
-            patch("transcriptor4ai.core.pipeline.stages.worker.append_entry"):
+) -> None:
+    """
+    Verify that non-code resources (e.g., README.md) are correctly categorized.
+    """
+    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream, \
+            patch("builtins.open", mock_open()):
+        mock_stream.return_value = iter(["# Project Documentation\n"])
+
         result = process_file_task(
             file_path="/README.md",
             rel_path="README.md",
@@ -170,4 +194,4 @@ def test_worker_identifies_resources(
 
         assert result["ok"] is True
         assert result["mode"] == "resource"
-        mock_locks["resource"].__enter__.assert_called()
+        mock_locks["resource"].__enter__.assert_called_once()

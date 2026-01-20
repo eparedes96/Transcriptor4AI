@@ -129,13 +129,30 @@ def generate_skeleton_code(source: str) -> str:
 
 class _SkeletonTransformer(ast.NodeTransformer):
     """
-    AST Transformer that strips the implementation body of functions.
+    AST Transformer that strips bodies and non-definition nodes.
 
     Preserves:
-    - Function/Class names and decorators.
-    - Arguments and type annotations.
-    - Docstrings (if present).
+    - Function/Class names, decorators, arguments and annotations.
+    - Docstrings (as the only body content).
+    - Removes: Imports, Assignments, and logic outside definitions.
     """
+
+    def visit_Module(self, node: ast.Module) -> ast.AST:
+        """Filter module body to keep only definitions."""
+        node.body = [
+            n for n in node.body
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        ]
+        return self.generic_visit(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
+        """Filter class body to keep only methods and nested classes."""
+        # We keep Docstrings (ast.Expr) and definitions
+        node.body = [
+            n for n in node.body
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Expr))
+        ]
+        return self.generic_visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.AST:
         """Process synchronous and asynchronous function definitions."""
@@ -146,9 +163,7 @@ class _SkeletonTransformer(ast.NodeTransformer):
         new_body: List[ast.stmt] = []
 
         if docstring:
-            # Re-insert docstring as an expression
-            doc_node = ast.Expr(value=ast.Constant(value=docstring))
-            new_body.append(doc_node)
+            new_body.append(ast.Expr(value=ast.Constant(value=docstring)))
 
         # 3. Add the 'pass' statement to replace logic
         new_body.append(ast.Pass())
@@ -158,5 +173,5 @@ class _SkeletonTransformer(ast.NodeTransformer):
         return node
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
-        """Alias for visit_FunctionDef to handle async definitions identically."""
+        """Handle async definitions identically."""
         return self.visit_FunctionDef(node)

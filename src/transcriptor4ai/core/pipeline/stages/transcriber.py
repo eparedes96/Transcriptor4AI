@@ -267,6 +267,7 @@ def _execute_parallel_transcription(
                     cached_entry = cache_service.get_entry(comp_hash)
 
                     if cached_entry is not None:
+                        # cached_entry is Tuple[str, int] -> (content, token_count)
                         content, t_count = cached_entry
 
                         _write_cached_content(
@@ -283,7 +284,13 @@ def _execute_parallel_transcription(
                         results["total_tokens"] += t_count
 
                         # Increment specific counters for reporting
-                        _increment_mode_counters(file_data, results, processing_depth, process_tests, process_resources)
+                        _increment_mode_counters(
+                            file_data,
+                            results,
+                            processing_depth,
+                            process_tests,
+                            process_resources
+                        )
                         continue
 
                 except OSError:

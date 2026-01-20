@@ -5,7 +5,7 @@ Unit tests for the Local Cache Service.
 
 Verifies:
 1. SQLite database initialization and schema creation.
-2. Read/Write operations (Set/Get).
+2. Read/Write operations (Set/Get) including token counts.
 3. Deterministic hashing logic.
 4. Purging mechanism.
 5. Fail-safe behavior (exceptions should not crash the app).
@@ -48,16 +48,20 @@ def test_cache_initialization_creates_db(mock_cache_service: CacheService, tmp_p
 
 def test_set_and_get_entry(mock_cache_service: CacheService) -> None:
     """
-    Verify a complete write and read lifecycle for a cache entry.
+    Verify a complete write and read lifecycle for a cache entry including tokens.
     """
     dummy_hash = "abc123hash"
     dummy_path = "/src/main.py"
     content = "def main(): pass"
+    token_count = 150
 
-    mock_cache_service.set_entry(dummy_hash, dummy_path, content)
+    mock_cache_service.set_entry(dummy_hash, dummy_path, content, token_count)
 
     retrieved = mock_cache_service.get_entry(dummy_hash)
-    assert retrieved == content
+
+    # Verify both content and persisted token count
+    assert retrieved is not None
+    assert retrieved == (content, token_count)
 
 
 def test_get_non_existent_entry_returns_none(mock_cache_service: CacheService) -> None:
@@ -95,8 +99,8 @@ def test_purge_all_clears_data(mock_cache_service: CacheService) -> None:
     """
     Verify that the purge mechanism removes all entries from the database.
     """
-    mock_cache_service.set_entry("h1", "p1", "c1")
-    assert mock_cache_service.get_entry("h1") == "c1"
+    mock_cache_service.set_entry("h1", "p1", "c1", 50)
+    assert mock_cache_service.get_entry("h1") == ("c1", 50)
 
     mock_cache_service.purge_all()
     assert mock_cache_service.get_entry("h1") is None

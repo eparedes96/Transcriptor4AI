@@ -67,7 +67,11 @@ class CacheService:
                     columns = [info[1] for info in cursor.fetchall()]
                     if "token_count" not in columns:
                         logger.info("CacheService: Migrating database to include token_count...")
-                        cursor.execute("ALTER TABLE file_cache ADD COLUMN token_count INTEGER DEFAULT 0")
+                        sql_migration = (
+                            "ALTER TABLE file_cache "
+                            "ADD COLUMN token_count INTEGER DEFAULT 0"
+                        )
+                        cursor.execute(sql_migration)
 
                     conn.commit()
             logger.debug(f"CacheService: Database initialized at {self._db_path}")
@@ -109,7 +113,13 @@ class CacheService:
             logger.warning(f"CacheService: Read error for hash {composite_hash[:8]}: {e}")
             return None
 
-    def set_entry(self, composite_hash: str, file_path: str, content: str, token_count: int) -> None:
+    def set_entry(
+        self,
+        composite_hash: str,
+        file_path: str,
+        content: str,
+        token_count: int
+    ) -> None:
         """
         Store or update a processed entry in the cache.
 
@@ -144,10 +154,18 @@ class CacheService:
 
         try:
             with self._lock:
+                # Step 1: Clear all rows (Transactional)
                 with sqlite3.connect(self._db_path) as conn:
                     conn.execute("DELETE FROM file_cache")
+
+                # Step 2: Reclaim disk space (Non-transactional)
+                conn = sqlite3.connect(self._db_path)
+                conn.isolation_level = None
+                try:
                     conn.execute("VACUUM")
-                conn.commit()
+                finally:
+                    conn.close()
+
             logger.info("CacheService: Storage successfully purged.")
         except sqlite3.Error as e:
             logger.error(f"CacheService: Failed to purge database: {e}")

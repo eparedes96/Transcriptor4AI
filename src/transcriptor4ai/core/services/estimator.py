@@ -75,14 +75,19 @@ class CostEstimator:
             logger.error(f"CostEstimator: Malformed pricing data for '{model_name}': {e}")
             return 0.0
 
-    def update_live_pricing(self) -> None:
+    def update_live_pricing(self, data: Optional[Dict[str, Any]] = None) -> None:
         """
         Execute the 3-Tier pricing synchronization sequence.
 
-        Tries network fetch, then local file cache, then falls back to memory.
+        Tries injected data, then network fetch, then local file cache,
+        and finally falls back to hardcoded constants.
+
+        Args:
+            data: Optional pre-fetched pricing data (e.g., from a GUI thread).
         """
-        # Tier 1: Live Sync
-        raw_data = fetch_pricing_data(PRICING_DATA_URL)
+        # Tier 1: Live Sync (Injected or Fetched)
+        raw_data = data if data is not None else fetch_pricing_data(PRICING_DATA_URL)
+
         if raw_data:
             adapted = self._adapt_litellm_data(raw_data)
             if adapted:
@@ -128,13 +133,21 @@ class CostEstimator:
             return {}
 
     def _load_local_cache(self) -> Optional[Dict[str, Any]]:
-        """Load pricing from the local filesystem."""
+        """
+        Load pricing from the local filesystem.
+
+        Returns:
+            Optional[Dict[str, Any]]: The cached dictionary or None if invalid/missing.
+        """
         cache_path = get_pricing_cache_path()
         if not os.path.exists(cache_path):
             return None
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                content = json.load(f)
+                if isinstance(content, dict):
+                    return content
+                return None
         except Exception as e:
             logger.debug(f"CostEstimator: Failed to read local cache: {e}")
             return None

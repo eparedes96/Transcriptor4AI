@@ -16,7 +16,10 @@ from transcriptor4ai.core.services.estimator import CostEstimator
 
 @pytest.fixture
 def sample_live_pricing() -> Dict[str, Any]:
-    """Provide a sample dynamic pricing dictionary."""
+    """
+    Provide a sample dynamic pricing dictionary in internal format.
+    Used for initializing the estimator directly.
+    """
     return {
         "GPT-4o": {"input_cost_1k": 0.005, "output_cost_1k": 0.015},
         "Custom-Model": {"input_cost_1k": 0.010, "output_cost_1k": 0.020}
@@ -39,6 +42,13 @@ def test_calculate_cost_with_live_overrides(sample_live_pricing: Dict[str, Any])
     # Live data for GPT-4o is 0.005 per 1k
     cost = estimator.calculate_cost(1000, "GPT-4o")
     assert cost == pytest.approx(0.005)
+
+
+def test_calculate_cost_with_precalculated_tokens() -> None:
+    """TC-V2.1-01: Verify that precalculated tokens from cache override current run tokens."""
+    estimator = CostEstimator()
+    cost = estimator.calculate_cost(0, "ChatGPT 4o", precalculated_tokens=4000)
+    assert cost == pytest.approx(0.01)
 
 
 def test_calculate_cost_handles_missing_model() -> None:
@@ -64,10 +74,27 @@ def test_calculate_cost_malformed_data() -> None:
     assert cost == 0.0
 
 
-def test_update_live_pricing(sample_live_pricing: Dict[str, Any]) -> None:
-    """TC-06: Verify dynamic update of the pricing table."""
-    estimator = CostEstimator()
-    estimator.update_live_pricing(sample_live_pricing)
+def test_update_live_pricing() -> None:
+    """
+    TC-06: Verify dynamic update of the pricing table using LiteLLM format.
 
-    assert "Custom-Model" in estimator._live_pricing
-    assert estimator.calculate_cost(1000, "Custom-Model") == 0.010
+    The adapter should convert input_cost_per_token to input_cost_1k.
+    """
+    estimator = CostEstimator()
+
+    # Simulating raw LiteLLM JSON format
+    raw_external_data = {
+        "Lite-Model-V1": {
+            "input_cost_per_token": 0.00001,
+            "litellm_provider": "openai"
+        }
+    }
+
+    # Injected update (Tier 1 fallback test)
+    estimator.update_live_pricing(raw_external_data)
+
+    assert "Lite-Model-V1" in estimator._live_pricing
+
+    # Verify adaptation result (1000 tokens * 0.00001 * 1000 = 0.01 USD)
+    calculated = estimator.calculate_cost(1000, "Lite-Model-V1")
+    assert calculated == pytest.approx(0.01)

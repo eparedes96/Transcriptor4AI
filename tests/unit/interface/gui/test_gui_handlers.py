@@ -98,10 +98,25 @@ def test_controller_financial_sync(mock_config_dict: dict) -> None:
     controller = AppController(mock_app, mock_config_dict, {})
     controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
 
-    pricing_data = {"Model-X": {"input_cost_1k": 0.05}}
+    # Raw LiteLLM data format (input_cost_per_token)
+    pricing_data = {
+        "Model-X": {
+            "input_cost_per_token": 0.00005,
+            "litellm_provider": "openai"
+        }
+    }
     controller.on_pricing_updated(pricing_data)
 
-    assert controller.cost_estimator._live_pricing == pricing_data
+    # Expected internal adapted format
+    expected_adapted = {
+        "Model-X": {
+            "id": "Model-X",
+            "input_cost_1k": 0.05,
+            "provider": "openai"
+        }
+    }
+
+    assert controller.cost_estimator._live_pricing == expected_adapted
     mock_dash.set_pricing_status.assert_called_with(is_live=True)
 
 

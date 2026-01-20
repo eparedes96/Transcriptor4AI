@@ -6,7 +6,8 @@ Configuration Domain Management.
 Handles the persistent storage of application state, user preferences, 
 and session profiles using JSON serialization. Supports automatic schema 
 migration from legacy versions and provides default fallbacks for 
-resilient execution.
+resilient execution. 
+Introduced 'processing_depth' to support Skeleton Mode.
 """
 
 import json
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 # -----------------------------------------------------------------------------
 
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
+
 
 # -----------------------------------------------------------------------------
 # CONFIGURATION MODELS
@@ -48,7 +50,9 @@ def get_default_config() -> Dict[str, Any]:
         "output_prefix": const.DEFAULT_OUTPUT_PREFIX,
 
         # Processing scope
+        # @deprecated: 'process_modules' is replaced by 'processing_depth' in v2.1.0
         "process_modules": True,
+        "processing_depth": "full",
         "process_tests": True,
         "process_resources": True,
 
@@ -109,6 +113,7 @@ def get_default_app_state() -> Dict[str, Any]:
         "custom_stacks": {}
     }
 
+
 # -----------------------------------------------------------------------------
 # PERSISTENCE OPERATIONS
 # -----------------------------------------------------------------------------
@@ -117,7 +122,7 @@ def load_app_state() -> Dict[str, Any]:
     """
     Retrieve application state from persistent storage.
 
-    Implements automatic schema migration from legacy versions (v1.1)
+    Implements automatic schema migration from legacy versions (v1.1, v2.0)
     and handles file corruption by reverting to safe defaults.
 
     Returns:
@@ -137,13 +142,15 @@ def load_app_state() -> Dict[str, Any]:
             logger.warning("Configuration corruption detected. Resetting state.")
             return default_state
 
-        # Check for legacy schema (v1.1 flat structure) and migrate
+        # Migration: v1.1 flat structure to v2.0
         if "input_path" in data:
             logger.info("Executing legacy schema migration (v1.1 -> v2.0)...")
             new_state = get_default_app_state()
             new_state["last_session"].update(data)
-            save_app_state(new_state)
-            return new_state
+            data = new_state
+
+        # Migration: v2.0 process_modules to v2.1 processing_depth
+        _migrate_to_processing_depth(data)
 
         # Deep merge with defaults to ensure structural integrity
         state = default_state.copy()
@@ -180,6 +187,7 @@ def save_app_state(state: Dict[str, Any]) -> None:
     except OSError as e:
         logger.error(f"I/O error while saving configuration: {e}")
 
+
 # -----------------------------------------------------------------------------
 # FACADE ACCESSORS
 # -----------------------------------------------------------------------------
@@ -207,3 +215,41 @@ def save_config(config: Dict[str, Any]) -> None:
     state = load_app_state()
     state["last_session"] = config
     save_app_state(state)
+
+
+# -----------------------------------------------------------------------------
+# PRIVATE HELPERS
+# -----------------------------------------------------------------------------
+
+def _migrate_to_processing_depth(data: Dict[str, Any]) -> None:
+    """
+    Migrate legacy 'process_modules' boolean to 'processing_depth' enum.
+
+    Handles the transition for last_session and all saved_profiles.
+    Migration Logic:
+        True -> "full"
+        False -> "tree_only"
+
+    Args:
+        data: The state dictionary to migrate in-place.
+    """
+    # Migrate last_session
+    last_sess = data.get("last_session", {})
+    if "process_modules" in last_sess and "processing_depth" not in last_sess:
+        is_full = last_sess.get("process_modules", True)
+        depth = "full" if is_full else "tree_only"
+        last_sess["processing_depth"] = depth
+        logger.info(
+            f"Migrated last_session: process_modules={is_full} -> processing_depth={depth}"
+        )
+
+    # Migrate saved_profiles
+    profiles = data.get("saved_profiles", {})
+    for name, profile in profiles.items():
+        if "process_modules" in profile and "processing_depth" not in profile:
+            is_full = profile.get("process_modules", True)
+            depth = "full" if is_full else "tree_only"
+            profile["processing_depth"] = depth
+            logger.info(
+                f"Migrated profile '{name}': process_modules={is_full} -> depth={depth}"
+            )

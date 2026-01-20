@@ -5,6 +5,7 @@ Pipeline Domain Data Models.
 
 Defines the core data structures and factory functions used to communicate 
 execution results between the pipeline engine and interface layers (CLI/GUI).
+Added 'processing_depth' to track skeletonization state.
 """
 
 from dataclasses import dataclass, field
@@ -29,7 +30,8 @@ class PipelineResult:
         output_base_dir: Root directory for output artifacts.
         output_subdir_name: Subdirectory where results are saved.
         output_prefix: User-defined prefix for generated files.
-        process_modules: Whether source logic was targeted.
+        processing_depth: Strategy used ("full", "skeleton", "tree_only").
+        process_modules: Legacy flag for source logic targeting.
         process_tests: Whether test files were targeted.
         process_resources: Whether project resources were targeted.
         create_individual_files: Flag for categorized output files.
@@ -53,6 +55,7 @@ class PipelineResult:
     output_subdir_name: str
     output_prefix: str
 
+    processing_depth: str
     process_modules: bool
     process_tests: bool
     process_resources: bool
@@ -107,6 +110,7 @@ def create_error_result(
         output_base_dir=cfg.get("output_base_dir", ""),
         output_subdir_name=cfg.get("output_subdir_name", ""),
         output_prefix=cfg.get("output_prefix", ""),
+        processing_depth=cfg.get("processing_depth", "full"),
         process_modules=cfg.get("process_modules", False),
         process_tests=cfg.get("process_tests", False),
         process_resources=cfg.get("process_resources", False),
@@ -156,6 +160,7 @@ def create_success_result(
         output_base_dir=cfg.get("output_base_dir", ""),
         output_subdir_name=cfg.get("output_subdir_name", ""),
         output_prefix=cfg.get("output_prefix", ""),
+        processing_depth=cfg.get("processing_depth", "full"),
         process_modules=cfg.get("process_modules", True),
         process_tests=cfg.get("process_tests", True),
         process_resources=cfg.get("process_resources", True),

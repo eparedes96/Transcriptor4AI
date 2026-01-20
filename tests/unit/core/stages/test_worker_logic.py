@@ -5,11 +5,13 @@ Unit tests for the Atomic Worker Logic.
 
 Verifies the decision-making process of `process_file_task`:
 1. File classification (Module vs Test vs Resource).
-2. Skipping logic based on configuration.
+2. Skipping logic based on configuration and processing depth.
 3. Lock acquisition corresponding to the file type.
 4. Correct writing to disk via materialized content.
 5. Integration with the caching data flow (processed_content).
-6. Error handling and result dictionary formation.
+6. Routing to AST skeletonizer for Python files in skeleton mode.
+7. Error handling and result dictionary formation.
+Migration from 'process_modules' to 'processing_depth'.
 """
 
 from typing import Dict
@@ -55,19 +57,19 @@ def mock_paths() -> Dict[str, str]:
     }
 
 
-def test_worker_skips_modules_if_configured(
+def test_worker_skips_modules_if_depth_is_tree_only(
         mock_locks: Dict[str, MagicMock],
         mock_paths: Dict[str, str]
 ) -> None:
     """
-    Verify that a standard code file is skipped if process_modules is False.
+    Verify that a standard code file is skipped if processing_depth is 'tree_only'.
     """
     result = process_file_task(
         file_path="/src/main.py",
         rel_path="main.py",
         ext=".py",
         file_name="main.py",
-        process_modules=False,
+        processing_depth="tree_only",
         process_tests=True,
         process_resources=True,
         enable_sanitizer=False,
@@ -94,8 +96,10 @@ def test_worker_identifies_and_locks_tests(
     """
     test_content = ["def test_api(): pass\n"]
 
-    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream, \
-            patch("builtins.open", mock_open()) as mocked_file:
+    with (
+        patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream,
+        patch("builtins.open", mock_open()) as mocked_file
+    ):
         mock_stream.return_value = iter(test_content)
 
         result = process_file_task(
@@ -103,7 +107,7 @@ def test_worker_identifies_and_locks_tests(
             rel_path="tests/test_api.py",
             ext=".py",
             file_name="test_api.py",
-            process_modules=True,
+            processing_depth="full",
             process_tests=True,
             process_resources=True,
             enable_sanitizer=False,
@@ -135,6 +139,44 @@ def test_worker_identifies_and_locks_tests(
         assert "def test_api()" in full_output
 
 
+def test_worker_routes_to_skeleton_mode_for_python(
+        mock_locks: Dict[str, MagicMock],
+        mock_paths: Dict[str, str]
+) -> None:
+    """
+    Verify that in 'skeleton' mode, Python files are routed to the AST skeletonizer.
+    """
+    raw_code = "def heavy_logic():\n    print('Doing math')\n    return 42"
+    expected_skeleton = "def heavy_logic():\n    pass"
+
+    with (
+        patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream,
+        patch("transcriptor4ai.core.pipeline.stages.worker.generate_skeleton_code") as mock_skel,
+        patch("builtins.open", mock_open())
+    ):
+        mock_stream.return_value = iter([raw_code])
+        mock_skel.return_value = expected_skeleton
+
+        result = process_file_task(
+            file_path="/src/logic.py",
+            rel_path="src/logic.py",
+            ext=".py",
+            file_name="logic.py",
+            processing_depth="skeleton",
+            process_tests=False,
+            process_resources=False,
+            enable_sanitizer=False,
+            mask_user_paths=False,
+            minify_output=False,
+            locks=mock_locks,
+            output_paths=mock_paths
+        )
+
+        assert result["ok"] is True
+        assert result["processed_content"] == expected_skeleton
+        mock_skel.assert_called_once_with(raw_code)
+
+
 def test_worker_handles_io_error_gracefully(
         mock_locks: Dict[str, MagicMock],
         mock_paths: Dict[str, str]
@@ -151,7 +193,7 @@ def test_worker_handles_io_error_gracefully(
             rel_path="locked.py",
             ext=".py",
             file_name="locked.py",
-            process_modules=True,
+            processing_depth="full",
             process_tests=True,
             process_resources=True,
             enable_sanitizer=False,
@@ -182,7 +224,7 @@ def test_worker_identifies_resources(
             rel_path="README.md",
             ext=".md",
             file_name="README.md",
-            process_modules=True,
+            processing_depth="full",
             process_tests=True,
             process_resources=True,
             enable_sanitizer=False,

@@ -97,7 +97,9 @@ def assemble_and_finalize(
                     full_text = f.read()
 
                     final_token_count = count_tokens(full_text, model=target_model)
-                    logger.info(f"Estimated token count ({target_model}): {final_token_count}")
+                    logger.info(
+                        f"Estimated token count ({target_model}): {final_token_count}"
+                    )
             except Exception as e:
                 logger.warning(f"Failed to count tokens: {e}")
 
@@ -116,7 +118,9 @@ def assemble_and_finalize(
     else:
         # Move unified context to the final destination directory
         if unified_created:
-            real_path_unified = os.path.join(final_output_path, f"{prefix}_full_context.txt")
+            real_path_unified = os.path.join(
+                final_output_path, f"{prefix}_full_context.txt"
+            )
             if os.path.abspath(paths["unified"]) != os.path.abspath(real_path_unified):
                 if os.path.exists(real_path_unified):
                     os.remove(real_path_unified)
@@ -156,7 +160,9 @@ def assemble_and_finalize(
         "generated_files": gen_files_map,
         "tree": {
             "generated": bool(cfg.get("generate_tree")),
-            "path": paths["tree"] if (cfg["create_individual_files"] and not dry_run) else None,
+            "path": paths["tree"] if (
+                cfg["create_individual_files"] and not dry_run
+            ) else None,
             "lines": len(tree_lines),
         },
         "existing_files_before_run": list(existing_files),

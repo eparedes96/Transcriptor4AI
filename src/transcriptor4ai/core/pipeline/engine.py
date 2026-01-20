@@ -105,7 +105,7 @@ def run_pipeline(
             tests_output_path=paths["tests"],
             resources_output_path=paths["resources"],
             error_output_path=paths["errors"],
-            process_modules=bool(cfg["process_modules"]),
+            processing_depth=str(cfg.get("processing_depth", "full")),
             process_tests=bool(cfg["process_tests"]),
             process_resources=bool(cfg["process_resources"]),
             extensions=cfg["extensions"],

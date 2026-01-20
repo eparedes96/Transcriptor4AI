@@ -6,6 +6,8 @@ Configuration Validation Service.
 Acts as the primary gatekeeper for the pipeline, ensuring that the configuration 
 dictionary conforms to the expected schema. Handles type coercion, path 
 normalization, and default value injection to maintain execution stability.
+Integrated 'processing_depth' validation and cross-field 
+integrity with legacy 'process_modules' flag.
 """
 
 import logging
@@ -63,7 +65,7 @@ def validate_config(
     # 2. Schema Definition (Declarative mapping)
     string_fields = [
         "input_path", "output_base_dir", "output_subdir_name",
-        "output_prefix", "target_model"
+        "output_prefix", "target_model", "processing_depth"
     ]
 
     bool_fields = [
@@ -96,7 +98,17 @@ def validate_config(
             merged.get(field), fallback, field, warnings, strict
         )
 
-    # 4. Domain-Specific Normalization (Extensions)
+    # 4. Cross-field Integrity Logic
+    if not merged["process_modules"]:
+        if merged["processing_depth"] != "tree_only":
+            merged["processing_depth"] = "tree_only"
+            logger.debug("Integrity Check: forced depth='tree_only' due to process_modules=False")
+
+    # Conversely, if depth is tree_only, process_modules must be False for consistency
+    if merged["processing_depth"] == "tree_only":
+        merged["process_modules"] = False
+
+    # 5. Domain-Specific Normalization (Extensions)
     merged["extensions"] = _normalize_extensions(merged["extensions"], warnings, strict)
 
     return merged, warnings

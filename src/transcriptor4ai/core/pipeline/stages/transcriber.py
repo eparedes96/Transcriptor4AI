@@ -7,6 +7,8 @@ Manages the multi-threaded transcription lifecycle. It coordinates
 initialization, concurrent task dispatching via the Scanner service,
 thread-safe writing, and final error aggregation.
 Integrates CacheService to skip processing of unchanged files.
+Migration to 'processing_depth' strategy for AST-based 
+skeletonization routing.
 """
 
 import hashlib
@@ -43,7 +45,7 @@ def transcribe_code(
         tests_output_path: str,
         resources_output_path: str,
         error_output_path: str,
-        process_modules: bool = True,
+        processing_depth: str = "full",
         process_tests: bool = True,
         process_resources: bool = False,
         extensions: Optional[List[str]] = None,
@@ -69,7 +71,7 @@ def transcribe_code(
         tests_output_path: Target path for test suites transcription.
         resources_output_path: Target path for configuration/documentation files.
         error_output_path: Target path for the operation error log.
-        process_modules: Enable source code processing.
+        processing_depth: Content depth strategy ("full", "skeleton", "tree_only").
         process_tests: Enable test file processing.
         process_resources: Enable resource file processing.
         extensions: Filter by specific file extensions.
@@ -95,7 +97,7 @@ def transcribe_code(
     # 2. Setup output files and thread synchronization locks
     locks, output_paths = _initialize_execution_environment(
         modules_output_path, tests_output_path, resources_output_path,
-        error_output_path, process_modules, process_tests, process_resources
+        error_output_path, processing_depth, process_tests, process_resources
     )
 
     results: Dict[str, Any] = {
@@ -111,13 +113,13 @@ def transcribe_code(
     # Initialize Cache Service and compute config hash
     cache_service = CacheService()
     config_hash = _generate_config_hash(
-        process_modules, process_tests, process_resources,
+        processing_depth, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output
     )
 
     _execute_parallel_transcription(
         input_path, extensions or default_extensions(), include_rx, exclude_rx,
-        process_modules, process_tests, process_resources,
+        processing_depth, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output,
         locks, output_paths, results,
         cache_service, config_hash,
@@ -169,7 +171,7 @@ def _initialize_execution_environment(
         tests_path: str,
         resources_path: str,
         error_path: str,
-        process_modules: bool,
+        processing_depth: str,
         process_tests: bool,
         process_resources: bool
 ) -> Tuple[Dict[str, threading.Lock], Dict[str, str]]:
@@ -192,7 +194,8 @@ def _initialize_execution_environment(
         "error": error_path
     }
 
-    if process_modules:
+    # Only initialize module file if depth is not tree_only
+    if processing_depth != "tree_only":
         initialize_output_file(modules_path, "SCRIPTS/MODULES:")
     if process_tests:
         initialize_output_file(tests_path, "TESTS:")
@@ -213,7 +216,7 @@ def _execute_parallel_transcription(
         extensions: List[str],
         include_rx: List[re.Pattern],
         exclude_rx: List[re.Pattern],
-        process_modules: bool,
+        processing_depth: str,
         process_tests: bool,
         process_resources: bool,
         enable_sanitizer: bool,
@@ -231,12 +234,15 @@ def _execute_parallel_transcription(
 
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
 
+        # Legacy backward compatibility check for Scanner
+        process_modules_flag = processing_depth != "tree_only"
+
         for file_data in yield_project_files(
                 input_path=input_path,
                 extensions=extensions,
                 include_rx=include_rx,
                 exclude_rx=exclude_rx,
-                process_modules=process_modules,
+                process_modules=process_modules_flag,
                 process_tests=process_tests,
                 process_resources=process_resources
         ):
@@ -264,7 +270,7 @@ def _execute_parallel_transcription(
                             file_data,
                             locks,
                             output_paths,
-                            process_modules,
+                            processing_depth,
                             process_tests,
                             process_resources
                         )
@@ -282,7 +288,7 @@ def _execute_parallel_transcription(
                     rel_path=file_data["rel_path"],
                     ext=file_data["ext"],
                     file_name=file_data["file_name"],
-                    process_modules=process_modules,
+                    processing_depth=processing_depth,
                     process_tests=process_tests,
                     process_resources=process_resources,
                     enable_sanitizer=enable_sanitizer,
@@ -329,7 +335,7 @@ def _write_cached_content(
         file_data: Dict[str, Any],
         locks: Dict[str, threading.Lock],
         output_paths: Dict[str, str],
-        process_modules: bool,
+        processing_depth: str,
         process_tests: bool,
         process_resources: bool
 ) -> None:
@@ -341,16 +347,17 @@ def _write_cached_content(
     file_is_resource = is_resource_file(file_name)
     target_mode = "skip"
 
-    if file_is_test:
-        if process_tests:
-            target_mode = "test"
-    elif file_is_resource:
-        if process_resources:
-            target_mode = "resource"
-        elif process_modules:
-            target_mode = "module"
-    else:
-        if process_modules:
+    # Routing logic based on new processing_depth
+    if processing_depth != "tree_only":
+        if file_is_test:
+            if process_tests:
+                target_mode = "test"
+        elif file_is_resource:
+            if process_resources:
+                target_mode = "resource"
+            else:
+                target_mode = "module"
+        else:
             target_mode = "module"
 
     if target_mode == "skip":
@@ -363,7 +370,7 @@ def _write_cached_content(
     if lock and out_path:
         with lock:
             with open(out_path, "a", encoding="utf-8") as out:
-                out.write(f"{separator}/n")
-                out.write(f"{file_data['rel_path']}/n")
+                out.write(f"{separator}\n")
+                out.write(f"{file_data['rel_path']}\n")
                 out.write(content)
-                out.write("/n")
+                out.write("\n")

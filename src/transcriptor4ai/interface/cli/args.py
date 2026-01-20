@@ -6,6 +6,8 @@ CLI Argument Definition and Mapping.
 Defines the command-line interface schema, including help messages, 
 argument types, and defaults. Provides logic to translate raw argparse 
 namespaces into domain-compatible configuration overrides.
+Implemented parsimonious mapping for 'processing_depth' 
+to ensure CLI flags correctly override session defaults.
 """
 
 import argparse
@@ -62,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=i18n.t("cli.args.no_modules", default="Exclude source code logic."),
     )
     p.add_argument(
+        "--skeleton",
+        action="store_true",
+        help=i18n.t(
+            "cli.args.skeleton",
+            default="Enable AST skeletonization (strip bodies, keep structure)."
+        ),
+    )
+    p.add_argument(
         "--no-tests",
         action="store_true",
         help=i18n.t("cli.args.no_tests", default="Exclude test suite files."),
@@ -69,7 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--resources",
         action="store_true",
-        help=i18n.t("cli.args.resources", default="Include non-code resources (docs/config)."),
+        help=i18n.t(
+            "cli.args.resources",
+            default="Include non-code resources (docs/config)."
+        ),
     )
     p.add_argument(
         "--tree",
@@ -92,12 +105,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--unified-only",
         action="store_true",
-        help=i18n.t("cli.args.unified_only", default="Target ONLY unified context generation."),
+        help=i18n.t(
+            "cli.args.unified_only",
+            default="Target ONLY unified context generation."
+        ),
     )
     p.add_argument(
         "--individual-only",
         action="store_true",
-        help=i18n.t("cli.args.individual_only", default="Target ONLY categorized file generation."),
+        help=i18n.t(
+            "cli.args.individual_only",
+            default="Target ONLY categorized file generation."
+        ),
     )
 
     # --- Static Analysis (AST) Configuration ---
@@ -174,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     return p
 
+
 # -----------------------------------------------------------------------------
 # ARGUMENT MAPPING
 # -----------------------------------------------------------------------------
@@ -195,9 +215,14 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     overrides["output_subdir_name"] = args.output_subdir_name
     overrides["output_prefix"] = args.output_prefix
 
-    # Content Scope overrides
+    # Content Scope & Depth overrides
+    if args.skeleton:
+        overrides["processing_depth"] = "skeleton"
+
     if args.no_modules:
-        overrides["process_modules"] = False
+        overrides["processing_depth"] = "tree_only"
+        overrides["process_modules"] = False  # Legacy support
+
     if args.no_tests:
         overrides["process_tests"] = False
     if args.resources:
@@ -238,6 +263,7 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["save_error_log"] = False
 
     return overrides
+
 
 # -----------------------------------------------------------------------------
 # HELPERS

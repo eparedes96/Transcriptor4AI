@@ -17,14 +17,22 @@ from transcriptor4ai.core.pipeline.stages.transcriber import transcribe_code
 
 @pytest.fixture
 def complex_project(tmp_path: Path) -> Path:
-    """Creates a realistic project structure for integration testing."""
+    """
+    Creates a realistic project structure for integration testing.
+
+    Includes modules with classes, secrets for sanitization, tests,
+    documentation and ignore-patterns.
+    """
     root = tmp_path / "app"
     root.mkdir()
 
     # Modules
     src = root / "src"
     src.mkdir()
-    (src / "core.py").write_text("class Core: pass", encoding="utf-8")
+    (src / "core.py").write_text(
+        "class Core:\n    def run(self):\n        '''Main logic.'''\n        return True",
+        encoding="utf-8"
+    )
     (src / "secret.py").write_text("API_KEY = 'sk-1234567890'", encoding="utf-8")
 
     # Tests
@@ -54,7 +62,7 @@ def test_transcribe_code_full_integration(tmp_path: Path, complex_project: Path)
         tests_output_path=str(out_dir / "test.txt"),
         resources_output_path=str(out_dir / "res.txt"),
         error_output_path=str(out_dir / "err.txt"),
-        process_modules=True,
+        processing_depth="full",
         process_tests=True,
         process_resources=True,
         respect_gitignore=True,
@@ -76,8 +84,38 @@ def test_transcribe_code_full_integration(tmp_path: Path, complex_project: Path)
     assert "# Project Docs" in res_content
 
 
+def test_transcribe_code_skeleton_mode(tmp_path: Path, complex_project: Path) -> None:
+    """TC-02: Verify AST skeletonization strips logic but keeps structure."""
+    out_dir = tmp_path / "out_skeleton"
+
+    res = transcribe_code(
+        input_path=str(complex_project),
+        modules_output_path=str(out_dir / "mod_skeleton.txt"),
+        tests_output_path=str(out_dir / "test.txt"),
+        resources_output_path=str(out_dir / "res.txt"),
+        error_output_path=str(out_dir / "err.txt"),
+        processing_depth="skeleton",
+        process_tests=False,
+        process_resources=False
+    )
+
+    assert res["ok"] is True
+    mod_content = (out_dir / "mod_skeleton.txt").read_text(encoding="utf-8")
+
+    # Structure check
+    assert "class Core" in mod_content
+    assert "def run(self)" in mod_content
+
+    # Body check: Original 'return True' must be replaced by 'pass'
+    assert "return True" not in mod_content
+    assert "pass" in mod_content
+
+    # Docstring preservation check
+    assert '"""Main logic."""' in mod_content
+
+
 def test_transcribe_code_respects_gitignore(tmp_path: Path, complex_project: Path) -> None:
-    """TC-02: Ensure .gitignore patterns prevent file transcription."""
+    """TC-03: Ensure .gitignore patterns prevent file transcription."""
     out_dir = tmp_path / "out_git"
     os.makedirs(out_dir, exist_ok=True)
 
@@ -87,9 +125,11 @@ def test_transcribe_code_respects_gitignore(tmp_path: Path, complex_project: Pat
         tests_output_path=str(out_dir / "test.txt"),
         resources_output_path=str(out_dir / "res.txt"),
         error_output_path=str(out_dir / "err.txt"),
+        processing_depth="full",
         respect_gitignore=True
     )
 
-    # The debug.log should be skipped
-    assert "debug.log" not in (out_dir / "mod.txt").read_text(encoding="utf-8")
+    # The debug.log should be skipped according to fixture settings
+    content = (out_dir / "mod.txt").read_text(encoding="utf-8")
+    assert "debug.log" not in content
     assert res["counters"]["skipped"] >= 1

@@ -6,6 +6,7 @@ End-to-End (E2E) CLI Tests.
 Verifies the application's external behavior by invoking the entry point
 script via subprocess. These tests validate argument parsing, exit codes,
 stream output (stdout/stderr), and file system side effects (artifact generation).
+Alignment with 'processing_depth' configuration schema.
 """
 
 import json
@@ -178,7 +179,7 @@ def test_cli_config_overrides(tmp_path: Path, sample_project: Path) -> None:
 
     # Check that flags were respected in the pipeline result
     assert data["ok"] is True
-    assert data["process_modules"] is False
+    assert data["processing_depth"] == "tree_only"
     assert data["process_tests"] is False
     assert data["process_resources"] is True
 

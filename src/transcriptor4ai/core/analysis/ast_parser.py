@@ -4,8 +4,8 @@ from __future__ import annotations
 AST Analysis Service.
 
 Provides fault-tolerant parsing of Python source files to extract structural 
-definitions such as classes, functions, and methods. Designed to assist 
-LLMs in understanding code architecture without full file transcription.
+definitions and generate code skeletons. Supports 'Skeleton Mode' by stripping 
+function bodies while preserving signatures and docstrings for LLM context optimization.
 """
 
 import ast
@@ -14,6 +14,7 @@ import os
 from typing import List
 
 logger = logging.getLogger(__name__)
+
 
 # -----------------------------------------------------------------------------
 # PUBLIC API
@@ -86,3 +87,76 @@ def extract_definitions(
                     results.append(f"  Method: {m}()")
 
     return results
+
+
+def generate_skeleton_code(source: str) -> str:
+    """
+    Transform Python source code into a structural skeleton.
+
+    Reduces token consumption by replacing the bodies of all functions and
+    methods with 'pass' or an ellipsis, while preserving class structures,
+    function signatures, and original docstrings.
+
+    Args:
+        source: The original Python source code string.
+
+    Returns:
+        str: The skeletonized source code, or a fallback message if parsing fails.
+    """
+    try:
+        # Parse the source into an AST
+        tree = ast.parse(source)
+
+        # Apply the transformation
+        transformer = _SkeletonTransformer()
+        skeleton_tree = transformer.visit(tree)
+
+        # Fix locations and unparse back to source (Python 3.9+)
+        ast.fix_missing_locations(skeleton_tree)
+        return ast.unparse(skeleton_tree)
+
+    except SyntaxError as e:
+        logger.warning(f"Skeletonization failed due to SyntaxError: {e}")
+        return f"# [SKIPPING SKELETON] File has syntax errors: {e}\n"
+    except Exception as e:
+        logger.error(f"Unexpected error during skeletonization: {e}")
+        return f"# [ERROR] AST skeletonization failed: {str(e)}\n"
+
+
+# -----------------------------------------------------------------------------
+# PRIVATE HELPERS
+# -----------------------------------------------------------------------------
+
+class _SkeletonTransformer(ast.NodeTransformer):
+    """
+    AST Transformer that strips the implementation body of functions.
+
+    Preserves:
+    - Function/Class names and decorators.
+    - Arguments and type annotations.
+    - Docstrings (if present).
+    """
+
+    def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> ast.AST:
+        """Process synchronous and asynchronous function definitions."""
+        # 1. Extract docstring if it exists
+        docstring = ast.get_docstring(node)
+
+        # 2. Reconstruct the body
+        new_body: List[ast.stmt] = []
+
+        if docstring:
+            # Re-insert docstring as an expression
+            doc_node = ast.Expr(value=ast.Constant(value=docstring))
+            new_body.append(doc_node)
+
+        # 3. Add the 'pass' statement to replace logic
+        new_body.append(ast.Pass())
+
+        # 4. Update node and return
+        node.body = new_body
+        return node
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> ast.AST:
+        """Alias for visit_FunctionDef to handle async definitions identically."""
+        return self.visit_FunctionDef(node)

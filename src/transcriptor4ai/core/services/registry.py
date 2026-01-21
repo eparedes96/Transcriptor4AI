@@ -5,8 +5,8 @@ Model Discovery and Registry Service.
 
 Acts as the central authority for AI model metadata. Orchestrates the 
 discovery lifecycle by merging build-time snapshots with live remote 
-data from LiteLLM. Implements canonical filtering to prioritize base 
-models over infrastructure-specific variants (Azure, Bedrock, etc.).
+data from LiteLLM. Implements canonical filtering and provider 
+consolidation to ensure a clean UI and efficient discovery.
 """
 
 import json
@@ -20,6 +20,33 @@ from transcriptor4ai.infra import network
 from transcriptor4ai.infra.fs import get_user_data_dir
 
 logger = logging.getLogger(__name__)
+
+# -----------------------------------------------------------------------------
+# PROVIDER CONSOLIDATION MAP
+# -----------------------------------------------------------------------------
+# Maps noisy infrastructure-specific IDs to clean, canonical names.
+# This ensures the UI list is readable and not redundant.
+_PROVIDER_MAPPING: Dict[str, str] = {
+    "AZURE": "AZURE",
+    "AZURE_AI": "AZURE",
+    "AZURE_TEXT": "AZURE",
+    "BEDROCK": "AWS (BEDROCK)",
+    "BEDROCK_CONVERSE": "AWS (BEDROCK)",
+    "SAGEMAKER": "AWS (SAGEMAKER)",
+    "VERTEX_AI": "GOOGLE (VERTEX)",
+    "GEMINI": "GOOGLE",
+    "PALM": "GOOGLE",
+    "OPENROUTER": "OPENROUTER",
+    "TOGETHER_AI": "TOGETHER AI",
+    "ANYSCALE": "ANYSCALE",
+    "FIREWORKS_AI": "FIREWORKS AI",
+    "DEEPINFRA": "DEEPINFRA",
+    "FRIENDLIAI": "FRIENDLI AI",
+    "CLOUDFLARE": "CLOUDFLARE",
+    "DATABRICKS": "DATABRICKS",
+    "GITHUB_COPILOT": "GITHUB",
+    "TEXT-COMPLETION-OPENAI": "OPENAI",
+}
 
 
 class ModelRegistry:
@@ -125,12 +152,13 @@ class ModelRegistry:
 
         Implements:
         1. Mode Filtering (Text only).
-        2. Canonical Heuristic (Filter Azure/Bedrock if base exists).
-        3. Unit Conversion (Cost per 1k).
+        2. Provider Consolidation (Hides infrastructure variants).
+        3. Canonical Heuristic (Filter duplicates if base exists).
+        4. Unit Conversion (Cost per 1k).
         """
         curated: Dict[str, Dict[str, Any]] = {}
 
-        # 1. First Pass: Internal Normalization
+        # 1. First Pass: Internal Normalization and Consolidation
         for model_id, info in raw_data.items():
             if not isinstance(info, dict) or model_id == "sample_spec":
                 continue
@@ -147,9 +175,13 @@ class ModelRegistry:
             in_cost = float(info.get("input_cost_per_token", 0.0)) * 1000
             out_cost = float(info.get("output_cost_per_token", 0.0)) * 1000
 
+            # Provider Consolidation Logic
+            raw_provider = info.get("litellm_provider", "unknown").upper()
+            canonical_provider = _PROVIDER_MAPPING.get(raw_provider, raw_provider)
+
             curated[model_id] = {
                 "id": model_id,
-                "provider": info.get("litellm_provider", "unknown").upper(),
+                "provider": canonical_provider,
                 "input_cost_1k": in_cost,
                 "output_cost_1k": out_cost,
                 "context_window": int(context),
@@ -164,7 +196,9 @@ class ModelRegistry:
 
         Example: If 'gpt-4o' and 'azure/gpt-4o' exist, keep only 'gpt-4o'.
         """
-        infrastructure_providers = ("AZURE", "BEDROCK", "VERTEX_AI", "SAGEMAKER")
+        # Infrastructure-heavy providers to watch for duplicates
+        infrastructure_keywords = ("AZURE", "BEDROCK", "VERTEX", "SAGEMAKER")
+
         clean_catalog: Dict[str, Any] = {}
 
         # Group by base name (part after slash)
@@ -175,10 +209,11 @@ class ModelRegistry:
             if base_name not in clean_catalog:
                 clean_catalog[base_name] = data
             else:
-                current_is_infra = clean_catalog[base_name]["provider"] in infrastructure_providers
-                new_is_infra = data["provider"] in infrastructure_providers
+                provider = data["provider"]
+                current_is_infra = any(k in clean_catalog[base_name]["provider"] for k in infrastructure_keywords)
+                new_is_infra = any(k in provider for k in infrastructure_keywords)
 
-                # Favor non-infrastructure (original) providers
+                # Favor non-infrastructure (original/pure) providers
                 if current_is_infra and not new_is_infra:
                     clean_catalog[base_name] = data
 

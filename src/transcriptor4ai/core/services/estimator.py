@@ -10,7 +10,7 @@ execution metrics.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from transcriptor4ai.core.services.registry import ModelRegistry

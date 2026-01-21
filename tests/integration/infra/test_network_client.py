@@ -4,7 +4,7 @@ from __future__ import annotations
 Integration tests for Network Infrastructure.
 
 Utilizes mocking to verify GitHub API update checks, binary streaming,
-pricing synchronization, and telemetry submission without making real 
+model metadata discovery, and telemetry submission without making real 
 network calls.
 """
 
@@ -17,7 +17,7 @@ from transcriptor4ai.infra.network import (
     _calculate_sha256,
     check_for_updates,
     download_binary_stream,
-    fetch_pricing_data,
+    fetch_external_model_data,
     submit_feedback,
 )
 
@@ -74,42 +74,43 @@ def test_download_binary_stream_success(tmp_path: Path) -> None:
 
 
 # -----------------------------------------------------------------------------
-# PRICING SYNCHRONIZATION TESTS
+# MODEL DISCOVERY TESTS (FORMER PRICING)
 # -----------------------------------------------------------------------------
 
-def test_fetch_pricing_data_success() -> None:
-    """TC-01: Verify successful retrieval and parsing of remote pricing JSON."""
-    mock_data = {"Model-A": {"input_cost_1k": 0.01}}
+def test_fetch_external_model_data_success() -> None:
+    """TC-01: Verify successful retrieval and parsing of remote model JSON."""
+    mock_data = {"Model-A": {"input_cost_per_token": 0.00001}}
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = mock_data
+    mock_resp.content = b'{"Model-A": {"input_cost_per_token": 0.00001}}'
 
     with patch("requests.get", return_value=mock_resp) as mock_get:
-        result = fetch_pricing_data("http://fake.url/pricing.json")
+        result = fetch_external_model_data("http://fake.url/models.json")
 
         assert result == mock_data
         mock_get.assert_called_once()
 
-        # Verify infrastructure constraints (NFR-01: 2s timeout)
+        # Verify infrastructure constraints
         _, kwargs = mock_get.call_args
-        assert kwargs["timeout"] == 2
+        assert kwargs["timeout"] == 5
 
 
-def test_fetch_pricing_data_timeout() -> None:
+def test_fetch_external_model_data_timeout() -> None:
     """TC-02: Verify that the function returns None on network timeout."""
     with patch("requests.get", side_effect=requests.exceptions.Timeout):
-        result = fetch_pricing_data("http://slow.url")
+        result = fetch_external_model_data("http://slow.url")
         assert result is None
 
 
-def test_fetch_pricing_data_malformed_json() -> None:
+def test_fetch_external_model_data_malformed_json() -> None:
     """TC-03: Verify resilience when remote source returns a list instead of dict."""
     mock_resp = MagicMock()
     mock_resp.status_code = 200
     mock_resp.json.return_value = ["not", "a", "dict"]
 
     with patch("requests.get", return_value=mock_resp):
-        result = fetch_pricing_data("http://broken.url")
+        result = fetch_external_model_data("http://broken.url")
         assert result is None
 
 

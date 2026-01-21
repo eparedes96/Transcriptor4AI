@@ -12,8 +12,9 @@ consolidation to ensure a clean UI and efficient discovery.
 import json
 import logging
 import os
+import sys
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from transcriptor4ai.domain import constants as const
 from transcriptor4ai.infra import network
@@ -210,7 +211,10 @@ class ModelRegistry:
                 clean_catalog[base_name] = data
             else:
                 provider = data["provider"]
-                current_is_infra = any(k in clean_catalog[base_name]["provider"] for k in infrastructure_keywords)
+                current_provider = clean_catalog[base_name]["provider"]
+
+                # Check if current or new entry is infrastructure
+                current_is_infra = any(k in current_provider for k in infrastructure_keywords)
                 new_is_infra = any(k in provider for k in infrastructure_keywords)
 
                 # Favor non-infrastructure (original/pure) providers
@@ -221,9 +225,9 @@ class ModelRegistry:
 
     def _get_bundled_path(self) -> str:
         """Resolve the absolute path to the bundled resource."""
-        import sys
         if getattr(sys, 'frozen', False):
-            base_path = sys._MEIPASS
+            # Mypy: Using getattr to avoid attr-defined error for _MEIPASS
+            base_path = getattr(sys, "_MEIPASS", os.getcwd())
         else:
             # Fallback for development (src/transcriptor4ai/assets/)
             base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -4,13 +4,13 @@ from __future__ import annotations
 UI Section for AI Model Selection.
 
 Manages the provider-to-model mapping interface. Replaces standard ComboBoxes
-with scrollable dropdowns to handle large datasets (hundreds of models) 
-efficiently using a slider-enabled interface and maintaining controller 
-compatibility.
+with scrollable dropdowns to handle large datasets (hundreds of models)
+efficiently using a slider-enabled interface and maintaining controller
+compatibility via shimmed methods.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
 
 import customtkinter as ctk
 
@@ -101,7 +101,7 @@ class AIModelSection:
         selection callback (to notify the controller).
         """
         # The button's command is strictly internal: open the dropdown
-        btn = ctk.CTkButton(
+        btn_widget = ctk.CTkButton(
             parent,
             text="Select...",
             anchor="w",
@@ -113,9 +113,12 @@ class AIModelSection:
             command=click_callback
         )
 
+        # Cast to Any to allow dynamic method attachment (shims)
+        btn: Any = cast(Any, btn_widget)
+
         # Custom internal state
-        btn._values_list: List[str] = []
-        btn._selection_callback: Optional[Callable[[str], None]] = None
+        btn._values_list = []
+        btn._selection_callback = None
 
         # Add 'set' method for AppController compatibility
         def _set(value: str) -> None:
@@ -123,7 +126,7 @@ class AIModelSection:
 
         # Add 'get' method for AppController compatibility
         def _get() -> str:
-            return btn.cget("text")
+            return str(btn.cget("text"))
 
         # Store the original configure method to avoid recursion
         original_configure = btn.configure
@@ -135,6 +138,7 @@ class AIModelSection:
                 del kwargs["values"]
 
             if "command" in kwargs:
+                # Store as selection callback instead of overwriting click command
                 btn._selection_callback = kwargs["command"]
                 del kwargs["command"]
 
@@ -146,11 +150,11 @@ class AIModelSection:
         btn.get = _get
         btn.configure = _smart_configure
 
-        return btn
+        return cast(ctk.CTkButton, btn)
 
     def _on_provider_click(self) -> None:
         """Trigger the scrollable dropdown for providers."""
-        widget = self._master.combo_provider
+        widget: Any = self._master.combo_provider
 
         def _on_select(val: str) -> None:
             widget.set(val)
@@ -166,7 +170,7 @@ class AIModelSection:
 
     def _on_model_click(self) -> None:
         """Trigger the scrollable dropdown for models."""
-        widget = self._master.combo_model
+        widget: Any = self._master.combo_model
 
         def _on_select(val: str) -> None:
             widget.set(val)

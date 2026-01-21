@@ -224,9 +224,17 @@ class AppController:
             self.config["processing_depth"] = "full"
 
         self.config["process_modules"] = modules_enabled
-        self.config["extensions"] = tk_helpers.parse_list_from_string(self.settings_view.entry_ext.get())
-        self.config["include_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_inc.get())
-        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_exc.get())
+
+        # Ruff E501: Wrapped CSV parsing calls
+        self.config["extensions"] = tk_helpers.parse_list_from_string(
+            self.settings_view.entry_ext.get()
+        )
+        self.config["include_patterns"] = tk_helpers.parse_list_from_string(
+            self.settings_view.entry_inc.get()
+        )
+        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(
+            self.settings_view.entry_exc.get()
+        )
         self.config["target_model"] = self.settings_view.combo_model.get()
 
     # -------------------------------------------------------------------------
@@ -251,7 +259,13 @@ class AppController:
 
         threading.Thread(
             target=threads.run_pipeline_task,
-            args=(self.config, overwrite, dry_run, self._on_process_complete, self._cancellation_event),
+            args=(
+                self.config,
+                overwrite,
+                dry_run,
+                self._on_process_complete,
+                self._cancellation_event
+            ),
             daemon=True
         ).start()
 
@@ -377,7 +391,10 @@ class AppController:
     def on_tree_toggled(self) -> None:
         """Dynamic UI visibility logic for AST analysis options."""
         if self.dashboard_view.sw_tree.get():
-            self.dashboard_view.frame_ast.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+            # Ruff E501: Wrapped grid configuration
+            self.dashboard_view.frame_ast.grid(
+                row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10)
+            )
         else:
             self.dashboard_view.frame_ast.grid_forget()
 

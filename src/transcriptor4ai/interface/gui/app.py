@@ -12,7 +12,7 @@ import logging
 import queue
 import threading
 from logging.handlers import QueueHandler
-from typing import Optional
+from typing import List, Optional
 
 import customtkinter as ctk
 
@@ -50,7 +50,7 @@ def main() -> None:
     """
 
     # --- PHASE 1: DIAGNOSTIC INFRASTRUCTURE ---
-    log_path = get_default_gui_log_path()
+    log_path: str = get_default_gui_log_path()
 
     # Configure root logging with rotating file and console handlers
     configure_logging(LoggingConfig(level="INFO", console=True, log_file=log_path))
@@ -67,7 +67,7 @@ def main() -> None:
         app_state = cfg.load_app_state()
         config = cfg.load_config()
         saved_profiles = app_state.get("saved_profiles", {})
-        profile_names = sorted(list(saved_profiles.keys()))
+        profile_names: List[str] = sorted(list(saved_profiles.keys()))
     except Exception as e:
         logger.error(f"State Error: Failure during config deserialization: {e}")
         app_state = cfg.get_default_app_state()
@@ -75,7 +75,7 @@ def main() -> None:
         profile_names = []
 
     # --- PHASE 3: VIEW COMPONENT HIERARCHY ---
-    app = create_main_window(profile_names, config)
+    app: ctk.CTk = create_main_window(profile_names, config)
 
     def show_frame(name: str) -> None:
         """Switch current visible view via grid management."""
@@ -105,13 +105,14 @@ def main() -> None:
     settings_frame = SettingsFrame(app, config, profile_names)
     logs_frame = LogsFrame(app)
 
+    # Set default view
     show_frame("dashboard")
 
     # --- PHASE 4: CONTROLLER INTEGRATION ---
     controller = AppController(app, config, app_state)
     controller.register_views(dashboard_frame, settings_frame, logs_frame, sidebar_frame)
 
-    # Initialize OTA Controller
+    # Initialize Update Management Controller (OTA)
     update_manager = UpdateManager()
     ota_controller = UpdateController(app, sidebar_frame, update_manager)
 
@@ -143,9 +144,10 @@ def main() -> None:
     settings_frame.btn_save.configure(command=controller.save_profile)
     settings_frame.btn_del.configure(command=controller.delete_profile)
 
-    # Bind Cache Purge Action
+    # Bind Cache Management
     settings_frame.btn_purge.configure(command=controller.purge_cache)
 
+    # Link dynamic dropdown selections to the controller
     settings_frame.combo_stack.configure(command=controller.on_stack_selected)
     settings_frame.combo_provider.configure(command=controller.on_provider_selected)
     settings_frame.combo_model.configure(command=controller.on_model_selected)
@@ -154,7 +156,7 @@ def main() -> None:
     # Link Sidebar Triggers
     sidebar_frame.btn_feedback.configure(command=lambda: show_feedback_window(app))
 
-    # --- PHASE 5: BACKGROUND POLLING ---
+    # --- PHASE 5: BACKGROUND POLLING & TASKS ---
     log_formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s", "%H:%M:%S")
 
     def poll_log_queue() -> None:
@@ -176,7 +178,7 @@ def main() -> None:
             daemon=True
         ).start()
 
-    # Financial Pricing Synchronization
+    # Dynamic Pricing and Model Discovery Synchronization
     threading.Thread(
         target=threads.run_pricing_update_task,
         kwargs={
@@ -194,6 +196,7 @@ def main() -> None:
             controller.sync_config_from_view()
             app_state["last_session"] = config
             cfg.save_app_state(app_state)
+            logger.info("Application state persisted successfully during shutdown.")
         except Exception as e:
             logger.error(f"Shutdown: Failed to save state: {e}")
         finally:
@@ -222,7 +225,7 @@ def _browse_folder(
         entry_widget: Target entry for the primary path update.
         linked_entry: Optional secondary entry to keep in sync.
     """
-    path = ctk.filedialog.askdirectory(parent=app, title="Select Directory")
+    path: str = ctk.filedialog.askdirectory(parent=app, title="Select Directory")
     if path:
         # Update primary input field
         entry_widget.configure(state="normal")

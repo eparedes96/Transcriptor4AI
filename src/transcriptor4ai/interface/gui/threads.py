@@ -107,7 +107,7 @@ def run_pricing_update_task(
     """
     try:
         logger.debug("Pricing Task: Initiating remote sync...")
-        pricing_data = network.fetch_pricing_data(const.PRICING_DATA_URL)
+        pricing_data = network.fetch_external_model_data(const.MODEL_DATA_URL)
         on_complete(pricing_data)
     except Exception as e:
         logger.error(f"Pricing Task: Sync failed: {e}")

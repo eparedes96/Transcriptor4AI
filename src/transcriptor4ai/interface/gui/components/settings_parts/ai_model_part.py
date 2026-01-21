@@ -5,11 +5,12 @@ UI Section for AI Model Selection.
 
 Manages the provider-to-model mapping interface. Replaces standard ComboBoxes
 with scrollable dropdowns to handle large datasets (hundreds of models) 
-efficiently using a slider-enabled interface.
+efficiently using a slider-enabled interface and maintaining controller 
+compatibility.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Callable
 
 import customtkinter as ctk
 
@@ -28,7 +29,7 @@ class AIModelSection:
     Handles the UI logic for AI providers and LLM models selection.
 
     Uses CTkScrollableDropdown to provide a scrollable interface for
-    large lists, preventing UI overflow.
+    large lists, preventing UI overflow and handling controller callbacks.
     """
 
     def __init__(
@@ -64,7 +65,7 @@ class AIModelSection:
         # We use a Button that mimics a ComboBox to trigger the Scrollable Dropdown
         master.combo_provider = self._create_scrollable_trigger(
             f_prov,
-            callback=self._on_provider_click
+            click_callback=self._on_provider_click
         )
         master.combo_provider.pack(padx=10, pady=10, anchor="w", fill="x")
 
@@ -80,18 +81,26 @@ class AIModelSection:
 
         master.combo_model = self._create_scrollable_trigger(
             f_mod,
-            callback=self._on_model_click
+            click_callback=self._on_model_click
         )
 
         # Set initial value from last session
-        target_model = config.get("target_model", const.DEFAULT_MODEL_KEY)
+        target_model: str = config.get("target_model", const.DEFAULT_MODEL_KEY)
         master.combo_model.set(target_model)
         master.combo_model.pack(padx=10, pady=10, anchor="w", fill="x")
 
-    def _create_scrollable_trigger(self, parent: ctk.CTkFrame, callback: Any) -> ctk.CTkButton:
+    def _create_scrollable_trigger(
+            self,
+            parent: ctk.CTkFrame,
+            click_callback: Callable[[], None]
+    ) -> ctk.CTkButton:
         """
         Create a button styled as a dropdown with ComboBox compatibility methods.
+
+        Separates the physical click (to open the list) from the logical
+        selection callback (to notify the controller).
         """
+        # The button's command is strictly internal: open the dropdown
         btn = ctk.CTkButton(
             parent,
             text="Select...",
@@ -101,11 +110,12 @@ class AIModelSection:
             border_color=("gray70", "#565b5e"),
             text_color=("gray10", "gray90"),
             hover_color=("gray95", "#3e3f40"),
-            command=callback
+            command=click_callback
         )
 
-        # Internal state to store list of values
+        # Custom internal state
         btn._values_list: List[str] = []
+        btn._selection_callback: Optional[Callable[[str], None]] = None
 
         # Add 'set' method for AppController compatibility
         def _set(value: str) -> None:
@@ -115,23 +125,26 @@ class AIModelSection:
         def _get() -> str:
             return btn.cget("text")
 
-        # Add 'configure' method shim for 'values'
-        def _configure_shim(**kwargs: Any) -> None:
+        # Store the original configure method to avoid recursion
+        original_configure = btn.configure
+
+        # Define a specialized configure that catches 'values' and 'command'
+        def _smart_configure(**kwargs: Any) -> None:
             if "values" in kwargs:
                 btn._values_list = kwargs["values"]
-            if "command" in kwargs:
-                btn._controller_command = kwargs["command"]
+                del kwargs["values"]
 
+            if "command" in kwargs:
+                btn._selection_callback = kwargs["command"]
+                del kwargs["command"]
+
+            if kwargs:
+                original_configure(**kwargs)
+
+        # Attach shim methods
         btn.set = _set
         btn.get = _get
-        btn.configure_orig = btn.configure
-
-        def _smart_configure(**kwargs: Any) -> None:
-            _configure_shim(**kwargs)
-            btn.configure_orig(**{k: v for k, v in kwargs.items() if k != "values"})
-
-        btn.configure = _smart_configure  # type: ignore
-        btn._controller_command = None
+        btn.configure = _smart_configure
 
         return btn
 
@@ -141,8 +154,9 @@ class AIModelSection:
 
         def _on_select(val: str) -> None:
             widget.set(val)
-            if hasattr(widget, "_controller_command") and widget._controller_command:
-                widget._controller_command(val)
+            # Pass the selected value to the controller's callback
+            if hasattr(widget, "_selection_callback") and widget._selection_callback:
+                widget._selection_callback(val)
 
         CTkScrollableDropdown(
             attach=widget,
@@ -156,8 +170,9 @@ class AIModelSection:
 
         def _on_select(val: str) -> None:
             widget.set(val)
-            if hasattr(widget, "_controller_command") and widget._controller_command:
-                widget._controller_command(val)
+            # Model selection also needs to notify the controller
+            if hasattr(widget, "_selection_callback") and widget._selection_callback:
+                widget._selection_callback(val)
 
         CTkScrollableDropdown(
             attach=widget,

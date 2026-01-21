@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 """
-Unit tests for the Tokenizer Service (Orchestrator).
+Unit tests for the Tokenizer Service (Universal Proxy).
 
-Verifies the Strategy Pattern implementation:
-1. Correct mapping between model names and execution strategies.
-2. Resilience through the heuristic fallback mechanism.
-3. Proper handling of default model placeholders.
+Verifies the BPE Proxy implementation:
+1. Correct delegation to tiktoken when available.
+2. Robust fallback to heuristic estimation on failure or absence.
+3. Precise handling of empty inputs and the public API singleton.
 """
 
 from unittest.mock import patch
@@ -22,40 +22,47 @@ def service() -> TokenizerService:
     return TokenizerService()
 
 
-def test_tokenizer_service_mapping(service: TokenizerService) -> None:
-    """Verify that specific model keywords route to the correct strategies."""
-    # Test internal mapping through protected attribute access for validation
-    with patch.object(service._strategy_map["gpt"], "count", return_value=10):
-        assert service.count("text", "gpt-4") == 10
+def test_tokenizer_service_proxy_delegation(service: TokenizerService) -> None:
+    """Verify that any model routes through the BPE Proxy (tiktoken)."""
+    # We mock the internal tiktoken strategy which is now the universal proxy
+    with patch.object(service, "_tiktoken") as mock_tik:
+        mock_tik.count.return_value = 42
 
-    with patch.object(service._strategy_map["claude"], "count", return_value=20):
-        assert service.count("text", "claude-3") == 20
+        # Any model (OpenAI, Claude, Llama) should use the proxy
+        assert service.count("some text", "gpt-4o") == 42
+        assert service.count("some text", "claude-3-sonnet") == 42
+        assert service.count("some text", "llama-3-70b") == 42
 
-    with patch.object(service._strategy_map["gemini"], "count", return_value=30):
-        assert service.count("text", "gemini-pro") == 30
 
+def test_tokenizer_service_fallback_on_proxy_failure(service: TokenizerService) -> None:
+    """Ensure that if the BPE Proxy fails, the heuristic takes over silently."""
+    # Simulate a failure in the high-precision proxy
+    with patch.object(service, "_tiktoken") as mock_tik:
+        mock_tik.count.side_effect = Exception("Library Error")
 
-def test_tokenizer_service_fallback_on_failure(service: TokenizerService) -> None:
-    """Ensure that if a strategy fails (e.g. API Error), the heuristic takes over."""
-    # Mocking GPT strategy to raise an exception
-    with patch.object(service._strategy_map["gpt"], "count", side_effect=Exception("API Down")):
-        # "12345678" -> 8 chars -> Heuristic should return 2
-        count = service.count("12345678", "gpt-4")
+        # "12345678" -> 8 chars -> Heuristic (8/4) should return 2
+        count = service.count("12345678", "any-model")
         assert count == 2
 
 
-def test_tokenizer_service_default_model_handling(service: TokenizerService) -> None:
-    """Verify that the '- Default Model -' string triggers Tiktoken/GPT logic."""
-    target = "transcriptor4ai.core.processing.strategies.openai.TiktokenStrategy.count"
-    with patch(target) as mock_tik:
-        mock_tik.return_value = 100
-        count = service.count("some text", "- Default Model -")
-        assert count == 100
+def test_tokenizer_service_heuristic_fallback_when_no_tiktoken(service: TokenizerService) -> None:
+    """Verify fallback when tiktoken is not installed or initialized."""
+    service._tiktoken = None
+
+    # 12 chars -> 3 tokens
+    assert service.count("123456789012", "any-model") == 3
+
+
+def test_tokenizer_service_empty_input(service: TokenizerService) -> None:
+    """Verify that empty or None inputs return zero tokens."""
+    assert service.count("", "gpt-4o") == 0
+    assert service.count(None, "gpt-4o") == 0  # type: ignore
 
 
 def test_public_count_tokens_interface() -> None:
-    """Verify the singleton-based public function works as expected."""
-    with patch("transcriptor4ai.core.processing.tokenizer._SERVICE_INSTANCE.count") as mock_service:
-        mock_service.return_value = 5
-        assert count_tokens("hello") == 5
-        mock_service.assert_called_once()
+    """Verify the singleton-based public function delegates to the service."""
+    target = "transcriptor4ai.core.processing.tokenizer._SERVICE_INSTANCE.count"
+    with patch(target) as mock_count:
+        mock_count.return_value = 99
+        assert count_tokens("hello world", "model-x") == 99
+        mock_count.assert_called_once_with("hello world", "model-x")

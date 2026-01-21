@@ -63,7 +63,7 @@ def _download_latest_snapshot(dest_path: str) -> bool:
     Returns:
         bool: True if the snapshot was successfully acquired and persisted.
     """
-    print(f"[*] Downloading latest model snapshot from LiteLLM...")
+    print("[*] Downloading latest model snapshot from LiteLLM...")
     try:
         response = requests.get(MODEL_DATA_URL, timeout=15)
         response.raise_for_status()

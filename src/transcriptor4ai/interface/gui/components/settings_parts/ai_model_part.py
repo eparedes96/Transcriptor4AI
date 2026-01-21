@@ -10,7 +10,7 @@ compatibility via shimmed methods.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, Any, Callable, Dict, cast
 
 import customtkinter as ctk
 

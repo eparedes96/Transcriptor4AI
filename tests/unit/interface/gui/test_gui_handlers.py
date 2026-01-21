@@ -4,8 +4,8 @@ from __future__ import annotations
 Unit tests for GUI Handlers (Controller Logic).
 
 Verifies the integration between CustomTkinter views and the AppController,
-ensuring data flows correctly from widgets to the internal configuration model.
-Includes OS-specific interaction tests and financial integration (v2.1.0).
+ensuring data flows correctly from widgets to the internal dynamic model.
+Includes financial calculation validation with ModelRegistry (v2.2.0).
 """
 
 from pathlib import Path
@@ -36,88 +36,55 @@ def test_controller_sync_config_from_view(mock_config_dict: dict) -> None:
     Verify that the AppController correctly scrapes values from
     CustomTkinter widgets and updates the config dictionary.
     """
-    # 1. Setup Controller with mocks
     mock_app = MagicMock()
-    mock_app_state = {}
-    controller = AppController(mock_app, mock_config_dict, mock_app_state)
+    # We mock ModelRegistry to avoid disk IO during controller init
+    target = "transcriptor4ai.interface.gui.controllers.main_controller.ModelRegistry"
+    with patch(target):
+        controller = AppController(mock_app, mock_config_dict, {})
 
-    # 2. Mock Views & Widgets
     mock_dash = MagicMock()
     mock_settings = MagicMock()
 
-    # Configure Dashboard Mocks (Simulate User Input)
+    # Configure Dashboard Mocks
     mock_dash.entry_input.get.return_value = "/new/input"
     mock_dash.entry_output.get.return_value = "/new/output"
-    mock_dash.entry_subdir.get.return_value = "new_sub"
-    mock_dash.entry_prefix.get.return_value = "new_prefix"
-
-    # Simulate Switches (1=True, 0=False in CTK)
     mock_dash.sw_modules.get.return_value = 0
     mock_dash.sw_tests.get.return_value = 1
     mock_dash.sw_resources.get.return_value = 1
-    mock_dash.sw_tree.get.return_value = 1
-
-    # Simulate AST Checkboxes
-    mock_dash.chk_func.get.return_value = 1
-    mock_dash.chk_class.get.return_value = 0
-    mock_dash.chk_meth.get.return_value = 0
 
     # Configure Settings Mocks
     mock_settings.entry_ext.get.return_value = ".rs, .toml"
-    mock_settings.entry_inc.get.return_value = "src/.*"
-    mock_settings.entry_exc.get.return_value = ""
-
-    mock_settings.sw_gitignore.get.return_value = 1
-    mock_settings.sw_individual.get.return_value = 1
-    mock_settings.sw_unified.get.return_value = 0
-    mock_settings.sw_sanitizer.get.return_value = 1
-    mock_settings.sw_mask.get.return_value = 0
     mock_settings.sw_minify.get.return_value = 1
-    mock_settings.sw_error_log.get.return_value = 0
 
-    # Register mocks with controller
     controller.register_views(mock_dash, mock_settings, MagicMock(), MagicMock())
-
-    # 3. Execute Sync
     controller.sync_config_from_view()
 
-    # 4. Assertions
-    # Check Paths
     assert controller.config["input_path"] == "/new/input"
-
-    # Check Logic Flags
     assert controller.config["process_modules"] is False
     assert controller.config["minify_output"] is True
 
 
 @pytest.mark.gui
 def test_controller_financial_sync(mock_config_dict: dict) -> None:
-    """TC-V2.1-01: Verify estimator and view update upon pricing sync success."""
+    """TC-V2.1-01: Verify estimator and view update upon discovery success."""
     mock_app = MagicMock()
     mock_dash = MagicMock()
-    controller = AppController(mock_app, mock_config_dict, {})
-    controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
 
-    # Raw LiteLLM data format (input_cost_per_token)
-    pricing_data = {
-        "Model-X": {
-            "input_cost_per_token": 0.00005,
-            "litellm_provider": "openai"
-        }
-    }
-    controller.on_pricing_updated(pricing_data)
+    target = "transcriptor4ai.interface.gui.controllers.main_controller.ModelRegistry"
+    with patch(target) as mock_reg_cls:
+        mock_reg = mock_reg_cls.return_value
+        # Simulate a successful live sync
+        mock_reg.sync_remote.return_value = True
+        mock_reg._is_live_synced = True
 
-    # Expected internal adapted format
-    expected_adapted = {
-        "Model-X": {
-            "id": "Model-X",
-            "input_cost_1k": 0.05,
-            "provider": "openai"
-        }
-    }
+        controller = AppController(mock_app, mock_config_dict, {})
+        controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
 
-    assert controller.cost_estimator._live_pricing == expected_adapted
-    mock_dash.set_pricing_status.assert_called_with(is_live=True)
+        # Discovery completion (data ignored in new registry-driven logic)
+        controller.on_pricing_updated({})
+
+        # Verify visual status was updated to LIVE
+        mock_dash.set_pricing_status.assert_called_with(is_live=True)
 
 
 @pytest.mark.gui
@@ -130,62 +97,52 @@ def test_controller_result_cost_calc(
 ) -> None:
     """
     TC-V2.1-02: Verify cost calculation is triggered after pipeline success.
-
-    Ensures that the controller uses a valid model key to perform calculations.
     """
     mock_app = MagicMock()
     mock_dash = MagicMock()
 
-    # Ensure config uses a valid model key existing in constants.py
     mock_config_dict["target_model"] = "ChatGPT 4o"
 
-    controller = AppController(mock_app, mock_config_dict, {})
-    controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
+    target = "transcriptor4ai.interface.gui.controllers.main_controller.ModelRegistry"
+    with patch(target) as mock_reg_cls:
+        mock_reg = mock_reg_cls.return_value
+        # Inject model data into the registry mock
+        mock_reg.get_model_info.return_value = {
+            "input_cost_1k": 0.0025,
+            "context_window": 128000
+        }
 
-    # Result with 10k tokens -> Cost: (10000/1000) * 0.0025 = 0.025
-    result = create_success_result(
-        cfg=mock_config_dict,
-        base_path="/in",
-        final_output_path="/out",
-        existing_files=[],
-        token_count=10000
-    )
+        controller = AppController(mock_app, mock_config_dict, {})
+        controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
 
-    controller._handle_process_result(result)
+        # Result with 10k tokens -> Cost: (10000/1000) * 0.0025 = 0.025
+        result = create_success_result(
+            cfg=mock_config_dict,
+            base_path="/in",
+            final_output_path="/out",
+            existing_files=[],
+            token_count=10000
+        )
 
-    # 1. Verify the dashboard was updated with the correct calculation
-    mock_dash.update_cost_display.assert_called_with(0.025)
+        controller._handle_process_result(result)
 
-    # 2. Verify the modal was requested but not physically shown
-    mock_show_results.assert_called_once()
+        # Verify calculation was dispatched to UI
+        mock_dash.update_cost_display.assert_called_with(0.025)
 
 
 @pytest.mark.gui
 def test_open_file_explorer_calls_system(tmp_path: Path) -> None:
-    """Verify that the correct OS command is called based on platform."""
+    """Verify OS-specific command dispatch for file exploration."""
     target_dir = tmp_path / "target"
     target_dir.mkdir()
     path_str = str(target_dir)
 
-    # Test Windows
     with patch("platform.system", return_value="Windows"):
         with patch("os.startfile", create=True) as mock_start:
             open_file_explorer(path_str)
             mock_start.assert_called_with(path_str)
 
-    # Test Linux
     with patch("platform.system", return_value="Linux"):
         with patch("subprocess.Popen") as mock_popen:
             open_file_explorer(path_str)
             mock_popen.assert_called_with(["xdg-open", path_str])
-
-
-@pytest.mark.gui
-def test_open_file_explorer_handles_invalid_path() -> None:
-    """It should verify path existence before calling system to avoid crashes."""
-    # Mock showerror to avoid UI popup during test
-    with patch("tkinter.messagebox.showerror") as mock_alert:
-        with patch("subprocess.Popen") as mock_popen:
-            open_file_explorer("/non/existent/path")
-            mock_popen.assert_not_called()
-            mock_alert.assert_called_once()

@@ -7,9 +7,7 @@ Bridges the View (UI Components) and the Model (Core Logic).
 Handles user interactions, configuration sync, and process execution.
 Acts as a Facade for specialized sub-controllers (Profiles, Feedback),
 managing the asynchronous lifecycle of the transcription pipeline.
-Integrates CacheService management (Purge) and Financial Cost logic.
-Implements complex mapping between UI switches and 
-'processing_depth' ("full", "skeleton", "tree_only").
+Integrates ModelRegistry for dynamic discovery and context window validation.
 """
 
 import logging
@@ -22,6 +20,7 @@ import customtkinter as ctk
 
 from transcriptor4ai.core.services.cache import CacheService
 from transcriptor4ai.core.services.estimator import CostEstimator
+from transcriptor4ai.core.services.registry import ModelRegistry
 from transcriptor4ai.domain import config as cfg
 from transcriptor4ai.domain import constants as const
 from transcriptor4ai.domain.pipeline_models import PipelineResult
@@ -48,8 +47,8 @@ class AppController:
     """
     Central controller class that bridges the UI (View) and the Core (Model).
 
-    It manages the application state, configuration syncing via declarative
-    mappings, and thread-safe event handling for long-running tasks.
+    It manages the application state, configuration syncing via dynamic
+    discovery, and thread-safe event handling for long-running tasks.
     """
 
     def __init__(
@@ -79,7 +78,8 @@ class AppController:
 
         # Core Services
         self.binder = FormBinder()
-        self.cost_estimator = CostEstimator()
+        self.registry = ModelRegistry()
+        self.cost_estimator = CostEstimator(self.registry)
         self.cache_service = CacheService()
 
         # Initialize Sub-Controllers (Delegation Pattern)
@@ -119,13 +119,12 @@ class AppController:
         """
         Populate UI widgets with values from the internal configuration state.
 
-        Delegates widget manipulation to FormBinder and resolves
-        provider-specific model dependencies.
+        Resolves dynamic provider/model lists from the Registry.
         """
         if not self.dashboard_view or not self.settings_view:
             return
 
-        # 1. IO Paths (Read-only logic handled by Binder)
+        # 1. IO Paths
         input_path = self.config.get("input_path", "")
         output_path = self.config.get("output_base_dir", "") or input_path
         self.binder.update_entry(self.dashboard_view.entry_input, input_path)
@@ -147,7 +146,7 @@ class AppController:
             widget.delete(0, "end")
             widget.insert(0, str(self.config.get(key, "")))
 
-        # 3. Processing Depth Mapping (Phase 3 UI Logic)
+        # 3. Processing Depth Mapping
         depth = self.config.get("processing_depth", "full")
 
         # UI Toggle: Modules enabled if not 'tree_only'
@@ -163,7 +162,7 @@ class AppController:
             else:
                 self.dashboard_view.sw_skeleton.deselect()
 
-        # 4. List Fields (CSV format)
+        # 4. List Fields (CSV)
         list_fields: List[Tuple[str, ctk.CTkEntry]] = [
             ("extensions", self.settings_view.entry_ext),
             ("include_patterns", self.settings_view.entry_inc),
@@ -173,38 +172,34 @@ class AppController:
             widget.delete(0, "end")
             widget.insert(0, ",".join(self.config.get(key, [])))
 
-        # 5. ComboBoxes and UI States
+        # 5. DYNAMIC MODEL DISCOVERY (Registry-based)
         self.on_tree_toggled()
         self.settings_view.combo_profiles.set(i18n.t("gui.profiles.no_selection"))
         self.settings_view.combo_stack.set(i18n.t("gui.combos.select_stack"))
 
         target_model = self.config.get("target_model", const.DEFAULT_MODEL_KEY)
+        discovered_models = self.registry.get_available_models()
 
-        # Determine Provider context from current model
-        current_provider = "OPENAI"
-        if target_model in const.AI_MODELS:
-            current_provider = const.AI_MODELS[target_model].get("provider", "OPENAI")
-
-        providers = sorted(list(set(m["provider"] for m in const.AI_MODELS.values())))
+        # Populate Providers dynamically
+        providers = sorted(list(set(m["provider"] for m in discovered_models.values())))
         self.settings_view.combo_provider.configure(values=providers)
+
+        # Resolve current provider context
+        current_provider = "UNKNOWN"
+        model_info = self.registry.get_model_info(target_model)
+        if model_info:
+            current_provider = model_info["provider"]
+        elif providers:
+            current_provider = providers[0]
+
         self.settings_view.combo_provider.set(current_provider)
+        self._filter_models_by_provider(current_provider, preserve_selection=target_model)
 
-        self._filter_models_by_provider(
-            current_provider,
-            preserve_selection=target_model
-        )
-
-        # Reset financial display on config sync
         if self.dashboard_view and hasattr(self.dashboard_view, "update_cost_display"):
             self.dashboard_view.update_cost_display(0.0)
 
     def sync_config_from_view(self) -> None:
-        """
-        Scrape current UI widget values into the internal configuration state.
-
-        Standardizes data types (CSV strings to lists, 0/1 to bool) before
-        updating the transient session config.
-        """
+        """Scrape UI widget values into the internal configuration state."""
         if not self.dashboard_view or not self.settings_view:
             return
 
@@ -214,7 +209,6 @@ class AppController:
 
         # 2. Map generic fields
         mapping = self.binder.get_ui_mapping(self.dashboard_view, self.settings_view)
-
         for key, widget in mapping.get("switches", []):
             if key in ["process_modules", "processing_depth"]:
                 continue
@@ -226,11 +220,9 @@ class AppController:
         for key, widget in mapping.get("entries", []):
             self.config[key] = widget.get().strip()
 
-        # 3. Processing Depth Resolution (Phase 3 Routing)
+        # Depth Resolution
         modules_enabled = bool(self.dashboard_view.sw_modules.get())
-        skeleton_enabled = False
-        if hasattr(self.dashboard_view, "sw_skeleton"):
-            skeleton_enabled = bool(self.dashboard_view.sw_skeleton.get())
+        skeleton_enabled = hasattr(self.dashboard_view, "sw_skeleton") and bool(self.dashboard_view.sw_skeleton.get())
 
         if not modules_enabled:
             self.config["processing_depth"] = "tree_only"
@@ -241,19 +233,9 @@ class AppController:
 
         # Maintain legacy flag for components not yet migrated
         self.config["process_modules"] = modules_enabled
-
-        # 4. List transformation
-        self.config["extensions"] = tk_helpers.parse_list_from_string(
-            self.settings_view.entry_ext.get()
-        )
-        self.config["include_patterns"] = tk_helpers.parse_list_from_string(
-            self.settings_view.entry_inc.get()
-        )
-        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(
-            self.settings_view.entry_exc.get()
-        )
-
-        # 5. AI Strategy
+        self.config["extensions"] = tk_helpers.parse_list_from_string(self.settings_view.entry_ext.get())
+        self.config["include_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_inc.get())
+        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(self.settings_view.entry_exc.get())
         self.config["target_model"] = self.settings_view.combo_model.get()
 
     # -------------------------------------------------------------------------
@@ -261,23 +243,12 @@ class AppController:
     # -------------------------------------------------------------------------
 
     def start_processing(self, dry_run: bool = False, overwrite: bool = False) -> None:
-        """
-        Initiate the transcription pipeline in a background thread.
-
-        Performs pre-flight validation and manages UI state transitions.
-
-        Args:
-            dry_run: Enable simulation mode.
-            overwrite: Permission to replace existing artifacts.
-        """
+        """Initiate the transcription pipeline in a background thread."""
         self.sync_config_from_view()
 
         input_path = self.config.get("input_path", "")
         if not os.path.isdir(input_path):
-            mb.showerror(
-                i18n.t("gui.dialogs.error_title"),
-                i18n.t("gui.dialogs.invalid_input")
-            )
+            mb.showerror(i18n.t("gui.dialogs.error_title"), i18n.t("gui.dialogs.invalid_input"))
             return
 
         # UI State transition to locked/processing
@@ -286,19 +257,12 @@ class AppController:
         self.dashboard_view.btn_process.configure(text=btn_text, fg_color="gray")
 
         self._cancellation_event.clear()
-
         logger.debug(f"Starting pipeline (DryRun={dry_run}). Config: {self.config}")
 
         # Dispatch execution to background thread to maintain GUI responsiveness
         threading.Thread(
             target=threads.run_pipeline_task,
-            args=(
-                self.config,
-                overwrite,
-                dry_run,
-                self._on_process_complete,
-                self._cancellation_event
-            ),
+            args=(self.config, overwrite, dry_run, self._on_process_complete, self._cancellation_event),
             daemon=True
         ).start()
 
@@ -307,17 +271,14 @@ class AppController:
         if not self._cancellation_event.is_set():
             logger.info("User requested task cancellation. Signaling workers...")
             self._cancellation_event.set()
-            self.dashboard_view.btn_process.configure(
-                text="CANCELING...",
-                state="disabled"
-            )
+            self.dashboard_view.btn_process.configure(text="CANCELING...", state="disabled")
 
     def _on_process_complete(self, result: Any) -> None:
         """Handle pipeline completion from the background thread."""
         self.app.after(0, lambda: self._handle_process_result(result))
 
     def _handle_process_result(self, result: Any) -> None:
-        """Process pipeline result, managing collisions and error reporting."""
+        """Process pipeline result, managing collisions and context validation."""
         if isinstance(result, PipelineResult) and not result.ok:
             if result.existing_files:
                 msg_files = "\n".join(result.existing_files)
@@ -328,22 +289,27 @@ class AppController:
 
         # UI State transition back to normal
         self._toggle_ui(disabled=False)
-        self.dashboard_view.btn_process.configure(
-            text=i18n.t("gui.dashboard.btn_start"),
-            fg_color="#1F6AA5"
-        )
+        self.dashboard_view.btn_process.configure(text=i18n.t("gui.dashboard.btn_start"), fg_color="#1F6AA5")
 
         # Result orchestration and Financial Calculation
         if isinstance(result, PipelineResult):
             if result.ok:
                 target_model = self.config.get("target_model", const.DEFAULT_MODEL_KEY)
-                cost = self.cost_estimator.calculate_cost(
-                    result.token_count,
-                    target_model
-                )
 
+                # Financial Calculation
+                cost = self.cost_estimator.calculate_cost(result.token_count, target_model)
                 if self.dashboard_view and hasattr(self.dashboard_view, "update_cost_display"):
                     self.dashboard_view.update_cost_display(cost)
+
+                # Context Window Validation (New Logic v2.2.0)
+                limit = self.cost_estimator.get_context_limit(target_model)
+                if result.token_count > limit:
+                    warning_msg = (
+                        f"Warning: Estimated tokens ({result.token_count:,}) exceed "
+                        f"the model's context window ({limit:,}).\n\n"
+                        "The output will likely be truncated by the AI provider."
+                    )
+                    mb.showwarning("Context Overflow", warning_msg)
 
                 results_modal.show_results_window(self.app, result)
             else:
@@ -362,28 +328,20 @@ class AppController:
         self.dashboard_view.btn_simulate.configure(state=state)
 
     # -------------------------------------------------------------------------
-    # PRICING SYNCHRONIZATION
+    # DYNAMIC DISCOVERY & UI UPDATES
     # -------------------------------------------------------------------------
 
     def on_pricing_updated(self, data: Optional[Dict[str, Any]]) -> None:
-        """
-        Handle remote pricing data delivery from the network thread.
+        """Handle remote discovery completion and refresh UI components."""
+        self.cost_estimator.update_live_pricing()
 
-        Args:
-            data: Retrieved pricing dictionary or None if sync failed.
-        """
-        if data:
-            self.cost_estimator.update_live_pricing(data)
-            if self.dashboard_view and hasattr(self.dashboard_view, "set_pricing_status"):
-                self.dashboard_view.set_pricing_status(is_live=True)
-        else:
-            logger.warning("Pricing sync failed. Fallback to cached constants.")
-            if self.dashboard_view and hasattr(self.dashboard_view, "set_pricing_status"):
-                self.dashboard_view.set_pricing_status(is_live=False)
+        if self.dashboard_view and hasattr(self.dashboard_view, "set_pricing_status"):
+            is_live = self.registry._is_live_synced
+            self.dashboard_view.set_pricing_status(is_live=is_live)
 
-    # -------------------------------------------------------------------------
-    # UI EVENT HANDLERS
-    # -------------------------------------------------------------------------
+        # Re-populate UI to reflect new discovered models
+        self.sync_view_from_config()
+        logger.info("UI: Model and pricing discovery synced and views refreshed.")
 
     def on_provider_selected(self, provider: str) -> None:
         """Update the model selection list when the provider changes."""
@@ -397,10 +355,11 @@ class AppController:
             provider: str,
             preserve_selection: Optional[str] = None
     ) -> None:
-        """Filter the model ComboBox values based on selected provider."""
+        """Filter the model ComboBox values based on discovered data."""
+        discovered = self.registry.get_available_models()
         models = sorted([
-            n for n, d in const.AI_MODELS.items()
-            if d.get("provider") == provider
+            m_id for m_id, info in discovered.items()
+            if info.get("provider") == provider
         ])
 
         if not models:
@@ -414,6 +373,10 @@ class AppController:
             self.settings_view.combo_model.set(models[0])
             self.config["target_model"] = models[0]
 
+    # -------------------------------------------------------------------------
+    # UI EVENT HANDLERS
+    # -------------------------------------------------------------------------
+
     def on_stack_selected(self, stack_name: str) -> None:
         """Update extension filters based on a stack preset."""
         if stack_name in const.DEFAULT_STACKS:
@@ -425,9 +388,7 @@ class AppController:
     def on_tree_toggled(self) -> None:
         """Dynamic UI visibility logic for AST analysis options."""
         if self.dashboard_view.sw_tree.get():
-            self.dashboard_view.frame_ast.grid(
-                row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10)
-            )
+            self.dashboard_view.frame_ast.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         else:
             self.dashboard_view.frame_ast.grid_forget()
 
@@ -438,21 +399,14 @@ class AppController:
 
     def reset_config(self) -> None:
         """Revert the current session to factory defaults."""
-        msg = "Are you sure you want to reset all settings to their defaults?"
-        if mb.askyesno(i18n.t("gui.dialogs.confirm_title"), msg):
+        if mb.askyesno(i18n.t("gui.dialogs.confirm_title"), "Reset all settings to defaults?"):
             self.config = cfg.get_default_config()
             self.sync_view_from_config()
             mb.showinfo(i18n.t("gui.dialogs.success_title"), "Settings reset.")
 
     def purge_cache(self) -> None:
-        """
-        Manually clear the local cache database.
-
-        Invoked by the user via Settings to resolve potential cache corruption
-        or force a fresh processing cycle.
-        """
-        msg = "Are you sure you want to clear the local processing cache?"
-        if mb.askyesno("Purge Cache", msg):
+        """Manually clear the local processing cache database."""
+        if mb.askyesno("Purge Cache", "Clear the local processing cache?"):
             try:
                 self.cache_service.purge_all()
                 mb.showinfo("Cache Cleared", "Local cache has been successfully purged.")
@@ -461,39 +415,35 @@ class AppController:
                 mb.showerror("Error", f"Failed to purge cache:\n{e}")
 
     def on_model_selected(self, model_name: str) -> None:
-        """Update session state and perform security key verification."""
+        """Update session state and perform API key verification."""
         self.config["target_model"] = model_name
-
         if model_name == const.DEFAULT_MODEL_KEY:
             return
 
         # Inform user that actual inference is not active, only estimation
         logger.info(i18n.t("gui.logs.api_warning", model=model_name))
 
-        model_info = const.AI_MODELS.get(model_name, {})
-        provider = model_info.get("provider", "")
+        info = self.registry.get_model_info(model_name)
+        if not info:
+            return
 
-        # Environment security verification for accurate tokenization
+        provider = info.get("provider", "")
         missing_key = False
         if provider == "GOOGLE" and not os.environ.get("GOOGLE_API_KEY"):
             missing_key = True
             logger.warning(f"Selected {model_name} but GOOGLE_API_KEY is missing.")
         elif provider == "ANTHROPIC" and not os.environ.get("ANTHROPIC_API_KEY"):
             missing_key = True
-            logger.warning(f"Selected {model_name} but ANTHROPIC_API_KEY is missing.")
-        elif provider == "MISTRAL" and not os.environ.get("MISTRAL_API_KEY"):
+        elif provider in ("OPENAI", "MISTRAL") and not os.environ.get(f"{provider}_API_KEY"):
             missing_key = True
             logger.warning(f"Selected {model_name} but MISTRAL_API_KEY is missing.")
 
         if missing_key:
-            logger.warning(f"Selected {model_name} but API key is missing.")
-            mb.showwarning(
-                i18n.t("gui.dialogs.warning_title"),
-                "Missing API Key for accurate token count.\nUsing heuristic fallback."
-            )
+            logger.warning(f"Missing {provider}_API_KEY for {model_name}.")
+            mb.showwarning(i18n.t("gui.dialogs.warning_title"), f"Missing {provider} API Key for accurate counting.")
 
     # -------------------------------------------------------------------------
-    # DELEGATED ACTIONS (SUB-CONTROLLERS)
+    # DELEGATED ACTIONS
     # -------------------------------------------------------------------------
 
     def load_profile(self) -> None:

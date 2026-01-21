@@ -5,7 +5,7 @@ Network Communication Infrastructure.
 
 Orchestrates external HTTP interactions, including remote version
 synchronization via GitHub API, binary stream acquisition for OTA
-updates, real-time pricing synchronization, and secure transmission 
+updates, discovery of dynamic model metadata, and secure transmission 
 of telemetry and crash reports.
 """
 
@@ -26,10 +26,12 @@ GITHUB_REPO = "Transcriptor4AI"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases/latest"
 FORMSPREE_ENDPOINT = "https://formspree.io/f/xnjjazrl"
 
+# Timeouts in seconds
 TIMEOUT = 10
-PRICING_TIMEOUT = 2
+MODEL_DATA_TIMEOUT = 5
 USER_AGENT = "Transcriptor4AI-Client/2.1.0"
 CHUNK_SIZE = 8192
+
 
 # -----------------------------------------------------------------------------
 # PUBLIC API: REMOTE SYNCHRONIZATION
@@ -94,40 +96,42 @@ def check_for_updates(current_version: str) -> Dict[str, Any]:
     return result
 
 
-def fetch_pricing_data(url: str) -> Optional[Dict[str, Any]]:
+def fetch_external_model_data(url: str) -> Optional[Dict[str, Any]]:
     """
-    Synchronize model pricing data from a remote repository.
+    Acquire the master model database from a remote authority.
 
-    Implements a strict timeout to ensure that network latency does not
-    degrade the application startup experience.
+    Designed to handle larger payloads (~2MB) for the Dynamic Model
+    Discovery engine. Implements strict schema validation for the root object.
 
     Args:
-        url: Remote URL pointing to the pricing JSON resource.
+        url: Remote URL pointing to the LiteLLM-compatible JSON resource.
 
     Returns:
-        Optional[Dict[str, Any]]: Fresh pricing data or None if the request fails.
+        Optional[Dict[str, Any]]: Raw model database or None if synchronization fails.
     """
     headers = {"User-Agent": USER_AGENT}
-    logger.debug(f"Syncing live pricing from: {url}")
+    logger.debug(f"Initiating dynamic model discovery from: {url}")
 
     try:
-        response = requests.get(url, headers=headers, timeout=PRICING_TIMEOUT)
+        response = requests.get(url, headers=headers, timeout=MODEL_DATA_TIMEOUT)
         response.raise_for_status()
+
         data = response.json()
 
         if not isinstance(data, dict):
-            logger.warning("Network: Received malformed pricing data (not a dictionary).")
+            logger.warning("Network: Received malformed model data (Root is not a dictionary).")
             return None
 
-        logger.info("Network: Live pricing data synchronized successfully.")
+        size_kb = len(response.content) / 1024
+        logger.info(f"Network: Model metadata synchronized ({size_kb:.1f} KB).")
         return data
 
     except requests.exceptions.Timeout:
-        logger.warning(f"Network: Pricing sync timed out after {PRICING_TIMEOUT}s.")
+        logger.warning(f"Network: Model discovery timed out after {MODEL_DATA_TIMEOUT}s.")
     except requests.exceptions.RequestException as e:
-        logger.error(f"Network: Connection error during pricing sync: {e}")
+        logger.error(f"Network: Communication error during model discovery: {e}")
     except Exception as e:
-        logger.error(f"Network: Unexpected error during pricing sync: {e}")
+        logger.error(f"Network: Unexpected failure during model synchronization: {e}")
 
     return None
 
@@ -166,6 +170,7 @@ def download_binary_stream(
     except Exception as e:
         return False, str(e)
 
+
 # -----------------------------------------------------------------------------
 # PUBLIC API: TELEMETRY & FEEDBACK
 # -----------------------------------------------------------------------------
@@ -194,6 +199,7 @@ def submit_error_report(payload: Dict[str, Any]) -> Tuple[bool, str]:
         Tuple[bool, str]: Operation result status.
     """
     return _secure_post(FORMSPREE_ENDPOINT, payload, "Error Report")
+
 
 # -----------------------------------------------------------------------------
 # PRIVATE HELPERS

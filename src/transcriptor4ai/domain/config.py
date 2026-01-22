@@ -3,11 +3,9 @@ from __future__ import annotations
 """
 Configuration Domain Management.
 
-Handles the persistent storage of application state, user preferences, 
-and session profiles using JSON serialization. Supports automatic schema 
-migration from legacy versions and provides default fallbacks for 
-resilient execution. 
-Introduced 'processing_depth' to support Skeleton Mode.
+Handles the persistent storage of application state, user preferences,
+and session profiles using JSON serialization.
+Delegates schema versioning logic to the migrations module.
 """
 
 import json
@@ -16,20 +14,12 @@ import os
 from typing import Any, Dict
 
 from transcriptor4ai.domain import constants as const
+from transcriptor4ai.domain.migrations import run_migrations
 from transcriptor4ai.infra.fs import DEFAULT_OUTPUT_SUBDIR, get_user_data_dir
 
 logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------------------------
-# PATH CONFIGURATIONS
-# -----------------------------------------------------------------------------
-
 CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
-
-
-# -----------------------------------------------------------------------------
-# CONFIGURATION MODELS
-# -----------------------------------------------------------------------------
 
 def get_default_config() -> Dict[str, Any]:
     """
@@ -43,24 +33,23 @@ def get_default_config() -> Dict[str, Any]:
     """
     base = os.getcwd()
     return {
-        # IO Path defaults
+        # IO Settings
         "input_path": base,
         "output_base_dir": base,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": const.DEFAULT_OUTPUT_PREFIX,
 
-        # Processing scope
-        # @deprecated: 'process_modules' is replaced by 'processing_depth' in v2.1.0
-        "process_modules": True,
+        # Scope Settings (v2.1+ Schema)
+        "process_modules": True,  # Kept for backward compatibility
         "processing_depth": "full",
         "process_tests": True,
         "process_resources": True,
 
-        # Output strategy
+        # Output Structure
         "create_individual_files": True,
         "create_unified_file": True,
 
-        # Filtering and constraints
+        # Filters
         "extensions": [".py"],
         "include_patterns": [".*"],
         "exclude_patterns": [
@@ -72,22 +61,21 @@ def get_default_config() -> Dict[str, Any]:
         "respect_gitignore": False,
         "target_model": const.DEFAULT_MODEL_KEY,
 
-        # Static analysis settings
+        # Analysis & Tree
         "generate_tree": True,
         "show_functions": False,
         "show_classes": False,
         "show_methods": False,
         "print_tree": True,
 
-        # Security and content optimization
+        # Privacy & Optimization
         "enable_sanitizer": False,
         "mask_user_paths": False,
         "minify_output": False,
 
-        # Operational diagnostics
+        # Diagnostics
         "save_error_log": False
     }
-
 
 def get_default_app_state() -> Dict[str, Any]:
     """
@@ -113,17 +101,12 @@ def get_default_app_state() -> Dict[str, Any]:
         "custom_stacks": {}
     }
 
-
-# -----------------------------------------------------------------------------
-# PERSISTENCE OPERATIONS
-# -----------------------------------------------------------------------------
-
 def load_app_state() -> Dict[str, Any]:
     """
     Retrieve application state from persistent storage.
 
-    Implements automatic schema migration from legacy versions (v1.1, v2.0)
-    and handles file corruption by reverting to safe defaults.
+    Delegates schema migration to the migrations module to ensure
+    compatibility across versions (v1.1 -> v2.0+).
 
     Returns:
         Dict[str, Any]: The loaded state dictionary.
@@ -142,17 +125,10 @@ def load_app_state() -> Dict[str, Any]:
             logger.warning("Configuration corruption detected. Resetting state.")
             return default_state
 
-        # Migration: v1.1 flat structure to v2.0
-        if "input_path" in data:
-            logger.info("Executing legacy schema migration (v1.1 -> v2.0)...")
-            new_state = get_default_app_state()
-            new_state["last_session"].update(data)
-            data = new_state
+        # Delegate migration logic
+        data = run_migrations(data, default_state)
 
-        # Migration: v2.0 process_modules to v2.1 processing_depth
-        _migrate_to_processing_depth(data)
-
-        # Deep merge with defaults to ensure structural integrity
+        # Merge with defaults to ensure missing keys are populated
         state = default_state.copy()
         if "app_settings" in data:
             state["app_settings"].update(data["app_settings"])
@@ -170,7 +146,6 @@ def load_app_state() -> Dict[str, Any]:
         logger.error(f"Failed to decode configuration file: {e}")
         return default_state
 
-
 def save_app_state(state: Dict[str, Any]) -> None:
     """
     Persist the application state dictionary to disk.
@@ -187,11 +162,6 @@ def save_app_state(state: Dict[str, Any]) -> None:
     except OSError as e:
         logger.error(f"I/O error while saving configuration: {e}")
 
-
-# -----------------------------------------------------------------------------
-# FACADE ACCESSORS
-# -----------------------------------------------------------------------------
-
 def load_config() -> Dict[str, Any]:
     """
     Extract the active session configuration from the application state.
@@ -204,7 +174,6 @@ def load_config() -> Dict[str, Any]:
     defaults.update(state.get("last_session", {}))
     return defaults
 
-
 def save_config(config: Dict[str, Any]) -> None:
     """
     Update and persist the provided config as the 'last_session' state.
@@ -215,41 +184,3 @@ def save_config(config: Dict[str, Any]) -> None:
     state = load_app_state()
     state["last_session"] = config
     save_app_state(state)
-
-
-# -----------------------------------------------------------------------------
-# PRIVATE HELPERS
-# -----------------------------------------------------------------------------
-
-def _migrate_to_processing_depth(data: Dict[str, Any]) -> None:
-    """
-    Migrate legacy 'process_modules' boolean to 'processing_depth' enum.
-
-    Handles the transition for last_session and all saved_profiles.
-    Migration Logic:
-        True -> "full"
-        False -> "tree_only"
-
-    Args:
-        data: The state dictionary to migrate in-place.
-    """
-    # Migrate last_session
-    last_sess = data.get("last_session", {})
-    if "process_modules" in last_sess and "processing_depth" not in last_sess:
-        is_full = last_sess.get("process_modules", True)
-        depth = "full" if is_full else "tree_only"
-        last_sess["processing_depth"] = depth
-        logger.info(
-            f"Migrated last_session: process_modules={is_full} -> processing_depth={depth}"
-        )
-
-    # Migrate saved_profiles
-    profiles = data.get("saved_profiles", {})
-    for name, profile in profiles.items():
-        if "process_modules" in profile and "processing_depth" not in profile:
-            is_full = profile.get("process_modules", True)
-            depth = "full" if is_full else "tree_only"
-            profile["processing_depth"] = depth
-            logger.info(
-                f"Migrated profile '{name}': process_modules={is_full} -> depth={depth}"
-            )

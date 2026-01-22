@@ -101,7 +101,7 @@ def build() -> None:
     and bundles essential resources including the dynamic model snapshot.
     """
     print("======================================================")
-    print("Starting Build Process for Transcriptor4AI v2.2.0")
+    print("Starting Build Process for Transcriptor4AI v2.1.0")
     print("======================================================")
 
     # 1. Environment Preparation

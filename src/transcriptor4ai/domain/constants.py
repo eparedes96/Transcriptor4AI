@@ -12,7 +12,7 @@ from typing import Dict, List
 # -----------------------------------------------------------------------------
 # VERSIONING AND METADATA
 # -----------------------------------------------------------------------------
-CURRENT_CONFIG_VERSION = "2.2.0"
+CURRENT_CONFIG_VERSION = "2.1.0"
 DEFAULT_OUTPUT_PREFIX = "transcription"
 DEFAULT_MODEL_KEY = "- Default Model -"
 

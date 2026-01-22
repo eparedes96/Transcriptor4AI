@@ -5,7 +5,7 @@ Unit tests for GUI Handlers (Controller Logic).
 
 Verifies the integration between CustomTkinter views and the AppController,
 ensuring data flows correctly from widgets to the internal dynamic model.
-Includes financial calculation validation with ModelRegistry (v2.2.0).
+Includes financial calculation validation with ModelRegistry (v2.1.0).
 """
 
 from pathlib import Path

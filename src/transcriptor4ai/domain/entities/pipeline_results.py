@@ -3,18 +3,16 @@ from __future__ import annotations
 """
 Pipeline Domain Data Models.
 
-Defines the application data structures and factory functions used to communicate 
+Defines the application data structures and factory functions used to communicate
 execution results between the pipeline engine and interface layers (CLI/GUI).
-Added 'processing_depth' to track skeletonization state.
 """
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-# -----------------------------------------------------------------------------
-# CORE DATA MODELS
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
+# DOMAIN ENTITIES
+# ==============================================================================
 @dataclass(frozen=True)
 class PipelineResult:
     """
@@ -77,10 +75,9 @@ class PipelineResult:
 
     summary: Dict[str, Any] = field(default_factory=dict)
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # FACTORY FUNCTIONS
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
 def create_error_result(
         error: str,
         cfg: Dict[str, Any],
@@ -123,7 +120,6 @@ def create_error_result(
         existing_files=existing_files or [],
         summary=summary_extra or {},
     )
-
 
 def create_success_result(
         cfg: Dict[str, Any],

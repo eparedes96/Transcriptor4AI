@@ -1,54 +1,40 @@
-from __future__ import annotations
-
-"""
-Internationalization (i18n) Utility.
-
-Provides a centralized singleton manager for application-wide translations. 
-Implements dot-notation lookup for nested JSON locale files and supports 
-dynamic variable interpolation for responsive string formatting across 
-CLI and GUI interfaces.
-"""
-
 import json
 import logging
 import os
+import sys  # <--- NEW IMPORT
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # SYSTEM DEFAULTS
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
 DEFAULT_LOCALE = "en"
-LOCALES_REL_PATH = os.path.join("..", "interface", "locales")
+# LOCALES_REL_PATH se elimina como constante global rígida
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # I18N MANAGER SERVICE
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
 class I18n:
     """
     Resource manager for locale-specific string translations.
-
-    Handles dynamic loading of JSON resource files from the locale repository
-    and provides safe access to keys with recursive resolution.
     """
 
-    def __init__(self, locale: str = DEFAULT_LOCALE):
-        """
-        Initialize the manager and attempt to load the default locale.
-
-        Args:
-            locale: Standard ISO locale identifier (e.g., 'en', 'es').
-        """
+    def __init__(self, locale: str = DEFAULT_LOCALE) -> None:
         self._locale = locale
         self._translations: Dict[str, Any] = {}
         self.is_loaded = False
 
-        # Construct absolute base path for the locales repository
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        self._locales_path = os.path.abspath(os.path.join(base_dir, LOCALES_REL_PATH))
+        # 1. RESOLVE RESOURCE PATH (Frozen vs Dev)
+        if getattr(sys, 'frozen', False):
+            # PyInstaller creates a temporary folder at _MEIPASS
+            base_dir = getattr(sys, '_MEIPASS', os.getcwd())
+            # In bundled app, assets are usually mapped to root or specific folder
+            self._locales_path = os.path.join(base_dir, "transcriptor4ai", "interface", "locales")
+        else:
+            # Standard development environment
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            self._locales_path = os.path.abspath(os.path.join(base_dir, "..", "interface", "locales"))
 
         self.load_locale(locale)
 
@@ -98,7 +84,7 @@ class I18n:
         current_val: Any = self._translations
 
         try:
-            # Recursive resolution of nested dictionary keys
+            # 1. RESOLVE: Recursive resolution of nested dictionary keys
             for k in keys:
                 if isinstance(current_val, dict):
                     current_val = current_val.get(k)
@@ -106,19 +92,19 @@ class I18n:
                     current_val = None
                     break
 
-            # Validation: terminal result must be a formatable string
+            # 2. VALIDATE: Terminal result must be a formatable string
             if not isinstance(current_val, str):
                 return key
 
+            # 3. INTERPOLATE: Apply dynamic variables if provided
             return current_val.format(**kwargs) if kwargs else current_val
 
         except Exception as e:
             logger.debug(f"I18n: Resolution error for path '{key}': {e}")
             return key
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # SERVICE INITIALIZATION
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
 # Global singleton instance for application-wide resource access
 i18n = I18n(DEFAULT_LOCALE)

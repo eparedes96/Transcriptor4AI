@@ -1,45 +1,49 @@
 from __future__ import annotations
 
 """
-Configuration Domain Management.
+Configuration Domain Entities.
 
-Handles the persistent storage of application state, user preferences,
-and session profiles using JSON serialization.
-Delegates schema versioning logic to the migrations module.
+Defines the default data structures and schemas for the application state
+and session configuration. This module is pure data definition and does
+not handle I/O or persistence.
 """
 
-import logging
 import os
 from typing import Any, Dict
 
 from transcriptor4ai.shared import constants as const
-from transcriptor4ai.infrastructure.system.os_file_system import get_user_data_dir, DEFAULT_OUTPUT_SUBDIR
 
-logger = logging.getLogger(__name__)
+# ==============================================================================
+# DOMAIN CONSTANTS
+# ==============================================================================
+DEFAULT_OUTPUT_SUBDIR = "transcript"
 
-CONFIG_FILE = os.path.join(get_user_data_dir(), "config.json")
-
-def get_default_config() -> Dict[str, Any]:
+# ==============================================================================
+# CONFIGURATION FACTORIES
+# ==============================================================================
+def get_default_config(base_path: str) -> Dict[str, Any]:
     """
     Generate the default execution configuration for a transcription session.
 
     This dictionary controls the behavior of the application pipeline, including
     I/O paths, filtering rules, and optimization flags.
 
+    Args:
+        base_path: The filesystem path to use as root for input and output.
+
     Returns:
         Dict[str, Any]: Default session configuration values.
     """
-    base = os.getcwd()
     return {
         # IO Settings
-        "input_path": base,
-        "output_base_dir": base,
+        "input_path": base_path,
+        "output_base_dir": base_path,
         "output_subdir_name": DEFAULT_OUTPUT_SUBDIR,
         "output_prefix": const.DEFAULT_OUTPUT_PREFIX,
 
         # Scope Settings (v2.1+ Schema)
         "process_modules": True,  # Kept for backward compatibility
-        "processing_depth": "full",
+        "processing_depth": "full",  # Options: "full", "skeleton", "tree_only"
         "process_tests": True,
         "process_resources": True,
 
@@ -75,12 +79,15 @@ def get_default_config() -> Dict[str, Any]:
         "save_error_log": False
     }
 
-def get_default_app_state() -> Dict[str, Any]:
+def get_default_app_state(base_path: str) -> Dict[str, Any]:
     """
     Generate the complete root application state structure.
 
     Encapsulates global application settings, user-defined profiles,
     and the state of the last active session for persistence.
+
+    Args:
+        base_path: The filesystem path to use for the initial session.
 
     Returns:
         Dict[str, Any]: The full application state schema.
@@ -94,7 +101,7 @@ def get_default_app_state() -> Dict[str, Any]:
             "auto_check_updates": True,
             "last_update_check": ""
         },
-        "last_session": get_default_config(),
+        "last_session": get_default_config(base_path),
         "saved_profiles": {},
         "custom_stacks": {}
     }

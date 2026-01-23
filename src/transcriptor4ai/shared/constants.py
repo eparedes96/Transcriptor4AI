@@ -9,16 +9,16 @@ discovery metadata, default file extension stacks, and system versioning.
 
 from typing import Dict, List
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # VERSIONING AND METADATA
-# -----------------------------------------------------------------------------
+# ==============================================================================
 CURRENT_CONFIG_VERSION = "2.1.0"
 DEFAULT_OUTPUT_PREFIX = "transcription"
 DEFAULT_MODEL_KEY = "- Default Model -"
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # DYNAMIC MODEL DISCOVERY (LiteLLM Authority)
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # Master repository for live pricing and context window synchronization
 MODEL_DATA_URL = (
     "https://raw.githubusercontent.com/BerriAI/litellm/main/"
@@ -31,9 +31,9 @@ BUNDLED_DATA_FILENAME = "bundled_models.json"
 # Local cache filename for persistent pricing storage across sessions
 LOCAL_PRICING_FILENAME = "pricing_cache.json"
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # FILE STACKS AND EXTENSIONS
-# -----------------------------------------------------------------------------
+# ==============================================================================
 DEFAULT_STACKS: Dict[str, List[str]] = {
     "Python Data": [".py", ".ipynb", ".json", ".csv", ".yaml"],
     "Web Fullstack": [".js", ".ts", ".jsx", ".tsx", ".html", ".css", ".json"],

@@ -3,16 +3,15 @@ from __future__ import annotations
 """
 Transcription Domain Data Models.
 
-Defines the Data Transfer Objects (DTOs) used to encapsulate atomic 
+Defines the Data Transfer Objects (DTOs) used to encapsulate atomic
 transcription units and error reporting within the processing domain.
 """
 
 from dataclasses import dataclass
 
-# -----------------------------------------------------------------------------
-# ERROR TRACKING MODELS
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
+# DOMAIN ENTITIES
+# ==============================================================================
 @dataclass(frozen=True)
 class TranscriptionError:
     """

@@ -3,17 +3,16 @@ from __future__ import annotations
 """
 Directory Tree Structure Data Models.
 
-Provides the recursive type definitions and structural nodes used by 
+Provides the recursive type definitions and structural nodes used by
 the static analysis subsystem to build hierarchical project maps.
 """
 
 from dataclasses import dataclass
 from typing import Dict, Union
 
-# -----------------------------------------------------------------------------
-# STRUCTURAL COMPONENTS
-# -----------------------------------------------------------------------------
-
+# ==============================================================================
+# DOMAIN ENTITIES
+# ==============================================================================
 @dataclass(frozen=True)
 class FileNode:
     """
@@ -24,4 +23,8 @@ class FileNode:
     """
     path: str
 
+# ==============================================================================
+# TYPE DEFINITIONS
+# ==============================================================================
+# Recursive type definition for the directory tree structure
 Tree = Dict[str, Union["Tree", FileNode]]

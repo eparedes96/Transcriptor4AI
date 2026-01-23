@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+from transcriptor4ai.infrastructure.system.os_file_system import open_file_explorer
+
 """
 Integration tests for FileSystem Infrastructure.
 
@@ -93,3 +97,21 @@ def test_safe_mkdir_permission_error() -> None:
         success, err = safe_mkdir("/root/forbidden")
         assert success is False
         assert "Permission Denied" in err
+
+
+@pytest.mark.gui
+def test_open_file_explorer_calls_system(tmp_path: Path) -> None:
+    """Verify OS-specific command dispatch for file exploration."""
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    path_str = str(target_dir)
+
+    with patch("platform.system", return_value="Windows"):
+        with patch("os.startfile", create=True) as mock_start:
+            open_file_explorer(path_str)
+            mock_start.assert_called_with(path_str)
+
+    with patch("platform.system", return_value="Linux"):
+        with patch("subprocess.Popen") as mock_popen:
+            open_file_explorer(path_str)
+            mock_popen.assert_called_with(["xdg-open", path_str])

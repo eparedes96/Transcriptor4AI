@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+from transcriptor4ai.interface.gui.common.ui_widgets import parse_list_from_string
+
 """
 Unit tests for Pricing Background Tasks.
 
@@ -49,3 +53,12 @@ def test_run_pricing_update_task_exception_handling() -> None:
         run_pricing_update_task(on_complete=callback)
 
         callback.assert_called_once_with(None)
+
+
+@pytest.mark.gui
+def test_parse_list_from_string_gui() -> None:
+    """Verify helper splits CSV strings from GUI inputs into clean lists."""
+    assert parse_list_from_string(".py, .js") == [".py", ".js"]
+    assert parse_list_from_string("  val1  , val2 ") == ["val1", "val2"]
+    assert parse_list_from_string("") == []
+    assert parse_list_from_string(None) == []

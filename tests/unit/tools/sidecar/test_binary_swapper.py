@@ -15,8 +15,8 @@ import os
 import sys
 from unittest.mock import patch
 
-# Add 'scripts' to path for import, as it is outside 'src'
-scripts_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "scripts"))
+# Add 'sidecar' to path for import, as it is outside 'src'
+scripts_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "sidecar"))
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 

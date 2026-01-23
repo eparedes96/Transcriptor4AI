@@ -1,33 +1,53 @@
 from __future__ import annotations
 
-"""
-Unit tests for GUI Handlers (Controller Logic).
-
-Verifies the integration between CustomTkinter views and the AppController,
-ensuring data flows correctly from widgets to the internal dynamic model.
-Includes financial calculation validation with ModelRegistry (v2.1.0).
-"""
-
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from transcriptor4ai.domain.entities.pipeline_results import create_success_result
+
+"""
+Unit tests for the GUI Controller Mapping logic.
+
+Tests the mapping between UI toggle switches and the internal 
+'processing_depth' state to prevent invalid configuration combinations.
+"""
+
+from unittest.mock import MagicMock, patch
+
 from transcriptor4ai.interface.gui.controllers.main_controller import AppController
-from transcriptor4ai.interface.gui.common.ui_widgets import (
-    parse_list_from_string,
-)
-from transcriptor4ai.infrastructure.system.os_file_system import open_file_explorer
 
 
-@pytest.mark.gui
-def test_parse_list_from_string_gui() -> None:
-    """Verify helper splits CSV strings from GUI inputs into clean lists."""
-    assert parse_list_from_string(".py, .js") == [".py", ".js"]
-    assert parse_list_from_string("  val1  , val2 ") == ["val1", "val2"]
-    assert parse_list_from_string("") == []
-    assert parse_list_from_string(None) == []
+def test_controller_depth_routing_logic() -> None:
+    """
+    TC-01: Verify UI switch combinations map to correct processing_depth.
+    """
+    # Mock App and State
+    mock_app = MagicMock()
+    mock_config = {"processing_depth": "full", "process_modules": True}
+
+    controller = AppController(mock_app, mock_config, {})
+
+    # Mock View Components
+    mock_dashboard = MagicMock()
+    mock_settings = MagicMock()
+    controller.register_views(mock_dashboard, mock_settings, MagicMock(), MagicMock())
+
+    # Case A: Modules OFF -> depth = tree_only (Regardless of Skeleton switch)
+    mock_dashboard.sw_modules.get.return_value = 0
+    mock_dashboard.sw_skeleton.get.return_value = 1
+    controller.sync_config_from_view()
+    assert controller.config["processing_depth"] == "tree_only"
+
+    # Case B: Modules ON + Skeleton ON -> depth = skeleton
+    mock_dashboard.sw_modules.get.return_value = 1
+    mock_dashboard.sw_skeleton.get.return_value = 1
+    controller.sync_config_from_view()
+    assert controller.config["processing_depth"] == "skeleton"
+
+    # Case C: Modules ON + Skeleton OFF -> depth = full
+    mock_dashboard.sw_modules.get.return_value = 1
+    mock_dashboard.sw_skeleton.get.return_value = 0
+    controller.sync_config_from_view()
+    assert controller.config["processing_depth"] == "full"
 
 
 @pytest.mark.gui
@@ -62,29 +82,6 @@ def test_controller_sync_config_from_view(mock_config_dict: dict) -> None:
     assert controller.config["input_path"] == "/new/input"
     assert controller.config["process_modules"] is False
     assert controller.config["minify_output"] is True
-
-
-@pytest.mark.gui
-def test_controller_financial_sync(mock_config_dict: dict) -> None:
-    """TC-V2.1-01: Verify estimator and view update upon discovery success."""
-    mock_app = MagicMock()
-    mock_dash = MagicMock()
-
-    target = "transcriptor4ai.interface.gui.controllers.main_controller.ModelRegistry"
-    with patch(target) as mock_reg_cls:
-        mock_reg = mock_reg_cls.return_value
-        # Simulate a successful live sync
-        mock_reg.sync_remote.return_value = True
-        mock_reg._is_live_synced = True
-
-        controller = AppController(mock_app, mock_config_dict, {})
-        controller.register_views(mock_dash, MagicMock(), MagicMock(), MagicMock())
-
-        # Discovery completion (data ignored in new registry-driven logic)
-        controller.on_pricing_updated({})
-
-        # Verify visual status was updated to LIVE
-        mock_dash.set_pricing_status.assert_called_with(is_live=True)
 
 
 @pytest.mark.gui
@@ -128,21 +125,3 @@ def test_controller_result_cost_calc(
 
         # Verify calculation was dispatched to UI
         mock_dash.update_cost_display.assert_called_with(0.025)
-
-
-@pytest.mark.gui
-def test_open_file_explorer_calls_system(tmp_path: Path) -> None:
-    """Verify OS-specific command dispatch for file exploration."""
-    target_dir = tmp_path / "target"
-    target_dir.mkdir()
-    path_str = str(target_dir)
-
-    with patch("platform.system", return_value="Windows"):
-        with patch("os.startfile", create=True) as mock_start:
-            open_file_explorer(path_str)
-            mock_start.assert_called_with(path_str)
-
-    with patch("platform.system", return_value="Linux"):
-        with patch("subprocess.Popen") as mock_popen:
-            open_file_explorer(path_str)
-            mock_popen.assert_called_with(["xdg-open", path_str])

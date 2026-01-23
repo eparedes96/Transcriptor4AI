@@ -9,13 +9,13 @@ Verifies:
 3. Default values in domain objects.
 """
 
-from transcriptor4ai.domain.pipeline_models import (
+from transcriptor4ai.domain.entities.pipeline_results import (
     PipelineResult,
     create_error_result,
     create_success_result,
 )
-from transcriptor4ai.domain.transcription_models import TranscriptionError
-from transcriptor4ai.domain.tree_models import FileNode
+from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
+from transcriptor4ai.domain.entities.file_node import FileNode
 
 
 def test_create_success_result_populates_fields(mock_config_dict):

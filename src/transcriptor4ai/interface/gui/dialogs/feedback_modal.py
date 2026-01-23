@@ -16,10 +16,10 @@ from typing import Tuple
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import constants as const
-from transcriptor4ai.infra.logging import get_recent_logs
-from transcriptor4ai.interface.gui import threads
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.interface.gui.common import async_workers
+from transcriptor4ai.infrastructure.logging import get_recent_logs
+from transcriptor4ai.shared import constants as const
+from transcriptor4ai.shared.i18n import i18n
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ def show_feedback_window(parent: ctk.CTk) -> None:
 
         # Asynchronous submission
         threading.Thread(
-            target=threads.submit_feedback_task,
+            target=async_workers.submit_feedback_task,
             args=(payload, lambda res: parent.after(0, lambda: _on_sent(res))),
             daemon=True
         ).start()

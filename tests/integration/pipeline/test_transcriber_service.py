@@ -29,7 +29,7 @@ def complex_project(tmp_path: Path) -> Path:
     # Modules
     src = root / "src"
     src.mkdir()
-    (src / "core.py").write_text(
+    (src / "application.py").write_text(
         "class Core:\n    def run(self):\n        '''Main logic.'''\n        return True",
         encoding="utf-8"
     )

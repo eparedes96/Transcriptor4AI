@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.updater import calculate_sha256, wait_for_pid
+from tools.sidecar.binary_swapper import calculate_sha256, wait_for_pid
 
 """
 Unit tests for the Standalone Updater Script.

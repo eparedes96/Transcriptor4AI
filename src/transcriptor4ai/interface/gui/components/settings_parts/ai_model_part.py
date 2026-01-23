@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, cast
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import constants as const
-from transcriptor4ai.interface.gui.utils.tk_helpers import CTkScrollableDropdown
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared import constants as const
+from transcriptor4ai.interface.gui.common.ui_widgets import CTkScrollableDropdown
+from transcriptor4ai.shared.i18n import i18n
 
 if TYPE_CHECKING:
     from transcriptor4ai.interface.gui.components.settings import SettingsFrame

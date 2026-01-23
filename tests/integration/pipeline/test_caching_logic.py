@@ -26,7 +26,7 @@ def workspace(tmp_path: Path) -> Dict[str, Any]:
     output_dir.mkdir()
 
     (input_dir / "logic.py").write_text("def run():\n    return 42", encoding="utf-8")
-    (input_dir / "utils.py").write_text("def help():\n    pass", encoding="utf-8")
+    (input_dir / "shared.py").write_text("def help():\n    pass", encoding="utf-8")
 
     return {
         "input": str(input_dir),

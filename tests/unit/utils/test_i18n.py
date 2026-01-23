@@ -13,7 +13,7 @@ from typing import Any, Dict, Set
 
 import pytest
 
-from transcriptor4ai.utils.i18n import I18n
+from transcriptor4ai.shared.i18n import I18n
 
 
 def _get_flat_keys(d: Dict[str, Any], prefix: str = "") -> Set[str]:

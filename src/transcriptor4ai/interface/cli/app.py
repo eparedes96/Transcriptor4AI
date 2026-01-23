@@ -15,13 +15,14 @@ import sys
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
-from transcriptor4ai.core.pipeline.engine import run_pipeline
-from transcriptor4ai.core.pipeline.stages.validator import validate_config
-from transcriptor4ai.domain.config import get_default_config, load_config
-from transcriptor4ai.domain.pipeline_models import PipelineResult
-from transcriptor4ai.infra.logging import LoggingConfig, configure_logging, get_logger
-from transcriptor4ai.interface.cli import args as cli_args
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
+from transcriptor4ai.application.pipeline.stages.validator import validate_config
+from transcriptor4ai.infrastructure.logging import get_logger, LoggingConfig, configure_logging
+from transcriptor4ai.domain.entities.app_config import get_default_config
+from transcriptor4ai.infrastructure.persistence.json_config_repo import load_config
+from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.interface.cli import argument_parser as cli_args
+from transcriptor4ai.shared.i18n import i18n
 
 logger = get_logger(__name__)
 

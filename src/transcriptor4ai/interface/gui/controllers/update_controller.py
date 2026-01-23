@@ -14,8 +14,8 @@ from typing import Any, Dict
 
 import customtkinter as ctk
 
-from transcriptor4ai.core.services.updater import UpdateManager, UpdateStatus
-from transcriptor4ai.domain import constants as const
+from transcriptor4ai.application.services.update_service import UpdateManager, UpdateStatus
+from transcriptor4ai.shared import constants as const
 from transcriptor4ai.interface.gui.dialogs.update_modal import show_update_prompt_modal
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class UpdateController:
         Args:
             app: Root application instance.
             sidebar: The Sidebar view containing the update badge.
-            update_manager: The core UpdateManager service.
+            update_manager: The application UpdateManager service.
         """
         self.app = app
         self.sidebar = sidebar
@@ -46,7 +46,7 @@ class UpdateController:
         Designed to be run in a background thread.
         """
         try:
-            # Check and download if necessary using core service
+            # Check and download if necessary using application service
             self.manager.run_silent_cycle(const.CURRENT_CONFIG_VERSION)
 
             info = self.manager.update_info.copy()

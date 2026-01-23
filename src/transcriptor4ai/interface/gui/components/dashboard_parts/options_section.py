@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, Dict
 
 import customtkinter as ctk
 
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared.i18n import i18n
 
 if TYPE_CHECKING:
     from transcriptor4ai.interface.gui.components.dashboard import DashboardFrame

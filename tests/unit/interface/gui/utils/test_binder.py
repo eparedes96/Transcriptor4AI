@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from transcriptor4ai.interface.gui.utils.binder import FormBinder
+from transcriptor4ai.interface.gui.common.form_binder import FormBinder
 
 
 @pytest.fixture

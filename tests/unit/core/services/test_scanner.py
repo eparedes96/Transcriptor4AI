@@ -18,7 +18,7 @@ from transcriptor4ai.core.services.scanner import (
     prepare_filtering_rules,
     yield_project_files,
 )
-from transcriptor4ai.domain.transcription_models import TranscriptionError
+from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def mock_fs_structure(tmp_path: Path) -> Path:
 
     # Create files
     (root / "src" / "main.py").write_text("print('hello')", encoding="utf-8")
-    (root / "src" / "utils.py").write_text("def helper(): pass", encoding="utf-8")
+    (root / "src" / "shared.py").write_text("def helper(): pass", encoding="utf-8")
     (root / "src" / "exclude_me.tmp").write_text("trash", encoding="utf-8")
     (root / "tests" / "test_main.py").write_text("def test(): pass", encoding="utf-8")
     (root / "README.md").write_text("# Project", encoding="utf-8")
@@ -47,7 +47,7 @@ def mock_fs_structure(tmp_path: Path) -> Path:
 
 def test_prepare_filtering_rules_integration(mock_fs_structure: Path) -> None:
     """Verify aggregation of default, user, and gitignore patterns."""
-    with patch("transcriptor4ai.core.services.scanner.load_gitignore_patterns") as mock_git:
+    with patch("transcriptor4ai.application.services.scanner.load_gitignore_patterns") as mock_git:
         mock_git.return_value = [r"custom_ignore"]
 
         inc, exc = prepare_filtering_rules(
@@ -83,7 +83,7 @@ def test_yield_project_files_classification(mock_fs_structure: Path) -> None:
     processed = [f for f in files if f["status"] == "process"]
     skipped = [f for f in files if f["status"] == "skipped"]
 
-    # main.py, utils.py, test_main.py, README.md, config.json should be processed
+    # main.py, shared.py, test_main.py, README.md, config.json should be processed
     assert len(processed) == 5
 
     # 1. node_modules/lib.js should NOT be in processed because of directory pruning

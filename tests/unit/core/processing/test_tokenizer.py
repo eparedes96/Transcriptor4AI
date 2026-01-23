@@ -61,7 +61,7 @@ def test_tokenizer_service_empty_input(service: TokenizerService) -> None:
 
 def test_public_count_tokens_interface() -> None:
     """Verify the singleton-based public function delegates to the service."""
-    target = "transcriptor4ai.core.processing.tokenizer._SERVICE_INSTANCE.count"
+    target = "transcriptor4ai.application.processing.tokenizer._SERVICE_INSTANCE.count"
     with patch(target) as mock_count:
         mock_count.return_value = 99
         assert count_tokens("hello world", "model-x") == 99

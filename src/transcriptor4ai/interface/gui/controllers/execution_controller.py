@@ -6,11 +6,11 @@ import threading
 import tkinter.messagebox as mb
 from typing import TYPE_CHECKING, Any
 
-from transcriptor4ai.domain import constants as const
-from transcriptor4ai.domain.pipeline_models import PipelineResult
-from transcriptor4ai.interface.gui import threads
+from transcriptor4ai.shared import constants as const
+from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.interface.gui.common import async_workers
 from transcriptor4ai.interface.gui.dialogs import crash_modal, results_modal
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared.i18n import i18n
 
 if TYPE_CHECKING:
     from transcriptor4ai.interface.gui.controllers.main_controller import AppController
@@ -46,7 +46,7 @@ class ExecutionController:
         logger.debug(f"Starting pipeline (DryRun={dry_run}). Config: {self.main.config}")
 
         threading.Thread(
-            target=threads.run_pipeline_task,
+            target=async_workers.run_pipeline_task,
             args=(
                 self.main.config,
                 overwrite,

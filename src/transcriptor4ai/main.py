@@ -107,7 +107,7 @@ def main() -> int:
 
         # Default to GUI mode
         else:
-            from transcriptor4ai.interface.gui.app import main as gui_main
+            from transcriptor4ai.interface.gui.gui_launcher import main as gui_main
             gui_main()
             return 0
 

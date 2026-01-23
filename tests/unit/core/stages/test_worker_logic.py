@@ -97,7 +97,7 @@ def test_worker_identifies_and_locks_tests(
     test_content = ["def test_api(): pass\n"]
 
     with (
-        patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream,
+        patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content") as mock_stream,
         patch("builtins.open", mock_open()) as mocked_file
     ):
         mock_stream.return_value = iter(test_content)
@@ -150,8 +150,8 @@ def test_worker_routes_to_skeleton_mode_for_python(
     expected_skeleton = "def heavy_logic():\n    pass"
 
     with (
-        patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream,
-        patch("transcriptor4ai.core.pipeline.stages.worker.generate_skeleton_code") as mock_skel,
+        patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content") as mock_stream,
+        patch("transcriptor4ai.application.pipeline.stages.worker.generate_skeleton_code") as mock_skel,
         patch("builtins.open", mock_open())
     ):
         mock_stream.return_value = iter([raw_code])
@@ -184,7 +184,7 @@ def test_worker_handles_io_error_gracefully(
     """
     Verify that OSError during file streaming returns failure instead of crashing.
     """
-    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream:
+    with patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content") as mock_stream:
         # Simulate OS Permission Error
         mock_stream.side_effect = OSError("Permission denied")
 
@@ -215,7 +215,7 @@ def test_worker_identifies_resources(
     """
     Verify that non-code resources (e.g., README.md) are correctly categorized.
     """
-    with patch("transcriptor4ai.core.pipeline.stages.worker.stream_file_content") as mock_stream, \
+    with patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content") as mock_stream, \
             patch("builtins.open", mock_open()):
         mock_stream.return_value = iter(["# Project Documentation\n"])
 

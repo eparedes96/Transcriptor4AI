@@ -3,9 +3,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from transcriptor4ai.domain import constants as const
-from transcriptor4ai.utils.i18n import i18n
-
 if TYPE_CHECKING:
     from transcriptor4ai.interface.gui.controllers.main_controller import AppController
 
@@ -22,7 +19,7 @@ class PricingController:
 
     def sync_remote_data(self, data: Optional[Dict[str, Any]]) -> None:
         """Handle remote discovery completion and refresh UI components."""
-        # Update core services hosted in Main
+        # Update application services hosted in Main
         self.main.cost_estimator.update_live_pricing()
 
         dashboard = self.main.dashboard_view

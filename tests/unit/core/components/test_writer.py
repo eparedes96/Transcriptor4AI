@@ -94,7 +94,7 @@ def test_append_entry_applies_sanitization(tmp_path):
 
     append_entry(
         output_path=str(f),
-        rel_path="config.py",
+        rel_path="app_config.py",
         line_iterator=iter(raw_lines),
         extension=".py",
         enable_sanitizer=True,

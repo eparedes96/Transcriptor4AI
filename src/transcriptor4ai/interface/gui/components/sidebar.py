@@ -13,8 +13,8 @@ from typing import Any
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import constants as const
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared import constants as const
+from transcriptor4ai.shared.i18n import i18n
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class SidebarFrame(ctk.CTkFrame):
     """
     Application navigation and information sidebar.
 
-    Provides centralized access to core views and displays metadata
+    Provides centralized access to application views and displays metadata
     regarding the application lifecycle, including versioning and
     available updates.
     """

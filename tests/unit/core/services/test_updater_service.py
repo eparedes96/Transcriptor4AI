@@ -27,7 +27,7 @@ def test_updater_initial_state(updater: UpdateManager) -> None:
     assert updater.pending_path == ""
 
 
-@patch("transcriptor4ai.core.services.updater.network.check_for_updates")
+@patch("transcriptor4ai.application.services.updater.network.check_for_updates")
 def test_run_silent_cycle_no_update(mock_check: MagicMock, updater: UpdateManager) -> None:
     """TC-02: Verify state returns to IDLE if no update is available."""
     mock_check.return_value = {"has_update": False}
@@ -37,9 +37,9 @@ def test_run_silent_cycle_no_update(mock_check: MagicMock, updater: UpdateManage
     assert updater.status == UpdateStatus.IDLE
 
 
-@patch("transcriptor4ai.core.services.updater.network.check_for_updates")
-@patch("transcriptor4ai.core.services.updater.network.download_binary_stream")
-@patch("transcriptor4ai.core.services.updater.network._calculate_sha256")
+@patch("transcriptor4ai.application.services.updater.network.check_for_updates")
+@patch("transcriptor4ai.application.services.updater.network.download_binary_stream")
+@patch("transcriptor4ai.application.services.updater.network._calculate_sha256")
 def test_run_silent_cycle_success(
         mock_hash: MagicMock,
         mock_download: MagicMock,
@@ -59,7 +59,7 @@ def test_run_silent_cycle_success(
     mock_hash.return_value = "correct_hash"
 
     # Execute with partitioned patch to respect E501
-    target_fs = "transcriptor4ai.core.services.updater.get_user_data_dir"
+    target_fs = "transcriptor4ai.application.services.updater.get_user_data_dir"
     with patch(target_fs, return_value=str(tmp_path)):
         updater._temp_dir = os.path.join(str(tmp_path), "updates")
         updater.run_silent_cycle("1.0.0")
@@ -68,9 +68,9 @@ def test_run_silent_cycle_success(
     assert "transcriptor4ai_v2.0.0.exe" in updater.pending_path
 
 
-@patch("transcriptor4ai.core.services.updater.network.check_for_updates")
-@patch("transcriptor4ai.core.services.updater.network.download_binary_stream")
-@patch("transcriptor4ai.core.services.updater.network._calculate_sha256")
+@patch("transcriptor4ai.application.services.updater.network.check_for_updates")
+@patch("transcriptor4ai.application.services.updater.network.download_binary_stream")
+@patch("transcriptor4ai.application.services.updater.network._calculate_sha256")
 def test_run_silent_cycle_integrity_failure(
         mock_hash: MagicMock,
         mock_download: MagicMock,
@@ -88,7 +88,7 @@ def test_run_silent_cycle_integrity_failure(
     mock_download.return_value = (True, "Success")
     mock_hash.return_value = "wrong_hash"
 
-    target_fs = "transcriptor4ai.core.services.updater.get_user_data_dir"
+    target_fs = "transcriptor4ai.application.services.updater.get_user_data_dir"
     with patch(target_fs, return_value=str(tmp_path)):
         updater._temp_dir = os.path.join(str(tmp_path), "updates")
         updater.run_silent_cycle("1.0.0")

@@ -10,7 +10,7 @@ Ensures resilience against network exceptions and name changes in the API.
 
 from unittest.mock import MagicMock, patch
 
-from transcriptor4ai.interface.gui.threads import run_pricing_update_task
+from transcriptor4ai.interface.gui.common.async_workers import run_pricing_update_task
 
 
 def test_run_pricing_update_task_success() -> None:
@@ -18,7 +18,7 @@ def test_run_pricing_update_task_success() -> None:
     mock_data = {"GPT-4o": {"input_cost_per_token": 0.0000025}}
 
     # FIX: Patched fetch_external_model_data (new API name)
-    target = "transcriptor4ai.infra.network.fetch_external_model_data"
+    target = "transcriptor4ai.infrastructure.network.fetch_external_model_data"
     with patch(target, return_value=mock_data):
         callback = MagicMock()
 
@@ -30,7 +30,7 @@ def test_run_pricing_update_task_success() -> None:
 
 def test_run_pricing_update_task_failure() -> None:
     """TC-02: Verify callback execution with None when network fails."""
-    target = "transcriptor4ai.infra.network.fetch_external_model_data"
+    target = "transcriptor4ai.infrastructure.network.fetch_external_model_data"
     with patch(target, return_value=None):
         callback = MagicMock()
 
@@ -41,7 +41,7 @@ def test_run_pricing_update_task_failure() -> None:
 
 def test_run_pricing_update_task_exception_handling() -> None:
     """TC-03: Verify that unexpected exceptions in the task return None."""
-    target = "transcriptor4ai.infra.network.fetch_external_model_data"
+    target = "transcriptor4ai.infrastructure.network.fetch_external_model_data"
     with patch(target, side_effect=RuntimeError("DNS Error")):
         callback = MagicMock()
 

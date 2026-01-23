@@ -82,9 +82,9 @@ def test_mask_local_paths_anonymizes_home_linux():
     _get_user_info.cache_clear()
 
     # Split patch calls to respect line length limits
-    with patch("transcriptor4ai.core.processing.sanitizer.Path.home", return_value=Path(fake_home)):
+    with patch("transcriptor4ai.application.processing.sanitizer.Path.home", return_value=Path(fake_home)):
         with patch(
-            "transcriptor4ai.core.processing.sanitizer.os.getlogin",
+            "transcriptor4ai.application.processing.sanitizer.os.getlogin",
             return_value="testuser"
         ):
             masked = mask_local_paths(text)
@@ -100,9 +100,9 @@ def test_mask_local_paths_anonymizes_home_windows():
     _get_user_info.cache_clear()
 
     # Simulate the bar normalization behavior
-    with patch("transcriptor4ai.core.processing.sanitizer.Path.home", return_value=Path(fake_home)):
+    with patch("transcriptor4ai.application.processing.sanitizer.Path.home", return_value=Path(fake_home)):
         with patch(
-            "transcriptor4ai.core.processing.sanitizer.os.getlogin",
+            "transcriptor4ai.application.processing.sanitizer.os.getlogin",
             return_value="testuser"
         ):
             masked = mask_local_paths(text)
@@ -120,9 +120,9 @@ def test_mask_local_paths_anonymizes_standalone_username():
 
     _get_user_info.cache_clear()
 
-    with patch("transcriptor4ai.core.processing.sanitizer.os.getlogin", return_value="testuser"):
+    with patch("transcriptor4ai.application.processing.sanitizer.os.getlogin", return_value="testuser"):
         with patch(
-            "transcriptor4ai.core.processing.sanitizer.Path.home",
+            "transcriptor4ai.application.processing.sanitizer.Path.home",
             return_value=Path("/home/testuser")
         ):
             masked = mask_local_paths(text)

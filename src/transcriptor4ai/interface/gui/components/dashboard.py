@@ -22,7 +22,7 @@ from transcriptor4ai.interface.gui.components.dashboard_parts.input_section impo
 from transcriptor4ai.interface.gui.components.dashboard_parts.options_section import (
     OptionsSection,
 )
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared.i18n import i18n
 
 logger = logging.getLogger(__name__)
 

@@ -78,7 +78,7 @@ The completely redesigned interface offering a dashboard experience.
 transcriptor-gui
 
 # OR running from source
-python src/transcriptor4ai/interface/gui/app.py
+python src/transcriptor4ai/interface/gui/gui_launcher.py
 ```
 
 *   **Simulation Mode**: Use **"SIMULATE"** to perform a dry-run. It calculates tokens and shows the file structure without writing to disk.
@@ -157,7 +157,7 @@ ruff check .
 To create a standalone executable (`.exe`):
 ```bash
 # Use the automated build script
-python scripts/build.py
+python scripts/build_runner.py
 ```
 
 ---

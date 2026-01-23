@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 
 from transcriptor4ai.core.pipeline.stages.assembler import assemble_and_finalize
-from transcriptor4ai.domain.config import get_default_config
+from transcriptor4ai.domain.entities.app_config import get_default_config
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_assemble_and_finalize_merging(env_context: dict) -> None:
         "counters": {"processed": 1}
     }
 
-    with patch("transcriptor4ai.core.pipeline.stages.assembler.count_tokens", return_value=123):
+    with patch("transcriptor4ai.application.pipeline.stages.assembler.count_tokens", return_value=123):
         result = assemble_and_finalize(cfg, trans_res, ["line1"], env_context, dry_run=False)
 
         assert result.ok is True

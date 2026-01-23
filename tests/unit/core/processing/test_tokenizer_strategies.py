@@ -26,7 +26,7 @@ def test_heuristic_strategy_math() -> None:
     assert strategy.count("123456789", "any") == 3
 
 
-@patch("transcriptor4ai.core.processing.strategies.openai.tiktoken")
+@patch("transcriptor4ai.application.processing.strategies.openai.tiktoken")
 def test_tiktoken_strategy_encoding(mock_tiktoken: MagicMock) -> None:
     """Verify Tiktoken strategy calls the correct encoding for OpenAI models."""
     mock_encoding = MagicMock()
@@ -40,8 +40,8 @@ def test_tiktoken_strategy_encoding(mock_tiktoken: MagicMock) -> None:
     mock_tiktoken.get_encoding.assert_called_with("o200k_base")
 
 
-@patch("transcriptor4ai.core.processing.strategies.anthropic.anthropic")
-@patch("transcriptor4ai.core.processing.strategies.anthropic.ANTHROPIC_AVAILABLE", True)
+@patch("transcriptor4ai.application.processing.strategies.anthropic.anthropic")
+@patch("transcriptor4ai.application.processing.strategies.anthropic.ANTHROPIC_AVAILABLE", True)
 @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test-key"})
 def test_anthropic_strategy_api(mock_anthropic: MagicMock) -> None:
     """Verify Anthropic strategy maps models and extracts input_tokens from response."""
@@ -58,8 +58,8 @@ def test_anthropic_strategy_api(mock_anthropic: MagicMock) -> None:
     mock_client.beta.messages.count_tokens.assert_called()
 
 
-@patch("transcriptor4ai.core.processing.strategies.google.genai", create=True)
-@patch("transcriptor4ai.core.processing.strategies.google.GOOGLE_AVAILABLE", True)
+@patch("transcriptor4ai.application.processing.strategies.google.genai", create=True)
+@patch("transcriptor4ai.application.processing.strategies.google.GOOGLE_AVAILABLE", True)
 @patch.dict("os.environ", {"GOOGLE_API_KEY": "ai-test-key"})
 def test_google_strategy_api(mock_genai: MagicMock) -> None:
     """Verify Google strategy utilizes the GenAI client correctly."""
@@ -79,8 +79,8 @@ def test_google_strategy_api(mock_genai: MagicMock) -> None:
     )
 
 
-@patch("transcriptor4ai.core.processing.strategies.local.MistralTokenizer")
-@patch("transcriptor4ai.core.processing.strategies.local.MISTRAL_AVAILABLE", True)
+@patch("transcriptor4ai.application.processing.strategies.local.MistralTokenizer")
+@patch("transcriptor4ai.application.processing.strategies.local.MISTRAL_AVAILABLE", True)
 def test_mistral_strategy_local(mock_tokenizer_cls: MagicMock) -> None:
     """Verify Mistral strategy calls the local Tekken tokenizer."""
     mock_tokenizer = MagicMock()

@@ -13,12 +13,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from transcriptor4ai.domain.pipeline_models import create_success_result
+from transcriptor4ai.domain.entities.pipeline_results import create_success_result
 from transcriptor4ai.interface.gui.controllers.main_controller import AppController
-from transcriptor4ai.interface.gui.utils.tk_helpers import (
-    open_file_explorer,
+from transcriptor4ai.interface.gui.common.ui_widgets import (
     parse_list_from_string,
 )
+from transcriptor4ai.infrastructure.system.os_file_system import open_file_explorer
 
 
 @pytest.mark.gui

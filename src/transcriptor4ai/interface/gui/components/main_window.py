@@ -12,7 +12,8 @@ from typing import Any, Dict, List
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import constants as const
+from transcriptor4ai.shared import constants as const
+
 
 # -----------------------------------------------------------------------------
 # ROOT WINDOW CONSTRUCTION

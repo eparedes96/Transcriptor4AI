@@ -14,7 +14,7 @@ from tkinter import messagebox as mb
 
 import customtkinter as ctk
 
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared.i18n import i18n
 
 # -----------------------------------------------------------------------------
 # PUBLIC DIALOG API

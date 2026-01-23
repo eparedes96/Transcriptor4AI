@@ -15,8 +15,9 @@ from unittest.mock import patch
 
 import pytest
 
-from transcriptor4ai.domain.config import get_default_config, load_app_state
-from transcriptor4ai.domain.constants import CURRENT_CONFIG_VERSION
+from transcriptor4ai.domain.entities.app_config import get_default_config
+from transcriptor4ai.infrastructure.persistence.json_config_repo import load_app_state
+from transcriptor4ai.shared.constants import CURRENT_CONFIG_VERSION
 
 
 @pytest.fixture

@@ -11,7 +11,7 @@ import pytest
 
 from transcriptor4ai.core.analysis.tree_generator import _build_structure, generate_directory_tree
 from transcriptor4ai.core.pipeline.components.filters import compile_patterns, is_test
-from transcriptor4ai.domain.tree_models import FileNode
+from transcriptor4ai.domain.entities.file_node import FileNode
 
 
 @pytest.fixture
@@ -23,7 +23,7 @@ def project_structure(tmp_path):
     /root
       /src
         main.py
-        utils.py
+        shared.py
       /tests
         test_main.py
       /ignore_me
@@ -36,7 +36,7 @@ def project_structure(tmp_path):
     src = root / "src"
     src.mkdir()
     (src / "main.py").write_text("class Main: pass", encoding="utf-8")
-    (src / "utils.py").write_text("def helper(): pass", encoding="utf-8")
+    (src / "shared.py").write_text("def helper(): pass", encoding="utf-8")
 
     tests = root / "tests"
     tests.mkdir()

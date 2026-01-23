@@ -14,9 +14,9 @@ from tkinter import messagebox as mb
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain.pipeline_models import PipelineResult
-from transcriptor4ai.interface.gui.utils.tk_helpers import open_file_explorer
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.infrastructure.system.os_file_system import open_file_explorer
+from transcriptor4ai.shared.i18n import i18n
 
 # -----------------------------------------------------------------------------
 # PUBLIC DIALOG API

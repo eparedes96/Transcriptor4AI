@@ -32,7 +32,7 @@ def mock_cache_service(tmp_path: Any) -> Generator[CacheService, None, None]:
     Yields:
         CacheService: Initialized service pointing to a temporary DB.
     """
-    with patch("transcriptor4ai.core.services.cache.get_user_data_dir", return_value=str(tmp_path)):
+    with patch("transcriptor4ai.application.services.cache.get_user_data_dir", return_value=str(tmp_path)):
         service = CacheService()
         yield service
 
@@ -117,7 +117,7 @@ def test_resilience_to_corruption(mock_cache_service: CacheService, tmp_path: An
         f.write(b"NOT_A_SQLITE_DB_CONTENT")
 
     # Re-initialize service against the corrupted file
-    with patch("transcriptor4ai.core.services.cache.get_user_data_dir", return_value=str(tmp_path)):
+    with patch("transcriptor4ai.application.services.cache.get_user_data_dir", return_value=str(tmp_path)):
         service = CacheService()
 
         # The service should either disable itself or handle the error on access

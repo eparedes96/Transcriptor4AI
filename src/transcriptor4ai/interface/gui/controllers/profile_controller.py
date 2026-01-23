@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import transcriptor4ai.infrastructure.persistence.json_config_repo
+
 """
 Configuration Profile Management Controller.
 
@@ -14,8 +16,8 @@ from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import config as cfg
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.domain.entities import app_config as cfg
+from transcriptor4ai.shared.i18n import i18n
 
 if TYPE_CHECKING:
     from transcriptor4ai.interface.gui.controllers.main_controller import AppController
@@ -108,7 +110,7 @@ class ProfileController:
 
             # Persist a snapshot of the config dictionary
             profiles[name] = self.controller.config.copy()
-            cfg.save_app_state(self.controller.app_state)
+            transcriptor4ai.infrastructure.persistence.json_config_repo.save_app_state(self.controller.app_state)
 
             self._update_profile_list(name)
             logger.info(f"Persistence: Profile '{name}' saved successfully.")
@@ -132,7 +134,7 @@ class ProfileController:
             )
             if confirm:
                 del profiles[name]
-                cfg.save_app_state(self.controller.app_state)
+                transcriptor4ai.infrastructure.persistence.json_config_repo.save_app_state(self.controller.app_state)
                 self._update_profile_list()
                 logger.info(f"Persistence: Profile '{name}' deleted.")
 

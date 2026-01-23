@@ -1,32 +1,33 @@
 from __future__ import annotations
 
+from customtkinter.windows import widgets
+
 """
 Main Application Controller.
 
 Acts as the Orchestrator (Hub).
-It initializes the core services and delegates specialized logic to
+It initializes the application services and delegates specialized logic to
 ExecutionController and PricingController.
 """
 
 import logging
-import os
 import tkinter.messagebox as mb
 from typing import Any, Dict, List, Optional, Tuple
 
 import customtkinter as ctk
 
-from transcriptor4ai.core.services.cache import CacheService
-from transcriptor4ai.core.services.estimator import CostEstimator
-from transcriptor4ai.core.services.registry import ModelRegistry
-from transcriptor4ai.domain import config as cfg
-from transcriptor4ai.domain import constants as const
+from transcriptor4ai.application.services.cost_calculator import CostEstimator
+from transcriptor4ai.infrastructure.persistence.model_registry_repo import ModelRegistry
+from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import CacheService
+from transcriptor4ai.domain.entities import app_config as cfg
+from transcriptor4ai.shared import constants as const
 from transcriptor4ai.interface.gui.controllers.execution_controller import ExecutionController
 from transcriptor4ai.interface.gui.controllers.feedback_controller import FeedbackController
 from transcriptor4ai.interface.gui.controllers.pricing_controller import PricingController
 from transcriptor4ai.interface.gui.controllers.profile_controller import ProfileController
-from transcriptor4ai.interface.gui.utils import tk_helpers
-from transcriptor4ai.interface.gui.utils.binder import FormBinder
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.interface.gui.common import ui_widgets
+from transcriptor4ai.interface.gui.common.form_binder import FormBinder
+from transcriptor4ai.shared.i18n import i18n
 
 logger = logging.getLogger(__name__)
 
@@ -183,13 +184,13 @@ class AppController:
 
         self.config["process_modules"] = modules_enabled
 
-        self.config["extensions"] = tk_helpers.parse_list_from_string(
+        self.config["extensions"] = ui_widgets.parse_list_from_string(
             self.settings_view.entry_ext.get()
         )
-        self.config["include_patterns"] = tk_helpers.parse_list_from_string(
+        self.config["include_patterns"] = ui_widgets.parse_list_from_string(
             self.settings_view.entry_inc.get()
         )
-        self.config["exclude_patterns"] = tk_helpers.parse_list_from_string(
+        self.config["exclude_patterns"] = ui_widgets.parse_list_from_string(
             self.settings_view.entry_exc.get()
         )
         self.config["target_model"] = self.settings_view.combo_model.get()

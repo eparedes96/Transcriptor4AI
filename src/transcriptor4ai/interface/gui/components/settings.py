@@ -14,14 +14,14 @@ from typing import Any, Dict, List
 
 import customtkinter as ctk
 
-from transcriptor4ai.domain import constants as const
+from transcriptor4ai.shared import constants as const
 from transcriptor4ai.interface.gui.components.settings_parts.ai_model_part import AIModelSection
 from transcriptor4ai.interface.gui.components.settings_parts.filters_part import FiltersSection
 from transcriptor4ai.interface.gui.components.settings_parts.formatting_part import (
     FormattingSection,
 )
 from transcriptor4ai.interface.gui.components.settings_parts.profiles_part import ProfilesSection
-from transcriptor4ai.utils.i18n import i18n
+from transcriptor4ai.shared.i18n import i18n
 
 logger = logging.getLogger(__name__)
 

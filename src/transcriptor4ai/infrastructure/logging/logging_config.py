@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Logging Configuration Models.
 
-Defines the data structures and constants required to initialize the 
-logging subsystem. Includes the primary configuration dataclass and 
+Defines the data structures and constants required to initialize the
+logging subsystem. Includes the primary configuration dataclass and
 severity level mappings.
 """
 
@@ -12,6 +12,9 @@ import logging
 from dataclasses import dataclass
 from typing import Dict, Optional
 
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
 # Mapping of string identifiers to native logging constants
 _LEVEL_MAP: Dict[str, int] = {
     "DEBUG": logging.DEBUG,
@@ -23,6 +26,9 @@ _LEVEL_MAP: Dict[str, int] = {
 }
 
 
+# ==============================================================================
+# CONFIGURATION ENTITY
+# ==============================================================================
 @dataclass(frozen=True)
 class LoggingConfig:
     """

@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Logging Core Orchestrator.
 
-Maintains the idempotent lifecycle of the logging subsystem. Implements a 
-non-blocking Queue architecture to ensure that I/O operations (file writing) 
-do not interfere with the performance of the main execution thread or the 
+Maintains the idempotent lifecycle of the logging subsystem. Implements a
+non-blocking Queue architecture to ensure that I/O operations (file writing)
+do not interfere with the performance of the main execution thread or the
 responsiveness of the GUI.
 """
 
@@ -17,11 +17,13 @@ import sys
 from logging.handlers import QueueHandler, QueueListener
 from typing import List, Optional
 
-from transcriptor4ai.infrastructure.logging.logging_config import _LEVEL_MAP
-from transcriptor4ai.infrastructure.logging import LoggingConfig
-from transcriptor4ai.infrastructure.logging.logging_handlers import _tag_handler, _create_rotating_file_handler, \
-    _is_our_handler
-from transcriptor4ai.infrastructure.system.os_file_system import get_user_data_dir
+from transcriptor4ai.infrastructure.logging.logging_config import _LEVEL_MAP, LoggingConfig
+from transcriptor4ai.infrastructure.logging.logging_handlers import (
+    _create_rotating_file_handler,
+    _is_our_handler,
+    _tag_handler,
+)
+from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 
 # Internal state flags for idempotency and lifecycle tracking
 _CONFIGURED_FLAG_ATTR: str = "_transcriptor4ai_configured"
@@ -31,13 +33,14 @@ _QUEUE_LISTENER_ATTR: str = "_transcriptor4ai_queue_listener"
 # ==============================================================================
 # PUBLIC API
 # ==============================================================================
-
 def get_default_gui_log_path(
         app_name: str = "Transcriptor4AI",
         file_name: str = "transcriptor4ai.log",
 ) -> str:
     """
     Resolve the standard diagnostic log path within the user data directory.
+
+    Uses the FileSystemAdapter to ensure cross-platform compatibility.
 
     Args:
         app_name: Target application identifier.
@@ -46,7 +49,8 @@ def get_default_gui_log_path(
     Returns:
         str: Absolute path to the persistent log file.
     """
-    base_dir = get_user_data_dir()
+    fs = FileSystemAdapter()
+    base_dir = fs.get_user_data_dir()
     return os.path.join(base_dir, "logs", file_name)
 
 
@@ -68,7 +72,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
     root = logging.getLogger()
 
     try:
-        # 1. Idempotency Check
+        # 1. VALIDATION: Idempotency Check
         already_configured = bool(getattr(root, _CONFIGURED_FLAG_ATTR, False))
         if already_configured and not force:
             return root
@@ -80,7 +84,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         _remove_our_handlers(root)
         _stop_existing_listener(root)
 
-        # 2. Handler Definition
+        # 2. SETUP: Handler Definition
         console_formatter = logging.Formatter(cfg.console_fmt)
         file_formatter = logging.Formatter(cfg.file_fmt, datefmt=cfg.datefmt)
 
@@ -107,7 +111,7 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         if not handlers_list:
             return root
 
-        # 3. Queue-Based Orchestration (Non-blocking I/O)
+        # 3. ORCHESTRATION: Queue-Based Non-blocking I/O
         log_queue: queue.Queue[logging.LogRecord] = queue.Queue(-1)
 
         queue_handler = QueueHandler(log_queue)
@@ -188,7 +192,6 @@ def get_recent_logs(n_lines: int = 100) -> str:
 # ==============================================================================
 # PRIVATE HELPERS
 # ==============================================================================
-
 def _parse_level(level: str) -> int:
     """Convert a string-based logging level to its numeric constant."""
     if not level:

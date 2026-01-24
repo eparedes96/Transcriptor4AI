@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Logging Handlers and Low-Level Utilities.
 
-Provides specialized handler factories and internal tagging mechanisms 
-to ensure that the application can distinguish its own logging 
+Provides specialized handler factories and internal tagging mechanisms
+to ensure that the application can distinguish its own logging
 infrastructure from external or library-injected handlers.
 """
 
@@ -14,17 +14,19 @@ import sys
 from logging.handlers import RotatingFileHandler
 from typing import Optional
 
-# Internal attribute used to tag and identify our own handlers
+# Internal attribute to identify handlers managed by Transcriptor4AI
 _HANDLER_TAG_ATTR: str = "_transcriptor4ai_handler"
 
 
 # ==============================================================================
-# INTERNAL LOGGING UTILITIES
+# HANDLER TAGGING UTILITIES
 # ==============================================================================
-
 def _tag_handler(handler: logging.Handler) -> None:
     """
     Mark a handler as an internally-managed application handler.
+
+    This prevents the 'configure_logging' function from removing handlers
+    it didn't create during reconfiguration cycles.
 
     Args:
         handler: The logging handler instance to tag.
@@ -48,6 +50,9 @@ def _is_our_handler(handler: logging.Handler) -> bool:
     return bool(getattr(handler, _HANDLER_TAG_ATTR, False))
 
 
+# ==============================================================================
+# HANDLER FACTORIES
+# ==============================================================================
 def _create_rotating_file_handler(
         log_file: str,
         level_int: int,
@@ -57,6 +62,9 @@ def _create_rotating_file_handler(
 ) -> Optional[RotatingFileHandler]:
     """
     Initialize a RotatingFileHandler with robust error handling.
+
+    Ensures the parent directory exists before attempting creation.
+    Fails gracefully if filesystem permissions deny access.
 
     Args:
         log_file: Target path for the log file.
@@ -81,13 +89,10 @@ def _create_rotating_file_handler(
         _tag_handler(fh)
         return fh
     except Exception as e:
+        # Fallback to stderr if we cannot write to the log file
         sys.stderr.write(f"WARNING: Diagnostic persistence failure at '{log_file}': {e}\n")
         return None
 
-
-# ==============================================================================
-# PRIVATE HELPERS
-# ==============================================================================
 
 def _ensure_parent_dir(path: str) -> None:
     """
@@ -98,4 +103,7 @@ def _ensure_parent_dir(path: str) -> None:
     """
     parent = os.path.dirname(os.path.abspath(path))
     if parent and not os.path.exists(parent):
-        os.makedirs(parent, exist_ok=True)
+        try:
+            os.makedirs(parent, exist_ok=True)
+        except OSError:
+            pass

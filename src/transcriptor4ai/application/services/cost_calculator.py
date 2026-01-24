@@ -1,37 +1,45 @@
 from __future__ import annotations
 
 """
-Cost Estimation Service.
+Cost Calculation Application Service.
 
-Provides high-precision financial calculations for LLM token consumption.
-Delegates model technical specifications and pricing discovery to the 
-ModelRegistry, focusing exclusively on applying economic formulas to 
-execution metrics.
+Implements high-precision financial logic for LLM token consumption. 
+Delegates model specifications and pricing discovery to the ModelRegistry, 
+ensuring execution metrics are translated into accurate USD estimates.
 """
 
 import logging
 from typing import TYPE_CHECKING, Optional
 
+# 1. TYPE CHECKING: External repository reference for dependency injection
 if TYPE_CHECKING:
-    from transcriptor4ai.infrastructure.persistence.model_registry_repo import ModelRegistry
+    from transcriptor4ai.domain.ports.model_port import IModelRegistry
 
 logger = logging.getLogger(__name__)
 
 
-class CostEstimator:
+# ==============================================================================
+# COST CALCULATOR SERVICE
+# ==============================================================================
+
+class CostCalculatorService:
     """
-    Service responsible for calculating the estimated financial impact
-    of project transcriptions based on dynamic registry data.
+    Service responsible for applying economic formulas to project
+    transcription metrics using dynamic registry data.
     """
 
-    def __init__(self, registry: ModelRegistry) -> None:
+    def __init__(self, registry: IModelRegistry) -> None:
         """
-        Initialize the estimator with a model metadata provider.
+        Initialize the service with an injected metadata provider.
 
         Args:
-            registry: The discovery service acting as the source of truth.
+            registry: Discovery service implementation of the IModelRegistry port.
         """
         self._registry = registry
+
+    # --------------------------------------------------------------------------
+    # CORE CALCULATION LOGIC
+    # --------------------------------------------------------------------------
 
     def calculate_cost(
             self,
@@ -42,17 +50,16 @@ class CostEstimator:
         """
         Compute the estimated cost in USD for a given token density.
 
-        Queries the registry for the specific model's price per 1k tokens.
-        Supports cache-hit overrides to ensure financial consistency.
-
         Args:
-            token_count: Current execution tokens.
+            token_count: Current execution tokens (live count).
             model_name: Identifier of the target model in the registry.
-            precalculated_tokens: Optional count from cache to prioritize.
+            precalculated_tokens: Optional count from cache (overrides live).
 
         Returns:
-            float: Estimated cost in USD. Returns 0.0 if model is unknown.
+            float: Estimated cost in USD. Returns 0.0 on unknown models or errors.
         """
+        # 1. ARBITRATION: Select between raw density or precalculated cache hits
+        # Cache hits are prioritized to maintain financial consistency between runs.
         effective_tokens = (
             precalculated_tokens if precalculated_tokens is not None else token_count
         )
@@ -60,49 +67,62 @@ class CostEstimator:
         if effective_tokens <= 0:
             return 0.0
 
+        # 2. LOOKUP: Query the registry for model-specific economic specs
         model_info = self._registry.get_model_info(model_name)
 
         if not model_info:
             logger.warning(
-                f"CostEstimator: Model '{model_name}' not found in registry. Cost set to 0.0."
+                f"CostCalculator: Model '{model_name}' not found. Defaulting to 0.0 cost."
             )
             return 0.0
 
+        # 3. MATH: Apply the normalized pricing formula (Price per 1k tokens)
         try:
-            # Registry ensures input_cost_1k is normalized to 1000 tokens
             input_price_1k = float(model_info.get("input_cost_1k", 0.0))
             estimated_cost = (effective_tokens / 1000) * input_price_1k
             return estimated_cost
+
         except (ValueError, TypeError) as e:
-            logger.error(f"CostEstimator: Numerical failure for model '{model_name}': {e}")
+            logger.error(f"CostCalculator: Numerical failure for model '{model_name}': {e}")
             return 0.0
 
-    def update_live_pricing(self) -> None:
+    # --------------------------------------------------------------------------
+    # DATA SYNCHRONIZATION
+    # --------------------------------------------------------------------------
+
+    def sync_remote_data(self) -> bool:
         """
-        Trigger a remote synchronization cycle in the registry.
-
-        This method maintains compatibility with the interface controller
-        while delegating the complex discovery logic to the Registry service.
-        """
-        success = self._registry.sync_remote()
-        if success:
-            logger.info("CostEstimator: Financial metadata refreshed via Registry.")
-        else:
-            logger.warning("CostEstimator: Registry sync failed. Using last known data.")
-
-    def get_context_limit(self, model_name: str) -> int:
-        """
-        Retrieve the maximum context window for a given model.
-
-        Used by controllers to perform pre-flight technical validations.
-
-        Args:
-            model_name: Identifier of the target model.
+        Trigger a remote synchronization cycle via the Registry repository.
 
         Returns:
-            int: Maximum input tokens allowed. Defaults to 4096.
+            bool: True if live pricing metadata was successfully integrated.
+        """
+        # Delegating network complexity to the persistence layer
+        success = self._registry.sync_remote()
+
+        if success:
+            logger.info("CostCalculator: Live financial metadata successfully refreshed.")
+        else:
+            logger.info("CostCalculator: Using cached or snapshot pricing metadata.")
+
+        return success
+
+    # --------------------------------------------------------------------------
+    # TECHNICAL SPECIFICATION HELPERS
+    # --------------------------------------------------------------------------
+
+    def get_context_window(self, model_name: str) -> int:
+        """
+        Retrieve the hardware input limit for the selected model.
+
+        Args:
+            model_name: Unique model identifier.
+
+        Returns:
+            int: Maximum input tokens. Default safety fallback: 4096.
         """
         info = self._registry.get_model_info(model_name)
         if not info:
             return 4096
+
         return int(info.get("context_window", 4096))

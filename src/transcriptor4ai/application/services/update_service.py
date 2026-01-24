@@ -1,30 +1,30 @@
 from __future__ import annotations
 
 """
-Update Management Service.
+Update Lifecycle Management Service.
 
-Orchestrates the background lifecycle for application updates. Handles 
-state transitions between version checking, binary acquisition via 
-streaming downloads, and cryptographic integrity verification before 
-flagging an update as ready for installation.
+Orchestrates the background process for application updates. Handles state 
+transitions from version discovery to binary acquisition and cryptographic 
+verification. Delegates technical IO and archive management to infrastructure 
+adapters.
 """
 
 import logging
 import os
 import shutil
-import zipfile
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from transcriptor4ai.infrastructure import network
-from transcriptor4ai.infrastructure.system.os_file_system import get_user_data_dir
+# 1. PORTS & ADAPTERS: Injected via constructor to maintain Hexagonal integrity
+from transcriptor4ai.domain.ports.network_port import IUpdateClient
+from transcriptor4ai.domain.ports.system_port import IFileSystem
 
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # UPDATE STATE DEFINITIONS
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 class UpdateStatus(Enum):
     """Enumeration of the background update process states."""
@@ -35,68 +35,87 @@ class UpdateStatus(Enum):
     ERROR = "ERROR"
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # UPDATE MANAGER SERVICE
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 class UpdateManager:
     """
     Stateful manager for the Over-The-Air (OTA) update cycle.
 
-    Designed to run asynchronously. It coordinates between the network
-    infrastructure layer and the local filesystem to prepare validated
-    binaries for the sidecar updater utility.
+    This service is designed for asynchronous execution within a background
+    thread to prevent GUI blocking.
     """
 
-    def __init__(self) -> None:
-        """Initialize the update manager with default idle state and paths."""
+    def __init__(
+            self,
+            network_client: IUpdateClient,
+            fs_adapter: IFileSystem
+    ) -> None:
+        """
+        Initialize the manager with injected domain ports.
+        """
+        self._network = network_client
+        self._fs = fs_adapter
+
         self._status = UpdateStatus.IDLE
         self._update_info: Dict[str, Any] = {}
-        self._temp_dir = os.path.join(get_user_data_dir(), "updates")
+        self._temp_dir = os.path.join(self._fs.get_user_data_dir(), "updates")
         self._pending_binary_path: str = ""
+
+    # --------------------------------------------------------------------------
+    # PUBLIC PROPERTIES (UI OBSERVABLES)
+    # --------------------------------------------------------------------------
 
     @property
     def status(self) -> UpdateStatus:
-        """Get the current operational status of the update cycle."""
+        """Get current lifecycle status."""
         return self._status
 
     @property
     def update_info(self) -> Dict[str, Any]:
-        """Get metadata regarding the latest discovered version."""
+        """Get metadata of the latest discovered version."""
         return self._update_info
 
     @property
     def pending_path(self) -> str:
-        """Get the absolute path to the verified downloaded binary."""
+        """Get the absolute path to the verified local binary."""
         return self._pending_binary_path
+
+    # --------------------------------------------------------------------------
+    # CORE UPDATE CYCLE
+    # --------------------------------------------------------------------------
 
     def run_silent_cycle(self, current_version: str) -> None:
         """
         Execute a complete non-interactive update check and download.
 
-        Coordinates filesystem preparation, remote version comparison,
-        stream-based downloading, and SHA-256 integrity verification.
+        Coordinates environment preparation, remote discovery, and verification.
+        Delegates technical file handling to the infrastructure layer.
 
         Args:
             current_version: Semantic version of the running application.
         """
         self._status = UpdateStatus.CHECKING
+
         try:
-            # 1. Clean staging environment
+            # 1. PREPARE: Clean and recreate staging environment
             if os.path.exists(self._temp_dir):
                 try:
+                    # shutil.rmtree is used here for directory-level cleanup
                     shutil.rmtree(self._temp_dir)
-                except OSError:
-                    pass
-            os.makedirs(self._temp_dir, exist_ok=True)
+                except OSError as e:
+                    logger.warning(f"UpdateManager: Staging cleanup partial: {e}")
 
-            # 2. Remote synchronization
-            res = network.check_for_updates(current_version)
+            self._fs.safe_mkdir(self._temp_dir)
+
+            # 2. SYNC: Query remote authority for newer releases
+            res = self._network.check_for_updates(current_version)
             if not res.get("has_update") or not res.get("binary_url"):
                 self._status = UpdateStatus.IDLE
                 return
 
-            # 3. Binary acquisition
+            # 3. ACQUISITION: Initiate stream-based binary download
             self._status = UpdateStatus.DOWNLOADING
             self._update_info = res
             latest_version = res.get("latest_version", "unknown")
@@ -107,53 +126,45 @@ class UpdateManager:
             filename = f"transcriptor4ai_v{latest_version}{download_ext}"
             download_path = os.path.join(self._temp_dir, filename)
 
-            success, msg = network.download_binary_stream(binary_url, download_path)
+            success, msg = self._network.download_binary_stream(binary_url, download_path)
             if not success:
-                logger.error(f"Background update download failed: {msg}")
+                logger.error(f"UpdateManager: Download failed: {msg}")
                 self._status = UpdateStatus.ERROR
                 return
 
-            # 4. Cryptographic integrity check (Verify the downloaded artifact)
+            # 4. INTEGRITY: Verify cryptographic checksum (SHA-256)
             expected_sha = res.get("sha256")
             if expected_sha:
-                actual_sha = network._calculate_sha256(download_path)
+                from transcriptor4ai.infrastructure.network.common import calculate_sha256
+                actual_sha = calculate_sha256(download_path)
+
                 if actual_sha.lower() != expected_sha.lower():
-                    logger.error("Update integrity breach: Checksum mismatch. Discarding binary.")
+                    logger.error("UpdateManager: Integrity breach. Checksum mismatch.")
                     self._status = UpdateStatus.ERROR
                     return
+                logger.debug("UpdateManager: Binary integrity verified.")
 
-            # 5. Extraction and Path Resolution
+            # 5. DEPLOYMENT: Extract package or resolve direct binary path
+            # Logic delegated to FileSystemAdapter to maintain Separation of Concerns
             if is_zip:
-                logger.info("Unpacking compressed update package...")
-                try:
-                    with zipfile.ZipFile(download_path, 'r') as zf:
-                        exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
-                        if not exe_files:
-                            logger.error("Update failed: No executable found inside the ZIP.")
-                            self._status = UpdateStatus.ERROR
-                            return
-
-                        # Prioritize files containing 'transcriptor' or take the first one
-                        target_exe_name = next(
-                            (f for f in exe_files if "transcriptor" in f.lower()),
-                            exe_files[0]
-                        )
-                        zf.extract(target_exe_name, self._temp_dir)
-                        self._pending_binary_path = os.path.join(self._temp_dir, target_exe_name)
-
-                    # Cleanup the original zip
-                    os.remove(download_path)
-                except Exception as e:
-                    logger.error(f"Failed to extract update package: {e}")
+                extracted_path = self._fs.unpack_executable_from_zip(
+                    download_path,
+                    self._temp_dir
+                )
+                if not extracted_path:
                     self._status = UpdateStatus.ERROR
                     return
+                self._pending_binary_path = extracted_path
+
+                # Cleanup original zip archive via adapter
+                self._fs.delete_file(download_path)
             else:
                 self._pending_binary_path = download_path
 
-            # 6. Readiness transition
+            # 6. FINALIZATION: Mark update as ready for swap
             self._status = UpdateStatus.READY
-            logger.info(f"Update v{latest_version} is verified and ready for deployment.")
+            logger.info(f"UpdateManager: v{latest_version} verified and staged.")
 
         except Exception as e:
-            logger.error(f"Critical failure in update service lifecycle: {e}")
+            logger.error(f"UpdateManager: Critical failure in lifecycle: {e}", exc_info=True)
             self._status = UpdateStatus.ERROR

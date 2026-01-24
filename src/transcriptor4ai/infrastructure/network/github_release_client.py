@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 import requests
 
+from transcriptor4ai.domain.ports.network_port import IUpdateClient
 from transcriptor4ai.infrastructure.network.common import (
     CHUNK_SIZE,
     DEFAULT_TIMEOUT,
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 # GITHUB RELEASE CLIENT
 # ==============================================================================
-class GithubReleaseClient:
+class GithubReleaseClient(IUpdateClient):
     """
     Network adapter for the GitHub Releases API.
     """

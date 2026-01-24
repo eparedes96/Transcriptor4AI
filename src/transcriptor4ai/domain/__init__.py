@@ -25,6 +25,9 @@ from transcriptor4ai.domain.entities.transcription_error import TranscriptionErr
 # ==============================================================================
 from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.config_port import IConfigRepository
+from transcriptor4ai.domain.ports.model_port import IModelRegistry
+from transcriptor4ai.domain.ports.network_port import IUpdateClient
+from transcriptor4ai.domain.ports.system_port import IFileSystem
 from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # ==============================================================================
@@ -48,6 +51,9 @@ __all__ = [
     # Ports
     "ICacheRepository",
     "IConfigRepository",
+    "IModelRegistry",
+    "IFileSystem",
+    "IUpdateClient",
     "IUserContext",
     # Exceptions
     "DomainError",

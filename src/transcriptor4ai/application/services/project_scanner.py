@@ -1,186 +1,221 @@
 from __future__ import annotations
 
 """
-File Discovery and Filtering Service.
+Project Scanning and File Discovery Service.
 
-Provides high-level abstractions for traversing project directories, 
-applying complex filtering rules (including .gitignore support), 
-and classifying files for the transcription pipeline.
+Provides a high-performance traversal engine for project directories. 
+Integrates regex-based filtering, .gitignore compliance, and polyglot 
+file classification to feed the transcription pipeline.
 """
 
 import logging
 import os
 import re
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, TypedDict
 
-from transcriptor4ai.application.pipeline.components.file_filters import matches_any, matches_include, is_resource_file, \
-    is_test, default_include_patterns, default_exclude_patterns, load_gitignore_patterns, compile_patterns
+from transcriptor4ai.application.pipeline.components.file_filters import (
+    compile_patterns,
+    default_exclude_patterns,
+    default_include_patterns,
+    is_resource_file,
+    is_test,
+    load_gitignore_patterns,
+    matches_any,
+    matches_include,
+)
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
+from transcriptor4ai.domain.ports.system_port import IFileSystem
 
 logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
-# PUBLIC API (DISCOVERY SERVICES)
+# DATA MODELS (INTERNAL TYPE SAFETY)
 # ==============================================================================
 
-def yield_project_files(
-        input_path: str,
-        extensions: List[str],
-        include_rx: List[re.Pattern],
-        exclude_rx: List[re.Pattern],
-        process_modules: bool,
-        process_tests: bool,
-        process_resources: bool,
-) -> Iterable[Dict[str, str]]:
+class FileMetadata(TypedDict, total=False):
+    """Schema for file discovery events."""
+    status: str  # "process" | "skipped"
+    file_path: str  # Absolute path
+    rel_path: str  # Path relative to project root
+    ext: str  # File extension including dot
+    file_name: str  # Base name
+
+
+# ==============================================================================
+# PROJECT SCANNER SERVICE
+# ==============================================================================
+
+class ProjectScannerService:
     """
-    Traverse the filesystem and yield files with their processing status.
-
-    Performs an optimized walk of the directory tree. Prunes excluded
-    directories early and classifies each file to determine if it should
-    be processed or skipped based on the current configuration.
-
-    Args:
-        input_path: Absolute path to the project root.
-        extensions: Whitelist of allowed file extensions.
-        include_rx: Compiled regex patterns for inclusion.
-        exclude_rx: Compiled regex patterns for exclusion.
-        process_modules: Flag to allow source logic files.
-        process_tests: Flag to allow test suite files.
-        process_resources: Flag to allow non-code resource files.
-
-    Yields:
-        Dict[str, str]: Metadata for each file found, including:
-                        - status: "process" or "skipped".
-                        - file_path: Absolute path (if processing).
-                        - rel_path: Relative path from root.
-                        - ext: File extension.
-                        - file_name: Base filename.
+    Application service responsible for project structure inventory
+    and file categorization.
     """
-    input_path_abs = os.path.abspath(input_path)
 
-    for root, dirs, files in os.walk(input_path_abs):
-        # In-place directory pruning to optimize traversal performance
-        dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
-        dirs.sort()
-        files.sort()
+    def __init__(self, fs_adapter: IFileSystem) -> None:
+        """
+        Initialize the scanner with a filesystem port.
+        """
+        self._fs = fs_adapter
 
-        for file_name in files:
-            file_path = os.path.join(root, file_name)
-            rel_path = os.path.relpath(file_path, input_path_abs)
-            _, ext = os.path.splitext(file_name)
+    # --------------------------------------------------------------------------
+    # CORE DISCOVERY LOGIC
+    # --------------------------------------------------------------------------
 
-            # 1. Evaluate Exclusion Rules (Highest Priority)
-            if matches_any(file_name, exclude_rx):
-                yield {"status": "skipped", "rel_path": rel_path}
-                continue
+    def yield_project_files(
+            self,
+            input_path: str,
+            extensions: List[str],
+            include_rx: List[re.Pattern],
+            exclude_rx: List[re.Pattern],
+            process_modules: bool,
+            process_tests: bool,
+            process_resources: bool,
+    ) -> Iterable[FileMetadata]:
+        """
+        Traverse the filesystem and yield files compliant with current filters.
 
-            # 2. Evaluate Inclusion Rules
-            if not matches_include(file_name, include_rx):
-                yield {"status": "skipped", "rel_path": rel_path}
-                continue
+        Uses an optimized walk that prunes excluded directories early to
+        prevent unnecessary disk I/O.
 
-            # 3. Classify and determine processing eligibility
-            should_process = False
+        Args:
+            input_path: Absolute project root path.
+            extensions: Allowed extensions whitelist.
+            include_rx: Compiled inclusion regexes.
+            exclude_rx: Compiled exclusion regexes.
+            process_modules: Flag for source logic files.
+            process_tests: Flag for test suite files.
+            process_resources: Flag for configuration/documentation files.
 
-            if process_resources and is_resource_file(file_name):
-                should_process = True
-            elif process_tests and is_test(file_name):
-                should_process = True
-            elif process_modules:
-                if ext in extensions or file_name in extensions:
+        Yields:
+            FileMetadata: Typed dictionary with file details and processing status.
+        """
+        input_path_abs = os.path.abspath(input_path)
+
+        for root, dirs, files in os.walk(input_path_abs):
+            # 1. OPTIMIZATION: Prune directories in-place to avoid deep walking excluded paths
+            dirs[:] = [d for d in dirs if not matches_any(d, exclude_rx)]
+            dirs.sort()
+            files.sort()
+
+            for file_name in files:
+                file_path = os.path.join(root, file_name)
+                rel_path = os.path.relpath(file_path, input_path_abs)
+                _, ext = os.path.splitext(file_name)
+
+                # 2. VALIDATION: Check against high-priority exclusion blacklist
+                if matches_any(file_name, exclude_rx):
+                    yield {"status": "skipped", "rel_path": rel_path}
+                    continue
+
+                # 3. VALIDATION: Check against inclusion whitelist
+                if not matches_include(file_name, include_rx):
+                    yield {"status": "skipped", "rel_path": rel_path}
+                    continue
+
+                # 4. CLASSIFICATION: Determine processing eligibility based on type
+                should_process = False
+
+                if process_resources and is_resource_file(file_name):
                     should_process = True
+                elif process_tests and is_test(file_name):
+                    should_process = True
+                elif process_modules:
+                    # Target modules by extension or exact filename (e.g. Dockerfile)
+                    if ext in extensions or file_name in extensions:
+                        should_process = True
 
-            if not should_process:
-                yield {"status": "skipped", "rel_path": rel_path}
-                continue
+                if not should_process:
+                    yield {"status": "skipped", "rel_path": rel_path}
+                    continue
 
-            # 4. Signal valid file for processing
-            yield {
-                "status": "process",
-                "file_path": file_path,
-                "rel_path": rel_path,
-                "ext": ext,
-                "file_name": file_name,
-            }
+                # 5. EMIT: Return metadata for valid file
+                yield {
+                    "status": "process",
+                    "file_path": file_path,
+                    "rel_path": rel_path,
+                    "ext": ext,
+                    "file_name": file_name,
+                }
 
+    # --------------------------------------------------------------------------
+    # RULE PREPARATION
+    # --------------------------------------------------------------------------
 
-def prepare_filtering_rules(
-        input_path: str,
-        include_patterns: Optional[List[str]],
-        exclude_patterns: Optional[List[str]],
-        respect_gitignore: bool
-) -> Tuple[List[re.Pattern], List[re.Pattern]]:
-    """
-    Compile and aggregate all patterns into actionable regex objects.
+    def prepare_filtering_rules(
+            self,
+            input_path: str,
+            include_patterns: Optional[List[str]],
+            exclude_patterns: Optional[List[str]],
+            respect_gitignore: bool
+    ) -> Tuple[List[re.Pattern], List[re.Pattern]]:
+        """
+        Aggregate and compile regex rules from defaults, user config and gitignore.
 
-    Integrates user-defined patterns with system defaults and local
-    .gitignore rules to build a comprehensive filtering context.
+        Returns:
+            Tuple[List[re.Pattern], List[re.Pattern]]: (Inclusion, Exclusion) regexes.
+        """
+        input_path_abs = os.path.abspath(input_path)
 
-    Args:
-        input_path: Path to the project root.
-        include_patterns: Optional list of raw inclusion regexes.
-        exclude_patterns: Optional list of raw exclusion regexes.
-        respect_gitignore: Whether to parse local .gitignore files.
+        # Resolve inclusions
+        final_includes = include_patterns if include_patterns is not None else default_include_patterns()
 
-    Returns:
-        Tuple[List[re.Pattern], List[re.Pattern]]: (Include Patterns, Exclude Patterns).
-    """
-    input_path_abs = os.path.abspath(input_path)
+        # Resolve exclusions (System defaults + User custom)
+        final_exclusions = list(exclude_patterns) if exclude_patterns is not None else default_exclude_patterns()
 
-    if include_patterns is not None:
-        final_includes = include_patterns
-    else:
-        final_includes = default_include_patterns()
+        # 1. GITIGNORE: Ingest local ignore rules if enabled
+        if respect_gitignore:
+            git_patterns = load_gitignore_patterns(input_path_abs)
+            if git_patterns:
+                logger.debug(f"ProjectScanner: Loaded {len(git_patterns)} rules from .gitignore")
+                final_exclusions.extend(git_patterns)
 
-    if exclude_patterns is not None:
-        final_exclusions = list(exclude_patterns)
-    else:
-        final_exclusions = default_exclude_patterns()
+        # 2. COMPILE: Transform strings to active regex objects
+        return compile_patterns(final_includes), compile_patterns(final_exclusions)
 
-    if respect_gitignore:
-        git_patterns = load_gitignore_patterns(input_path_abs)
-        if git_patterns:
-            logger.debug(f"Loaded {len(git_patterns)} patterns from .gitignore")
-            final_exclusions.extend(git_patterns)
+    # --------------------------------------------------------------------------
+    # REPORTING UTILITIES
+    # --------------------------------------------------------------------------
 
-    return compile_patterns(final_includes), compile_patterns(final_exclusions)
+    def finalize_error_reporting(
+            self,
+            save_error_log: bool,
+            error_output_path: str,
+            errors: List[TranscriptionError]
+    ) -> str:
+        """
+        Persist execution errors encountered during scanning/transcription.
 
+        Args:
+            save_error_log: User permission to write the log file.
+            error_output_path: Destination path for the report.
+            errors: List of error objects to format.
 
-def finalize_error_reporting(
-        save_error_log: bool,
-        error_output_path: str,
-        errors: List[TranscriptionError]
-) -> str:
-    """
-    Persist collected execution errors to a dedicated log file.
+        Returns:
+            str: Path to the generated log, or empty string if aborted.
+        """
+        actual_error_path = ""
+        if not (save_error_log and errors):
+            return actual_error_path
 
-    Formats and saves the list of failed operations to disk to provide
-    transparency during the transcription process.
-
-    Args:
-        save_error_log: Permission flag to write the file.
-        error_output_path: Target filesystem path for the error report.
-        errors: Collection of errors encountered during execution.
-
-    Returns:
-        str: The path to the generated error log, or an empty string if not saved.
-    """
-    actual_error_path = ""
-    if save_error_log and errors:
         try:
-            # Ensure parent directory exists before writing
-            os.makedirs(os.path.dirname(os.path.abspath(error_output_path)), exist_ok=True)
+            # Force parent directory creation using the port
+            error_dir = os.path.dirname(os.path.abspath(error_output_path))
+            self._fs.safe_mkdir(error_dir)
 
             with open(error_output_path, "w", encoding="utf-8") as f:
                 f.write("TRANSCRIPTION ERRORS REPORT:\n")
                 f.write("=" * 80 + "\n")
+
                 for err_item in errors:
                     f.write(f"FILE: {err_item.rel_path}\n")
                     f.write(f"ERROR: {err_item.error}\n")
                     f.write("-" * 80 + "\n")
-            actual_error_path = error_output_path
-        except OSError as e:
-            logger.error(f"Failed to persist error report to '{error_output_path}': {e}")
 
-    return actual_error_path
+            actual_error_path = error_output_path
+            logger.info(f"ProjectScanner: Error report persisted at {error_output_path}")
+
+        except OSError as e:
+            logger.error(f"ProjectScanner: Critical IO failure saving error log: {e}")
+
+        return actual_error_path

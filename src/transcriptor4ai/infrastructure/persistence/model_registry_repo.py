@@ -16,6 +16,7 @@ import sys
 import threading
 from typing import Any, Dict, Optional
 
+from transcriptor4ai.domain.ports.model_port import IModelRegistry
 from transcriptor4ai.infrastructure import network
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 from transcriptor4ai.shared import constants as const
@@ -53,7 +54,7 @@ _PROVIDER_MAPPING: Dict[str, str] = {
 # ==============================================================================
 # REPOSITORY IMPLEMENTATION
 # ==============================================================================
-class ModelRegistryRepository:
+class ModelRegistryRepository(IModelRegistry):
     """
     Persistence adapter responsible for the discovery, normalization,
     and filtering of AI model technical and economic specifications.

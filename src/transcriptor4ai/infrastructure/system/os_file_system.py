@@ -4,16 +4,21 @@ from __future__ import annotations
 FileSystem Infrastructure Adapter.
 
 Concrete implementation of filesystem operations. Acts as an abstraction layer
-over the 'os' and 'platform' modules to ensure uniform behavior across Windows
-and Unix-like systems.
+over the 'os', 'platform', and 'zipfile' modules to ensure uniform behavior 
+across different operating systems and handle complex I/O tasks like 
+binary extraction.
 """
 
 import logging
 import os
 import platform
+import shutil
 import subprocess
+import zipfile
+from pathlib import Path
 from typing import List, Optional, Tuple
 
+from transcriptor4ai.domain.ports.system_port import IFileSystem
 from transcriptor4ai.shared import constants as const
 
 logger = logging.getLogger(__name__)
@@ -27,27 +32,27 @@ UNIX_APP_DIR_NAME = ".transcriptor4ai"
 
 
 # ==============================================================================
-# FILESYSTEM ADAPTER
+# FILESYSTEM ADAPTER IMPLEMENTATION
 # ==============================================================================
-class FileSystemAdapter:
+
+class FileSystemAdapter(IFileSystem):
     """
-    Adapter for OS-level file and directory operations.
+    Adapter for OS-level file, directory, and archive operations.
     """
+
+    # --------------------------------------------------------------------------
+    # DIRECTORY RESOLUTION
+    # --------------------------------------------------------------------------
 
     def get_user_data_dir(self) -> str:
         """
         Resolve the standard OS-specific directory for persistent application data.
-
-        Standards:
-        - Windows: %LOCALAPPDATA%/Transcriptor4AI
-        - Linux/Mac: ~/.transcriptor4ai
 
         Returns:
             str: Absolute path to the application data directory.
         """
         path: str = ""
 
-        # Windows specific resolution
         if os.name == "nt":
             try:
                 base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
@@ -56,7 +61,6 @@ class FileSystemAdapter:
             except Exception:
                 pass
 
-        # Posix fallback (Linux/Mac)
         if not path:
             try:
                 home = os.path.expanduser("~")
@@ -64,7 +68,6 @@ class FileSystemAdapter:
             except Exception:
                 path = os.path.abspath(UNIX_APP_DIR_NAME)
 
-        # Idempotent directory creation
         try:
             os.makedirs(path, exist_ok=True)
         except OSError as e:
@@ -73,27 +76,17 @@ class FileSystemAdapter:
         return os.path.abspath(path)
 
     def get_pricing_cache_path(self) -> str:
-        """
-        Resolve the absolute path for the local pricing cache file.
-
-        Returns:
-            str: Absolute path to the pricing cache JSON file.
-        """
+        """Resolve the path for the pricing cache JSON file."""
         base_dir = self.get_user_data_dir()
         return os.path.join(base_dir, const.LOCAL_PRICING_FILENAME)
 
+    # --------------------------------------------------------------------------
+    # PATH MANIPULATION
+    # --------------------------------------------------------------------------
+
     def normalize_path(self, path: Optional[str], fallback: str) -> str:
         """
-        Normalize a directory path string into an absolute filesystem path.
-
-        Handles environment variable expansion ($VAR) and user home (~).
-
-        Args:
-            path: Raw input path string.
-            fallback: Default path to use if resolution fails.
-
-        Returns:
-            str: Normalized absolute path.
+        Normalize a path string handles env vars and user home shortcuts.
         """
         p = (path or "").strip()
         if not p:
@@ -105,30 +98,16 @@ class FileSystemAdapter:
             return os.path.abspath(fallback)
 
     def get_real_output_path(self, output_base_dir: str, output_subdir_name: str) -> str:
-        """
-        Calculate the final artifact destination.
-
-        Args:
-            output_base_dir: Parent output directory.
-            output_subdir_name: Target subdirectory name.
-
-        Returns:
-            str: Resolved absolute output path.
-        """
+        """Calculate final destination joining base and subfolder."""
         sub = (output_subdir_name or "").strip() or DEFAULT_OUTPUT_SUBDIR
         return os.path.join(output_base_dir, sub)
 
+    # --------------------------------------------------------------------------
+    # FILESYSTEM OPERATIONS
+    # --------------------------------------------------------------------------
+
     def check_existing_output_files(self, output_dir: str, names: List[str]) -> List[str]:
-        """
-        Identify naming collisions in the target output directory.
-
-        Args:
-            output_dir: Directory to inspect.
-            names: List of filenames to check for existence.
-
-        Returns:
-            List[str]: Absolute paths of files that already exist.
-        """
+        """Identify naming collisions in the target directory."""
         existing: List[str] = []
         for n in names:
             full = os.path.join(output_dir, n)
@@ -137,36 +116,83 @@ class FileSystemAdapter:
         return existing
 
     def safe_mkdir(self, path: str) -> Tuple[bool, Optional[str]]:
-        """
-        Attempt to recursively create a directory structure safely.
-
-        Args:
-            path: Target directory path.
-
-        Returns:
-            Tuple[bool, Optional[str]]: (Success flag, Error message if applicable).
-        """
+        """Attempt to recursively create a directory structure safely."""
         try:
             os.makedirs(path, exist_ok=True)
             return True, None
         except OSError as e:
             return False, str(e)
 
-    def open_file_explorer(self, path: str) -> None:
+    def delete_file(self, path: str) -> bool:
         """
-        Execute the host operating system's native file explorer.
+        Safely remove a file from the filesystem.
 
-        Supports Windows (explorer.exe), macOS (open), and Linux (xdg-open).
-
-        Args:
-            path: Absolute directory path to open.
-
-        Raises:
-            FileNotFoundError: If the path does not exist.
-            OSError: If the system command fails.
+        Returns:
+            bool: True if deleted or already absent, False on permission errors.
         """
         if not os.path.exists(path):
-            logger.warning(f"FileSystem: Attempted to open non-existent path: {path}")
+            return True
+        try:
+            os.remove(path)
+            return True
+        except OSError as e:
+            logger.error(f"FileSystem: Failed to delete '{path}': {e}")
+            return False
+
+    # --------------------------------------------------------------------------
+    # ARCHIVE MANAGEMENT
+    # --------------------------------------------------------------------------
+
+    def unpack_executable_from_zip(self, zip_path: str, extract_to: str) -> Optional[str]:
+        """
+        Extract the main application binary from a compressed update package.
+
+        Args:
+            zip_path: Path to the .zip archive.
+            extract_to: Directory where the binary should be placed.
+
+        Returns:
+            Optional[str]: Path to the extracted executable, or None on failure.
+        """
+        # 1. VALIDATION: Check archive integrity
+        if not zipfile.is_zipfile(zip_path):
+            logger.error(f"FileSystem: '{zip_path}' is not a valid ZIP archive.")
+            return None
+
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                # 2. DISCOVERY: Filter for executable files
+                exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
+
+                if not exe_files:
+                    logger.error("FileSystem: No executable found in update package.")
+                    return None
+
+                # 3. SELECTION: Apply heuristic to find the primary app binary
+                target_name = next(
+                    (f for f in exe_files if "transcriptor" in f.lower()),
+                    exe_files[0]
+                )
+
+                # 4. EXTRACTION: Atomically write to target directory
+                zf.extract(target_name, extract_to)
+                extracted_path = os.path.join(extract_to, target_name)
+
+                logger.debug(f"FileSystem: Binary extracted to {extracted_path}")
+                return extracted_path
+
+        except (zipfile.BadZipFile, OSError) as e:
+            logger.error(f"FileSystem: Extraction failed for '{zip_path}': {e}")
+            return None
+
+    # --------------------------------------------------------------------------
+    # SHELL INTEGRATION
+    # --------------------------------------------------------------------------
+
+    def open_file_explorer(self, path: str) -> None:
+        """Execute the host OS native file explorer."""
+        if not os.path.exists(path):
+            logger.warning(f"FileSystem: Path does not exist: {path}")
             raise FileNotFoundError(f"Path does not exist: {path}")
 
         try:
@@ -178,5 +204,5 @@ class FileSystemAdapter:
             else:
                 subprocess.Popen(["xdg-open", path])
         except Exception as e:
-            logger.error(f"FileSystem: Failed to invoke file explorer: {e}")
+            logger.error(f"FileSystem: Shell invocation failed: {e}")
             raise OSError(f"Could not open file explorer: {e}") from e

@@ -12,9 +12,14 @@ are unavailable.
 
 import logging
 
-from transcriptor4ai.application.processing.strategies import HeuristicStrategy, TiktokenStrategy, TIKTOKEN_AVAILABLE, \
-    DEFAULT_MODEL
+from transcriptor4ai.application.processing.strategies import (
+    DEFAULT_MODEL,
+    TIKTOKEN_AVAILABLE,
+    HeuristicStrategy,
+    TiktokenStrategy
+)
 
+# Standard logger initialization
 logger = logging.getLogger(__name__)
 
 
@@ -40,10 +45,6 @@ class TokenizerService:
         """
         Calculate token count using the Universal BPE Proxy.
 
-        Prioritizes the most accurate local method available.
-        1. Local BPE Proxy (tiktoken) -> High Precision (Matches or ~95% proxy).
-        2. Heuristic (chars/4) -> Fallback.
-
         Args:
             text: Raw input text to tokenize.
             model: Target model identifier.
@@ -51,27 +52,29 @@ class TokenizerService:
         Returns:
             int: Calculated or estimated token count.
         """
+        # 1. VALIDATION: Handle empty or null inputs early
         if not text:
             return 0
 
-        # High-Fidelity Local Path (Proxy for almost all modern text LLMs)
+        # 2. PROXY EXECUTION: High-Fidelity Local Path
+        # tiktoken (o200k/cl100k) is used as a proxy for almost all modern text LLMs
+        # because densities for Llama, Mistral, and Qwen are structurally similar.
         if TIKTOKEN_AVAILABLE and self._tiktoken:
             try:
-                # We use tiktoken as a universal proxy.
-                # Modern models (Llama, Mistral, Qwen) share similar densities.
+                # Force proxy counting to avoid remote API calls
                 return self._tiktoken.count(text, model)
             except Exception as e:
-                logger.debug(f"BPE Proxy failed for '{model}': {e}. Using heuristic.")
+                logger.debug(f"BPE Proxy failed for '{model}': {e}. Falling back.")
 
-        # Absolute Fallback (No libraries or unexpected error)
+        # 3. FALLBACK: Absolute char-based density estimation
         return self._heuristic.count(text, model)
 
 
 # ==============================================================================
-# PUBLIC API
+# PUBLIC API (SINGLETON ACCESS)
 # ==============================================================================
 
-# Singleton instance for global application access
+# Internal service instance for global application use
 _SERVICE_INSTANCE = TokenizerService()
 
 
@@ -81,7 +84,7 @@ def count_tokens(text: str, model: str = DEFAULT_MODEL) -> int:
 
     Args:
         text: Input string content.
-        model: Target model name.
+        model: Target model name (e.g., 'gpt-4o', 'claude-3-5-sonnet').
 
     Returns:
         int: Total token count.
@@ -94,6 +97,6 @@ def is_tiktoken_available() -> bool:
     Check if the high-precision local engine is operational.
 
     Returns:
-        bool: True if tiktoken is successfully imported.
+        bool: True if tiktoken is successfully imported and ready.
     """
     return TIKTOKEN_AVAILABLE

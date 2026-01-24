@@ -10,20 +10,26 @@ and a valid ANTHROPIC_API_KEY.
 
 import logging
 import os
+from typing import Final
 
 from .base import TokenizerStrategy
 
+# Standard logger initialization
 logger = logging.getLogger(__name__)
 
-# --- Dynamic Dependency Check ---
-ANTHROPIC_AVAILABLE = False
+# ==============================================================================
+# DYNAMIC DEPENDENCY CHECK
+# ==============================================================================
+ANTHROPIC_AVAILABLE: bool = False
 try:
     import anthropic
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     pass
 
-
+# ==============================================================================
+# ANTHROPIC SDK STRATEGY
+# ==============================================================================
 class AnthropicApiStrategy(TokenizerStrategy):
     """
     Anthropic strategy utilizing the official SDK for Claude models.
@@ -43,15 +49,15 @@ class AnthropicApiStrategy(TokenizerStrategy):
         if not ANTHROPIC_AVAILABLE:
             raise ImportError("Library 'anthropic' is not installed.")
 
+        # 1. VALIDATION: Ensure API access is configured
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY missing from environment variables.")
 
         try:
+            # 2. MAPPING: Match logical model names to specific API tags
             client = anthropic.Anthropic(api_key=api_key)
-
-            # Mapping logical model names to API identifiers
-            api_model = "claude-3-5-sonnet-20240620"
+            api_model: str = "claude-3-5-sonnet-20240620"
 
             if "4.5" in model_id:
                 if "haiku" in model_id:
@@ -65,11 +71,14 @@ class AnthropicApiStrategy(TokenizerStrategy):
             elif "3" in model_id and "opus" in model_id:
                 api_model = "claude-3-opus-20240229"
 
+            # 3. REQUEST: Execute token counting using the beta endpoint
+            # Beta features are used here for token estimation accuracy.
             response = client.beta.messages.count_tokens(
                 model=api_model,
                 messages=[{"role": "user", "content": text}]
             )
             return int(response.input_tokens)
+
         except Exception as e:
-            logger.error(f"Anthropic API tokenization failed: {e}")
+            logger.error(f"Anthropic API strategy failed: {e}")
             raise

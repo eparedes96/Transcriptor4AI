@@ -345,3 +345,17 @@ class FileSystemAdapter(IFileSystem):
         except Exception as e:
             logger.error(f"FileSystem: Shell invocation failed: {e}")
             raise OSError(f"Could not open file explorer: {e}") from e
+
+# ==============================================================================
+# STANDALONE COMPATIBILITY WRAPPERS
+# ==============================================================================
+
+def open_file_explorer(path: str) -> None:
+    """
+    Standalone wrapper for the FileSystemAdapter's shell integration.
+
+    Used by UI dialogs (like results_modal) that require direct system access
+    without passing the full DI container.
+    """
+    adapter = FileSystemAdapter()
+    adapter.open_file_explorer(path)

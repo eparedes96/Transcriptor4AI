@@ -3,236 +3,186 @@ from __future__ import annotations
 """
 CLI Argument Definition and Mapping.
 
-Defines the command-line interface schema, including help messages, 
-argument types, and defaults. Provides logic to translate raw argparse 
-namespaces into domain-compatible configuration overrides.
-Implemented parsimonious mapping for 'processing_depth' 
-to ensure CLI flags correctly override session defaults.
+Defines the Command Line Interface schema, including grouping, help messages, 
+and type specifications. Provides the translation logic to transform raw 
+argparse Namespaces into domain-compatible configuration dictionaries.
 """
 
 import argparse
 from typing import Any, Dict, List, Optional
 
+from transcriptor4ai.shared import converters as conv
 from transcriptor4ai.shared.i18n import i18n
 
-# -----------------------------------------------------------------------------
-# ARGUMENT DEFINITION
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# PARSER CONSTRUCTION
+# ==============================================================================
 
 def build_parser() -> argparse.ArgumentParser:
     """
-    Construct the argument parser for the Transcriptor4AI CLI.
+    Construct and configure the ArgumentParser for the CLI.
+
+    Organizes arguments into functional groups to improve documentation
+    readability and CLI discoverability.
 
     Returns:
-        argparse.ArgumentParser: Configured parser instance.
+        argparse.ArgumentParser: The configured parser instance.
     """
     p = argparse.ArgumentParser(
         prog="transcriptor4ai",
         description=i18n.t("app.description"),
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 
-    # --- Path Management ---
-    p.add_argument(
+    # 1. GROUP: Path Management
+    path_group = p.add_argument_group("Path Configuration")
+    path_group.add_argument(
         "-i", "--input",
         dest="input_path",
         help=i18n.t("cli.args.input"),
-        default=None,
     )
-    p.add_argument(
+    path_group.add_argument(
         "-o", "--output-base",
         dest="output_base_dir",
         help=i18n.t("cli.args.output_base"),
-        default=None,
     )
-    p.add_argument(
+    path_group.add_argument(
         "--subdir",
         dest="output_subdir_name",
         help=i18n.t("cli.args.subdir"),
-        default=None,
     )
-    p.add_argument(
+    path_group.add_argument(
         "--prefix",
         dest="output_prefix",
         help=i18n.t("cli.args.prefix"),
-        default=None,
     )
 
-    # --- Content Discovery and Selection ---
-    p.add_argument(
+    # 2. GROUP: Content Scope and Analysis
+    scope_group = p.add_argument_group("Content Discovery & Scope")
+    scope_group.add_argument(
         "--no-modules",
         action="store_true",
-        help=i18n.t("cli.args.no_modules", default="Exclude source code logic."),
+        help=i18n.t("cli.args.no_modules"),
     )
-    p.add_argument(
+    scope_group.add_argument(
         "--skeleton",
         action="store_true",
-        help=i18n.t(
-            "cli.args.skeleton",
-            default="Enable AST skeletonization (strip bodies, keep structure)."
-        ),
+        help=i18n.t("cli.args.skeleton"),
     )
-    p.add_argument(
+    scope_group.add_argument(
         "--no-tests",
         action="store_true",
-        help=i18n.t("cli.args.no_tests", default="Exclude test suite files."),
+        help=i18n.t("cli.args.no_tests"),
     )
-    p.add_argument(
+    scope_group.add_argument(
         "--resources",
         action="store_true",
-        help=i18n.t(
-            "cli.args.resources",
-            default="Include non-code resources (docs/config)."
-        ),
+        help=i18n.t("cli.args.resources"),
     )
-    p.add_argument(
+    scope_group.add_argument(
         "--tree",
         action="store_true",
         help=i18n.t("cli.args.tree"),
     )
-    p.add_argument(
+    scope_group.add_argument(
         "--tree-file",
         dest="tree_file",
-        default=None,
         help=i18n.t("cli.args.tree_file"),
     )
-    p.add_argument(
-        "--print-tree",
-        action="store_true",
-        help=i18n.t("cli.args.print_tree"),
-    )
 
-    # --- Output Strategies ---
-    p.add_argument(
+    # 3. GROUP: Static Analysis (AST)
+    ast_group = p.add_argument_group("Static Analysis Features")
+    ast_group.add_argument("--functions", action="store_true", help=i18n.t("cli.args.func"))
+    ast_group.add_argument("--classes", action="store_true", help=i18n.t("cli.args.cls"))
+    ast_group.add_argument("--methods", action="store_true", help=i18n.t("cli.args.meth"))
+    ast_group.add_argument("--print-tree", action="store_true", help=i18n.t("cli.args.print_tree"))
+
+    # 4. GROUP: Output Strategies
+    output_group = p.add_argument_group("Output Control")
+    output_group.add_argument(
         "--unified-only",
         action="store_true",
-        help=i18n.t(
-            "cli.args.unified_only",
-            default="Target ONLY unified context generation."
-        ),
+        help=i18n.t("cli.args.unified_only"),
     )
-    p.add_argument(
+    output_group.add_argument(
         "--individual-only",
         action="store_true",
-        help=i18n.t(
-            "cli.args.individual_only",
-            default="Target ONLY categorized file generation."
-        ),
+        help=i18n.t("cli.args.individual_only"),
     )
 
-    # --- Static Analysis (AST) Configuration ---
-    p.add_argument("--functions", action="store_true", help=i18n.t("cli.args.func"))
-    p.add_argument("--classes", action="store_true", help=i18n.t("cli.args.cls"))
-    p.add_argument("--methods", action="store_true", help=i18n.t("cli.args.meth"))
-
-    # --- Data Transformation Filters ---
-    p.add_argument(
+    # 5. GROUP: Filters and Security
+    filter_group = p.add_argument_group("Filtering & Privacy")
+    filter_group.add_argument(
         "--ext",
         dest="extensions",
-        default=None,
         help=i18n.t("cli.args.ext"),
     )
-    p.add_argument(
+    filter_group.add_argument(
         "--include",
         dest="include_patterns",
-        default=None,
         help=i18n.t("cli.args.inc"),
     )
-    p.add_argument(
+    filter_group.add_argument(
         "--exclude",
         dest="exclude_patterns",
-        default=None,
         help=i18n.t("cli.args.exc"),
     )
-    p.add_argument(
+    filter_group.add_argument(
         "--no-gitignore",
         action="store_true",
-        help=i18n.t("cli.args.no_gitignore", default="Ignore local .gitignore rules."),
+        help=i18n.t("cli.args.no_gitignore"),
     )
 
-    # --- Runtime Constraints and Safety ---
-    p.add_argument(
-        "--overwrite",
-        action="store_true",
-        help=i18n.t("cli.args.overwrite"),
-    )
-    p.add_argument(
-        "--dry-run",
-        action="store_true",
-        help=i18n.t("cli.args.dry_run"),
-    )
-    p.add_argument(
-        "--no-error-log",
-        action="store_true",
-        help=i18n.t("cli.args.no_log"),
-    )
-
-    # --- Configuration and Diagnostic Tools ---
-    p.add_argument(
-        "--use-defaults",
-        action="store_true",
-        help=i18n.t("cli.args.defaults"),
-    )
-    p.add_argument(
-        "--dump-config",
-        action="store_true",
-        help=i18n.t("cli.args.dump"),
-    )
-    p.add_argument(
-        "--debug",
-        action="store_true",
-        help="Elevate logging verbosity to DEBUG.",
-    )
-
-    # --- Format Selection ---
-    p.add_argument(
-        "--json",
-        dest="json_output",
-        action="store_true",
-        help=i18n.t("cli.args.json"),
-    )
+    # 6. GROUP: Operation & Diagnostics
+    ops_group = p.add_argument_group("System & Debugging")
+    ops_group.add_argument("--overwrite", action="store_true", help=i18n.t("cli.args.overwrite"))
+    ops_group.add_argument("--dry-run", action="store_true", help=i18n.t("cli.args.dry_run"))
+    ops_group.add_argument("--no-error-log", action="store_true", help=i18n.t("cli.args.no_log"))
+    ops_group.add_argument("--use-defaults", action="store_true", help=i18n.t("cli.args.defaults"))
+    ops_group.add_argument("--dump-config", action="store_true", help=i18n.t("cli.args.dump"))
+    ops_group.add_argument("--debug", action="store_true", help="Elevate logging to DEBUG.")
+    ops_group.add_argument("--json", dest="json_output", action="store_true", help=i18n.t("cli.args.json"))
 
     return p
 
 
-# -----------------------------------------------------------------------------
-# ARGUMENT MAPPING
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# NAMESPACE MAPPING
+# ==============================================================================
 
 def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
     """
-    Translate the argparse Namespace into a domain configuration dictionary.
+    Translate the argparse Namespace into a partial configuration dictionary.
 
     Args:
-        args: Parsed command-line arguments.
+        args: The result of parser.parse_args().
 
     Returns:
-        Dict[str, Any]: Configuration overrides subset.
+        Dict[str, Any]: A flat dictionary containing only provided overrides.
     """
     overrides: Dict[str, Any] = {}
 
+    # 1. MAP: Core path overrides
     overrides["input_path"] = args.input_path
     overrides["output_base_dir"] = args.output_base_dir
     overrides["output_subdir_name"] = args.output_subdir_name
     overrides["output_prefix"] = args.output_prefix
 
-    # Content Scope & Depth overrides
+    # 2. MAP: Content scope and processing depth
+    # Parsimonious logic: only set keys if flags are explicitly provided
     if args.skeleton:
         overrides["processing_depth"] = "skeleton"
 
     if args.no_modules:
         overrides["processing_depth"] = "tree_only"
-        overrides["process_modules"] = False  # Legacy support
+        overrides["process_modules"] = False
 
     if args.no_tests:
         overrides["process_tests"] = False
     if args.resources:
         overrides["process_resources"] = True
 
-    # Analysis overrides
-    if args.tree:
-        overrides["generate_tree"] = True
-
-    # Output Format overrides
+    # 3. MAP: Output and Formatting
     if args.unified_only:
         overrides["create_individual_files"] = False
         overrides["create_unified_file"] = True
@@ -240,17 +190,20 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["create_individual_files"] = True
         overrides["create_unified_file"] = False
 
-    # Logic-based filtering overrides
+    # 4. MAP: Collection-based filters
+    # We delegate CSV parsing to shared converters for consistency
     if args.extensions:
-        overrides["extensions"] = _split_csv(args.extensions)
+        overrides["extensions"] = conv.to_list_str(args.extensions)
     if args.include_patterns:
-        overrides["include_patterns"] = _split_csv(args.include_patterns)
+        overrides["include_patterns"] = conv.to_list_str(args.include_patterns)
     if args.exclude_patterns:
-        overrides["exclude_patterns"] = _split_csv(args.exclude_patterns)
+        overrides["exclude_patterns"] = conv.to_list_str(args.exclude_patterns)
+
+    # 5. MAP: Boolean flags and analysis options
     if args.no_gitignore:
         overrides["respect_gitignore"] = False
-
-    # Detailed Analysis flags
+    if args.tree:
+        overrides["generate_tree"] = True
     if args.print_tree:
         overrides["print_tree"] = True
     if args.functions:
@@ -263,17 +216,3 @@ def args_to_overrides(args: argparse.Namespace) -> Dict[str, Any]:
         overrides["save_error_log"] = False
 
     return overrides
-
-
-# -----------------------------------------------------------------------------
-# HELPERS
-# -----------------------------------------------------------------------------
-
-def _split_csv(value: Optional[str]) -> Optional[List[str]]:
-    """
-    Convert a comma-separated string into a list of sanitized strings.
-    """
-    if value is None:
-        return None
-    parts = [x.strip() for x in value.split(",")]
-    return [x for x in parts if x]

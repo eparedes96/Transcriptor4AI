@@ -5,13 +5,22 @@ UI Form Binding Utility.
 
 Provides a declarative mapping and synchronization layer between the 
 application configuration dictionary and CustomTkinter widgets. 
-Encapsulates low-level widget manipulation to maintain controller cleanliness.
+Encapsulates low-level widget manipulation to maintain controller cleanliness
+and ensure thread-safe UI updates.
 """
 
+import logging
 from typing import Any, Dict, List, Tuple
 
 import customtkinter as ctk
 
+# Standard logger initialization
+logger = logging.getLogger(__name__)
+
+
+# ==============================================================================
+# FORM BINDER SERVICE
+# ==============================================================================
 
 class FormBinder:
     """
@@ -24,13 +33,14 @@ class FormBinder:
         Define the declarative relationship between config keys and UI widgets.
 
         Args:
-            dashboard: The Dashboard view instance.
-            settings: The Settings view instance.
+            dashboard: The Dashboard view instance containing execution widgets.
+            settings: The Settings view instance containing advanced options.
 
         Returns:
-            Dict: Grouped mappings by widget type.
+            Dict: Grouped mappings by widget type for batch processing.
         """
         if not dashboard or not settings:
+            logger.warning("FormBinder: Attempted to map null view instances.")
             return {}
 
         return {
@@ -58,6 +68,10 @@ class FormBinder:
             ]
         }
 
+    # ==========================================================================
+    # WIDGET MANIPULATION HELPERS
+    # ==========================================================================
+
     def update_entry(self, entry: ctk.CTkEntry, text: str) -> None:
         """
         Update a CTkEntry's content while bypassing readonly constraints.
@@ -66,21 +80,45 @@ class FormBinder:
             entry: Target entry widget.
             text: New text to insert.
         """
+        # 1. UNLOCK: Enable widget for modification
         entry.configure(state="normal")
+
+        # 2. EDIT: Replace entire content
         entry.delete(0, "end")
         entry.insert(0, text)
+
+        # 3. LOCK: Return to user-facing readonly state
         entry.configure(state="readonly")
 
     def set_switch_state(self, config: Dict[str, Any], switch: ctk.CTkSwitch, key: str) -> None:
-        """Set a CTkSwitch state based on config boolean value."""
-        if config.get(key):
+        """
+        Synchronize a CTkSwitch state based on a configuration boolean.
+
+        Args:
+            config: Source configuration dictionary.
+            switch: Target UI switch widget.
+            key: Dictionary key to retrieve the state.
+        """
+        # Force conversion to bool to prevent UI state ambiguity
+        state = bool(config.get(key, False))
+
+        if state:
             switch.select()
         else:
             switch.deselect()
 
     def set_checkbox_state(self, config: Dict[str, Any], chk: ctk.CTkCheckBox, key: str) -> None:
-        """Set a CTkCheckBox state based on config boolean value."""
-        if config.get(key):
+        """
+        Synchronize a CTkCheckBox state based on a configuration boolean.
+
+        Args:
+            config: Source configuration dictionary.
+            chk: Target UI checkbox widget.
+            key: Dictionary key to retrieve the state.
+        """
+        state = bool(config.get(key, False))
+
+        if state:
             chk.select()
         else:
             chk.deselect()

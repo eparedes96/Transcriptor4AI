@@ -3,12 +3,13 @@ from __future__ import annotations
 """
 GUI Entrypoint and Application Lifecycle Orchestrator.
 
-Initializes the CustomTkinter environment, coordinates persistent state loading,
-assembles the visual component hierarchy, and bridges UI events with the
-AppController. Manages asynchronous log polling and background update cycles.
+Initializes the CustomTkinter environment, coordinates persistent state loading
+via dependency injection, assembles the visual component hierarchy, and bridges
+UI events with the AppController.
 """
 
 import logging
+import os
 import queue
 import threading
 from logging.handlers import QueueHandler
@@ -16,11 +17,22 @@ from typing import List, Optional
 
 import customtkinter as ctk
 
-import transcriptor4ai.infrastructure.persistence.json_config_repo
-from transcriptor4ai.application.services.update_service import UpdateManager
-from transcriptor4ai.domain.entities import app_config as cfg
+# Domain Entities & Config
+from transcriptor4ai.domain.entities import app_config as domain_cfg
 from transcriptor4ai.shared import constants as const
-from transcriptor4ai.infrastructure.logging import get_default_gui_log_path, configure_logging, LoggingConfig
+
+# Infrastructure Implementation (Concrete Adapters)
+from transcriptor4ai.infrastructure.logging import LoggingConfig, configure_logging, get_default_gui_log_path
+from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConfigRepository
+from transcriptor4ai.infrastructure.persistence.model_registry_repo import ModelRegistryRepository
+from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
+from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
+from transcriptor4ai.infrastructure.network.github_release_client import GithubReleaseClient
+
+# Application Services
+from transcriptor4ai.application.services.update_service import UpdateManager
+
+# Interface Components & Controllers
 from transcriptor4ai.interface.gui.common import async_workers
 from transcriptor4ai.interface.gui.components.dashboard import DashboardFrame
 from transcriptor4ai.interface.gui.components.logs_console import LogsFrame
@@ -42,8 +54,13 @@ def main() -> None:
     """
     Initialize and launch the Graphical User Interface.
 
-    Executes the six-phase startup sequence: Logging Setup, State Recovery,
-    UI Construction, Controller Binding, Task Scheduling, and Loop Entry.
+    Executes the six-phase startup sequence:
+    1. Diagnostic Bootstrap (Logging)
+    2. Infrastructure Instantiation (Adapters)
+    3. State Recovery (Persistence)
+    4. View Hierarchy Assembly (Tkinter)
+    5. Controller Injection (DIP)
+    6. Background Task Scheduling (Threads)
     """
 
     # --- PHASE 1: DIAGNOSTIC INFRASTRUCTURE ---
@@ -59,20 +76,30 @@ def main() -> None:
     gui_log_handler.setLevel(logging.INFO)
     logging.getLogger().addHandler(gui_log_handler)
 
-    # --- PHASE 2: PERSISTENT STATE RECOVERY ---
+    # --- PHASE 2: INFRASTRUCTURE INSTANTIATION ---
+    # Create concrete adapters to be injected into the application core
+    fs_adapter = FileSystemAdapter()
+    config_repo = JsonConfigRepository(fs_adapter)
+    cache_repo = SqliteCacheRepository(fs_adapter)
+    model_registry = ModelRegistryRepository(fs_adapter)
+    network_client = GithubReleaseClient()
+
+    # --- PHASE 3: PERSISTENT STATE RECOVERY ---
     try:
-        app_state = transcriptor4ai.infrastructure.persistence.json_config_repo.load_app_state()
-        config = transcriptor4ai.infrastructure.persistence.json_config_repo.load_config()
+        app_state = config_repo.load_app_state()
+        config = config_repo.load_config()
         saved_profiles = app_state.get("saved_profiles", {})
         profile_names: List[str] = sorted(list(saved_profiles.keys()))
     except Exception as e:
         logger.error(f"State Error: Failure during config deserialization: {e}")
-        app_state = cfg.get_default_app_state()
-        config = cfg.get_default_config()
+        # Fallback to domain defaults if persistence fails
+        cwd = os.getcwd()
+        app_state = domain_cfg.get_default_app_state(cwd)
+        config = domain_cfg.get_default_config(cwd)
         profile_names = []
 
-    # --- PHASE 3: VIEW COMPONENT HIERARCHY ---
-    app: ctk.CTk = create_main_window(profile_names, config)
+    # --- PHASE 4: VIEW COMPONENT HIERARCHY ---
+    app: ctk.CTk = create_main_window()
 
     def show_frame(name: str) -> None:
         """Switch current visible view via grid management."""
@@ -105,12 +132,21 @@ def main() -> None:
     # Set default view
     show_frame("dashboard")
 
-    # --- PHASE 4: CONTROLLER INTEGRATION ---
-    controller = AppController(app, config, app_state)
+    # --- PHASE 5: CONTROLLER INTEGRATION (DIP) ---
+    # Inject infrastructure adapters into the Main Controller
+    controller = AppController(
+        app=app,
+        config=config,
+        app_state=app_state,
+        fs=fs_adapter,
+        cache=cache_repo,
+        config_repo=config_repo,
+        registry=model_registry
+    )
     controller.register_views(dashboard_frame, settings_frame, logs_frame, sidebar_frame)
 
-    # Initialize Update Management Controller (OTA)
-    update_manager = UpdateManager()
+    # Initialize Update Management Controller (OTA) with injected dependencies
+    update_manager = UpdateManager(network_client, fs_adapter)
     ota_controller = UpdateController(app, sidebar_frame, update_manager)
 
     # Scrape configuration into widget initial values
@@ -153,7 +189,7 @@ def main() -> None:
     # Link Sidebar Triggers
     sidebar_frame.btn_feedback.configure(command=lambda: show_feedback_window(app))
 
-    # --- PHASE 5: BACKGROUND POLLING & TASKS ---
+    # --- PHASE 6: BACKGROUND POLLING & TASKS ---
     log_formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(message)s", "%H:%M:%S")
 
     def poll_log_queue() -> None:
@@ -177,22 +213,20 @@ def main() -> None:
 
     # Dynamic Pricing and Model Discovery Synchronization
     threading.Thread(
-        target=async_workers.run_pricing_update_task,
-        kwargs={
-            "on_complete": lambda data: app.after(
-                0, lambda: controller.on_pricing_updated(data)
-            )
-        },
+        target=async_workers.run_pricing_sync_task,
+        args=(controller.cost_estimator, lambda data: app.after(
+            0, lambda: controller.on_pricing_updated(data)
+        )),
         daemon=True
     ).start()
 
-    # --- PHASE 6: LIFECYCLE FINALIZATION ---
+    # --- PHASE 7: LIFECYCLE FINALIZATION ---
     def on_closing() -> None:
         """Persist session state and terminate the process."""
         try:
             controller.sync_config_from_view()
             app_state["last_session"] = config
-            transcriptor4ai.infrastructure.persistence.json_config_repo.save_app_state(app_state)
+            config_repo.save_app_state(app_state)
             logger.info("Application state persisted successfully during shutdown.")
         except Exception as e:
             logger.error(f"Shutdown: Failed to save state: {e}")

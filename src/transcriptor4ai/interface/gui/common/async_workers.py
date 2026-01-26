@@ -1,33 +1,37 @@
 from __future__ import annotations
 
 """
-Background Worker Threads for GUI Operations.
+GUI Background Worker Tasks.
 
-Orchestrates long-running tasks such as pipeline execution, update checks,
-remote pricing synchronization, and remote telemetry submission. Prevents 
-the graphical user interface from freezing by delegating CPU-bound and 
-I/O-bound operations to separate daemon threads while maintaining 
-communication via thread-safe callbacks.
+Orchestrates long-running operations in separate threads to maintain GUI 
+responsiveness. These workers act as thin wrappers around Application 
+Services, ensuring that thread lifecycle and UI callbacks are handled safely.
 """
 
 import logging
-import os
 import threading
-import zipfile
 from typing import Any, Callable, Dict, Optional, Tuple
 
+# Application Layer
 from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
-from transcriptor4ai.infrastructure import network
-from transcriptor4ai.shared import constants as const
+from transcriptor4ai.application.services.update_service import UpdateManager
 
+# Domain Ports (for DI type hinting)
+from transcriptor4ai.domain.ports.cache_port import ICacheRepository
+from transcriptor4ai.domain.ports.system_port import IFileSystem
+from transcriptor4ai.domain.ports.network_port import IUpdateClient
+
+# Global logger initialization
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
-# PIPELINE EXECUTION WORKERS
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# PIPELINE WORKERS
+# ==============================================================================
 
 def run_pipeline_task(
+        fs: IFileSystem,
+        cache: ICacheRepository,
         config: Dict[str, Any],
         overwrite: bool,
         dry_run: bool,
@@ -35,166 +39,93 @@ def run_pipeline_task(
         cancellation_event: Optional[threading.Event] = None
 ) -> None:
     """
-    Execute the transcription pipeline in a dedicated background thread.
-
-    Manages the full transcription lifecycle. Checks for cancellation signals
-    before and after execution to ensure responsive thread termination.
-
-    Args:
-        config: Full configuration dictionary for the session.
-        overwrite: Permission to replace existing output files.
-        dry_run: Flag to enable simulation mode.
-        on_complete: Callback function to marshal results back to the GUI.
-        cancellation_event: Event flag used to abort execution.
+    Execute the transcription pipeline in a background daemon thread.
     """
     try:
         if cancellation_event and cancellation_event.is_set():
-            logger.info("Pipeline Thread: Aborted by user before start.")
+            logger.info("Worker: Pipeline aborted before start.")
             return
 
-        # Trigger application engine orchestration
+        # 1. EXECUTE: Call the decoupled orchestrator with injected ports
         result = run_pipeline(
-            config,
+            fs=fs,
+            cache=cache,
+            config=config,
             overwrite=overwrite,
             dry_run=dry_run,
             cancellation_event=cancellation_event
         )
 
-        if cancellation_event and cancellation_event.is_set():
-            logger.info(
-                "Pipeline Thread: Execution completed but results discarded due to cancellation."
-            )
-            return
-
-        # Synchronize results with the UI controller
-        on_complete(result)
+        # 2. CALLBACK: Marshal results back to the UI thread
+        if not (cancellation_event and cancellation_event.is_set()):
+            on_complete(result)
 
     except Exception as e:
-        logger.critical(f"Pipeline Thread: Critical failure detected: {e}", exc_info=True)
+        logger.critical(f"Worker: Pipeline critical failure: {e}", exc_info=True)
         on_complete(e)
 
 
-# -----------------------------------------------------------------------------
-# NETWORK AND UPDATE WORKERS
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# UPDATE & NETWORK WORKERS
+# ==============================================================================
 
-def check_updates_task(
-        on_complete: Callable[[Any, bool], None],
-        is_manual: bool = False
+def run_update_cycle_task(
+        update_manager: UpdateManager,
+        current_version: str,
+        on_complete: Callable[[], None]
 ) -> None:
     """
-    Execute a remote release synchronization task.
+    Execute the full OTA update lifecycle (Check -> Download -> Verify -> Unpack).
 
-    Args:
-        on_complete: Callback to handle release metadata.
-        is_manual: Whether the check was explicitly triggered by the user.
+    Delegates all technical logic to the UpdateManager application service.
     """
     try:
-        res = network.check_for_updates(const.CURRENT_CONFIG_VERSION)
-        on_complete(res, is_manual)
-    except Exception as e:
-        logger.error(f"Update Task: Check failed during network call: {e}")
-        on_complete({"has_update": False, "error": str(e)}, is_manual)
+        # 1. PROCESS: Run the silent background cycle
+        update_manager.run_silent_cycle(current_version)
 
-def run_pricing_update_task(
+        # 2. NOTIFY: Signal the UI that the state has changed
+        on_complete()
+    except Exception as e:
+        logger.error(f"Worker: Update cycle failed: {e}")
+        on_complete()
+
+
+def run_pricing_sync_task(
+        pricing_service: Any,  # Implementation of Pricing synchronization
         on_complete: Callable[[Optional[Dict[str, Any]]], None]
 ) -> None:
     """
-    Synchronize LLM pricing data from the remote repository.
-
-    Args:
-        on_complete: Callback to handle the retrieved pricing dictionary.
+    Synchronize model data from the remote repository.
     """
     try:
-        logger.debug("Pricing Task: Initiating remote sync...")
-        pricing_data = network.fetch_external_model_data(const.MODEL_DATA_URL)
-        on_complete(pricing_data)
+        # Note: This usually delegates to CostCalculatorService.sync_remote_data()
+        success = pricing_service.sync_remote_data()
+        # In a real scenario, we might return the fetched data or just a signal
+        on_complete(None)
     except Exception as e:
-        logger.error(f"Pricing Task: Sync failed: {e}")
+        logger.error(f"Worker: Pricing sync failed: {e}")
         on_complete(None)
 
-def download_update_task(
-        binary_url: str,
-        dest_path: str,
-        on_progress: Callable[[float], None],
-        on_complete: Callable[[Tuple[bool, str]], None]
-) -> None:
-    """
-    Acquire and unpack a remote binary package in the background.
 
-    Handles the full binary acquisition lifecycle, including streaming
-    download, progress reporting, and ZIP extraction for portable bundles.
+# ==============================================================================
+# TELEMETRY WORKERS
+# ==============================================================================
 
-    Args:
-        binary_url: Remote source URL.
-        dest_path: Local target path for binary staging.
-        on_progress: Callback to update UI progress bars (0.0 - 100.0).
-        on_complete: Callback to report final task status.
-    """
-    success, msg = network.download_binary_stream(binary_url, dest_path, on_progress)
-
-    # Secondary lifecycle: Extraction if the asset is a compressed archive
-    if success and dest_path.lower().endswith(".zip"):
-        try:
-            logger.info(f"Update Task: Unpacking compressed archive: {dest_path}")
-            base_dir = os.path.dirname(dest_path)
-
-            # Resolve the executable artifact inside the archive
-            with zipfile.ZipFile(dest_path, 'r') as zf:
-                exe_files = [f for f in zf.namelist() if f.lower().endswith(".exe")]
-                if not exe_files:
-                    raise ValueError("Malformed update package: Executable missing.")
-
-                target_exe = next(
-                    (f for f in exe_files if "transcriptor" in f.lower()),
-                    exe_files[0]
-                )
-
-                zf.extract(target_exe, base_dir)
-                extracted_full_path = os.path.join(base_dir, target_exe)
-
-            # Cleanup download artifact and perform atomic rotation
-            os.remove(dest_path)
-            final_exe_path = dest_path[:-4] + ".exe"
-
-            if os.path.exists(final_exe_path):
-                try:
-                    os.remove(final_exe_path)
-                except OSError:
-                    pass
-
-            os.rename(extracted_full_path, final_exe_path)
-            msg = "Binary extraction successful."
-            logger.info(f"Update Task: Binary deployed to: {final_exe_path}")
-
-        except Exception as e:
-            logger.error(f"Update Task: Failed to unpack binary package: {e}")
-            success = False
-            msg = f"Extraction failure: {e}"
-
-    on_complete((success, msg))
-
-
-# -----------------------------------------------------------------------------
-# TELEMETRY AND REPORTING WORKERS
-# -----------------------------------------------------------------------------
-
-def submit_feedback_task(
+def submit_telemetry_task(
+        client: Any,  # Implementation of TelemetryApiClient
         payload: Dict[str, Any],
+        is_error_report: bool,
         on_complete: Callable[[Tuple[bool, str]], None]
 ) -> None:
     """
-    Dispatch user feedback to the remote collection endpoint.
+    Dispatch feedback or crash reports to the remote endpoint.
     """
-    success, msg = network.submit_feedback(payload)
-    on_complete((success, msg))
-
-def submit_error_report_task(
-        payload: Dict[str, Any],
-        on_complete: Callable[[Tuple[bool, str]], None]
-) -> None:
-    """
-    Dispatch diagnostic crash metadata to the remote collection endpoint.
-    """
-    success, msg = network.submit_error_report(payload)
-    on_complete((success, msg))
+    try:
+        if is_error_report:
+            res = client.submit_error_report(payload)
+        else:
+            res = client.submit_feedback(payload)
+        on_complete(res)
+    except Exception as e:
+        logger.error(f"Worker: Telemetry submission failed: {e}")
+        on_complete((False, str(e)))

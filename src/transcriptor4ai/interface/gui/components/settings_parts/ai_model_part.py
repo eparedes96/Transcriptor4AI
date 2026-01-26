@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 """
-UI Section for AI Model Selection.
+AI Model Selection UI Section.
 
 Manages the provider-to-model mapping interface. Replaces standard ComboBoxes
-with scrollable dropdowns to handle large datasets (hundreds of models)
-efficiently using a slider-enabled interface and maintaining controller
-compatibility via shimmed methods.
+with scrollable dropdowns to handle large datasets efficiently using a 
+slider-enabled interface while maintaining controller compatibility 
+via shimmed methods.
 """
 
 import logging
@@ -18,11 +18,17 @@ from transcriptor4ai.shared import constants as const
 from transcriptor4ai.interface.gui.common.ui_widgets import CTkScrollableDropdown
 from transcriptor4ai.shared.i18n import i18n
 
+# Use TYPE_CHECKING to resolve circular dependencies in static analysis
 if TYPE_CHECKING:
     from transcriptor4ai.interface.gui.components.settings import SettingsFrame
 
+# Global logger initialization
 logger = logging.getLogger(__name__)
 
+
+# ==============================================================================
+# VIEW COMPONENT: AI MODEL SECTION
+# ==============================================================================
 
 class AIModelSection:
     """
@@ -48,11 +54,12 @@ class AIModelSection:
         """
         self._master = master
 
+        # 1. LAYOUT: Create the main horizontal container for AI settings
         frame_ai = ctk.CTkFrame(container, fg_color="transparent")
         frame_ai.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         frame_ai.grid_columnconfigure((0, 1), weight=1)
 
-        # --- Provider Selection Column ---
+        # 2. PROVIDER: Build the infrastructure provider selection column
         f_prov = ctk.CTkFrame(frame_ai)
         f_prov.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
 
@@ -62,14 +69,13 @@ class AIModelSection:
             font=ctk.CTkFont(weight="bold")
         ).pack(anchor="w", padx=10, pady=5)
 
-        # We use a Button that mimics a ComboBox to trigger the Scrollable Dropdown
         master.combo_provider = self._create_scrollable_trigger(
             f_prov,
             click_callback=self._on_provider_click
         )
         master.combo_provider.pack(padx=10, pady=10, anchor="w", fill="x")
 
-        # --- Model Selection Column ---
+        # 3. MODEL: Build the specific LLM selection column
         f_mod = ctk.CTkFrame(frame_ai)
         f_mod.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
 
@@ -84,10 +90,14 @@ class AIModelSection:
             click_callback=self._on_model_click
         )
 
-        # Set initial value from last session
+        # 4. INITIALIZE: Set the starting value from the persistent config
         target_model: str = config.get("target_model", const.DEFAULT_MODEL_KEY)
         master.combo_model.set(target_model)
         master.combo_model.pack(padx=10, pady=10, anchor="w", fill="x")
+
+    # ==========================================================================
+    # INTERNAL COMPONENT FACTORY
+    # ==========================================================================
 
     def _create_scrollable_trigger(
             self,
@@ -100,7 +110,7 @@ class AIModelSection:
         Separates the physical click (to open the list) from the logical
         selection callback (to notify the controller).
         """
-        # The button's command is strictly internal: open the dropdown
+        # 1. WIDGET: Create base button with ComboBox aesthetics
         btn_widget = ctk.CTkButton(
             parent,
             text="Select...",
@@ -113,44 +123,46 @@ class AIModelSection:
             command=click_callback
         )
 
-        # Cast to Any to allow dynamic method attachment (shims)
+        # Force garbage collection to prevent memory leak in loop (Context: Casting)
+        # CRITICAL POINT: We cast to Any to allow dynamic attachment of shim methods
+        # that the AppController expects from a standard CTkComboBox.
         btn: Any = cast(Any, btn_widget)
 
-        # Custom internal state
         btn._values_list = []
         btn._selection_callback = None
 
-        # Add 'set' method for AppController compatibility
+        # 2. SHIMMING: Attach standard ComboBox methods for controller transparency
         def _set(value: str) -> None:
             btn.configure(text=str(value))
 
-        # Add 'get' method for AppController compatibility
         def _get() -> str:
             return str(btn.cget("text"))
 
-        # Store the original configure method to avoid recursion
         original_configure = btn.configure
 
-        # Define a specialized configure that catches 'values' and 'command'
         def _smart_configure(**kwargs: Any) -> None:
+            """Interpose configuration to trap 'values' and 'command' keys."""
             if "values" in kwargs:
                 btn._values_list = kwargs["values"]
                 del kwargs["values"]
 
             if "command" in kwargs:
-                # Store as selection callback instead of overwriting click command
+                # Store the controller callback without overwriting the click command
                 btn._selection_callback = kwargs["command"]
                 del kwargs["command"]
 
             if kwargs:
                 original_configure(**kwargs)
 
-        # Attach shim methods
         btn.set = _set
         btn.get = _get
         btn.configure = _smart_configure
 
         return cast(ctk.CTkButton, btn)
+
+    # ==========================================================================
+    # EVENT HANDLERS
+    # ==========================================================================
 
     def _on_provider_click(self) -> None:
         """Trigger the scrollable dropdown for providers."""
@@ -158,7 +170,6 @@ class AIModelSection:
 
         def _on_select(val: str) -> None:
             widget.set(val)
-            # Pass the selected value to the controller's callback
             if hasattr(widget, "_selection_callback") and widget._selection_callback:
                 widget._selection_callback(val)
 
@@ -174,7 +185,6 @@ class AIModelSection:
 
         def _on_select(val: str) -> None:
             widget.set(val)
-            # Model selection also needs to notify the controller
             if hasattr(widget, "_selection_callback") and widget._selection_callback:
                 widget._selection_callback(val)
 

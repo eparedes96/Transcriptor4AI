@@ -9,7 +9,7 @@ argparse Namespaces into domain-compatible configuration dictionaries.
 """
 
 import argparse
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from transcriptor4ai.shared import converters as conv
 from transcriptor4ai.shared.i18n import i18n

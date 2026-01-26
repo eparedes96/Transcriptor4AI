@@ -15,7 +15,6 @@ from typing import Any, Dict, Iterator
 # Analysis & Transformation Services
 from transcriptor4ai.application.analysis.ast_parser import generate_skeleton_code
 from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
-from transcriptor4ai.application.transformation.privacy_sanitizer import PrivacySanitizerService
 
 # Pipeline Components
 from transcriptor4ai.application.pipeline.components.file_reader import stream_file_content

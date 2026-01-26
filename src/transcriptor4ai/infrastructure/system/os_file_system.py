@@ -15,7 +15,6 @@ import platform
 import shutil
 import subprocess
 import zipfile
-from pathlib import Path
 from typing import List, Optional, Tuple, Any, Dict
 
 from transcriptor4ai.domain.ports.system_port import IFileSystem

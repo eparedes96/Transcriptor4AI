@@ -11,7 +11,7 @@ Supports both in-memory and streaming processing modes.
 
 import logging
 import re
-from typing import Final, Iterator, List, Optional, Tuple
+from typing import Final, Iterator, List, Tuple
 
 from transcriptor4ai.domain.ports.user_port import IUserContext
 

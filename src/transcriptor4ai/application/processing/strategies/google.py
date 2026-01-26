@@ -9,7 +9,6 @@ Requires an active internet connection and a valid GOOGLE_API_KEY.
 
 import logging
 import os
-from typing import Final
 
 from .base import TokenizerStrategy
 

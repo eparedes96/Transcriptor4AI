@@ -19,7 +19,6 @@ from transcriptor4ai.application.services.update_service import UpdateManager
 # Domain Ports (for DI type hinting)
 from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.system_port import IFileSystem
-from transcriptor4ai.domain.ports.network_port import IUpdateClient
 
 # Global logger initialization
 logger = logging.getLogger(__name__)

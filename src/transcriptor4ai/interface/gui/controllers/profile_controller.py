@@ -11,7 +11,7 @@ and the persistent application state using injected repository ports.
 import logging
 import os
 import tkinter.messagebox as mb
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, List
 
 import customtkinter as ctk
 

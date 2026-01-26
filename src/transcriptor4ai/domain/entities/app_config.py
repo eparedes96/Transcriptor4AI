@@ -8,7 +8,6 @@ state and session configuration. This module implements the "Domain Model"
 pattern, centralizing business logic validation.
 """
 
-import os
 from typing import Any, Dict
 
 from transcriptor4ai.shared import constants as const

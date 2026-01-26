@@ -10,7 +10,6 @@ and a valid ANTHROPIC_API_KEY.
 
 import logging
 import os
-from typing import Final
 
 from .base import TokenizerStrategy
 

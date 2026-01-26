@@ -13,7 +13,7 @@ import logging
 import os
 import shutil
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 # 1. PORTS & ADAPTERS: Injected via constructor to maintain Hexagonal integrity
 from transcriptor4ai.domain.ports.network_port import IUpdateClient

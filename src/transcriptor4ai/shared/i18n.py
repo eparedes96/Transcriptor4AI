@@ -1,38 +1,60 @@
+from __future__ import annotations
+
+"""
+Internationalization (i18n) Utility.
+
+Provides a centralized singleton manager for application-wide translations.
+Implements dot-notation lookup for nested JSON locale files and supports
+dynamic variable interpolation for responsive string formatting across
+CLI and GUI interfaces.
+"""
+
 import json
 import logging
 import os
-import sys  # <--- NEW IMPORT
+import sys
 from typing import Any, Dict
 
+# Standard logger initialization
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # SYSTEM DEFAULTS
 # ==============================================================================
 DEFAULT_LOCALE = "en"
-# LOCALES_REL_PATH se elimina como constante global rígida
+
 
 # ==============================================================================
 # I18N MANAGER SERVICE
 # ==============================================================================
+
 class I18n:
     """
     Resource manager for locale-specific string translations.
+
+    Handles dynamic loading of JSON resource files from the locale repository
+    and provides safe access to keys with recursive resolution.
     """
 
     def __init__(self, locale: str = DEFAULT_LOCALE) -> None:
+        """
+        Initialize the manager and attempt to load the default locale.
+
+        Args:
+            locale: Standard ISO locale identifier (e.g., 'en', 'es').
+        """
         self._locale = locale
         self._translations: Dict[str, Any] = {}
         self.is_loaded = False
 
-        # 1. RESOLVE RESOURCE PATH (Frozen vs Dev)
+        # 1. RESOLVE RESOURCE PATH: Handle PyInstaller frozen environment
         if getattr(sys, 'frozen', False):
-            # PyInstaller creates a temporary folder at _MEIPASS
+            # In bundled apps, assets are extracted to the temporary _MEIPASS folder
             base_dir = getattr(sys, '_MEIPASS', os.getcwd())
-            # In bundled app, assets are usually mapped to root or specific folder
+            # Path depends on spec file 'datas' mapping. Assuming standard structure:
             self._locales_path = os.path.join(base_dir, "transcriptor4ai", "interface", "locales")
         else:
-            # Standard development environment
+            # Standard development environment (relative to src/transcriptor4ai/shared)
             base_dir = os.path.dirname(os.path.abspath(__file__))
             self._locales_path = os.path.abspath(os.path.join(base_dir, "..", "interface", "locales"))
 
@@ -103,8 +125,10 @@ class I18n:
             logger.debug(f"I18n: Resolution error for path '{key}': {e}")
             return key
 
+
 # ==============================================================================
 # SERVICE INITIALIZATION
 # ==============================================================================
+
 # Global singleton instance for application-wide resource access
 i18n = I18n(DEFAULT_LOCALE)

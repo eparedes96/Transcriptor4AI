@@ -39,14 +39,18 @@ def wait_for_pid(pid: int, timeout: int = 30) -> bool:
     """
     logger.info(f"Waiting for process {pid} to exit...")
     start_time = time.time()
+
     while time.time() - start_time < timeout:
         try:
+            # Signal 0 does not send anything but checks access/existence
             os.kill(pid, 0)
         except OSError:
+            # Process doesn't exist or access denied (implies termination)
             return True
         except Exception:
             return True
         time.sleep(0.5)
+
     return False
 
 
@@ -93,15 +97,16 @@ def run_update(
         pid: Process identifier of the caller to synchronize termination.
         expected_sha256: Integrity verification string.
     """
-    # Phase 1: Termination Synchronization
+    # 1. SYNCHRONIZATION: Ensure parent process releases file locks
     if not wait_for_pid(pid):
         logger.error("Timeout waiting for main application to close. Aborting update.")
         sys.exit(1)
 
-    # Phase 2: Cryptographic Verification
+    # 2. INTEGRITY: Verify the payload before touching the filesystem
     if expected_sha256:
         logger.info("Verifying binary integrity...")
         actual_sha256 = calculate_sha256(new_exe)
+
         if actual_sha256.lower() != expected_sha256.lower():
             logger.error("INTEGRITY CRITICAL FAILURE: Checksum mismatch!")
             logger.error(f"Expected: {expected_sha256}")
@@ -109,16 +114,16 @@ def run_update(
             sys.exit(1)
         logger.info("Integrity check passed.")
 
-    # Phase 3: Filesystem Swap
+    # 3. SWAP: Atomic rotation of binaries
     try:
         if not os.path.exists(new_exe):
             logger.error(f"New version not found at: {new_exe}")
             sys.exit(1)
 
-        time.sleep(1)
+        time.sleep(1)  # Extra buffer for OS file handle release
         logger.info(f"Updating {old_exe}...")
 
-        # Rotate backup file
+        # Rotate backup file (clear previous backup if exists)
         backup_exe = old_exe + ".old"
         if os.path.exists(backup_exe):
             try:
@@ -126,19 +131,21 @@ def run_update(
             except OSError:
                 pass
 
-        # Robust rename to handle OS file locks (Antivirus/Indexing)
+        # Robust rename: Current -> Backup
         _retry_rename(old_exe, backup_exe)
 
         try:
+            # Robust rename: New -> Current
             _retry_rename(new_exe, old_exe)
             logger.info("Update applied successfully.")
         except Exception as e:
             logger.error(f"Failed to move new executable: {e}. Rolling back...")
+            # Rollback: Backup -> Current
             if os.path.exists(backup_exe):
                 _retry_rename(backup_exe, old_exe)
             raise
 
-        # Clean rotation artifact
+        # Cleanup: Remove backup artifact
         try:
             if os.path.exists(backup_exe):
                 os.remove(backup_exe)
@@ -149,7 +156,7 @@ def run_update(
         logger.error(f"Critical error during swap: {e}")
         sys.exit(1)
 
-    # Phase 4: Application Revival
+    # 4. REVIVAL: Restart the updated application
     try:
         logger.info(f"Restarting application: {old_exe}")
         if sys.platform == "win32":
@@ -170,7 +177,8 @@ def _retry_rename(src: str, dst: str, max_retries: int = 5) -> None:
     Attempt to rename a file with exponential backoff on failure.
 
     Specifically targets Windows Access Denied (EACCES) errors that occur
-    during the short window after a process terminates.
+    during the short window after a process terminates due to Antivirus
+    or Indexing Service locks.
 
     Args:
         src: Source path.
@@ -226,7 +234,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    # Small delay to ensure the parent process starts closing
+    # Small delay to ensure the parent process starts closing sequence
     time.sleep(0.5)
 
     run_update(args.old, args.new, args.pid, args.sha256)

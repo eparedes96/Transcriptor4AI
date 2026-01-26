@@ -10,7 +10,7 @@ automated background updates or manual browser-based acquisition.
 
 import logging
 import webbrowser
-from typing import Final, Optional
+from typing import Final
 
 import customtkinter as ctk
 

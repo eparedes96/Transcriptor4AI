@@ -11,7 +11,7 @@ file classification to feed the transcription pipeline.
 import logging
 import os
 import re
-from typing import Dict, Iterable, List, Optional, Tuple, TypedDict
+from typing import Iterable, List, Optional, Tuple, TypedDict
 
 from transcriptor4ai.application.pipeline.components.file_filters import (
     compile_patterns,

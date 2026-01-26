@@ -17,13 +17,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 # Components and Services
+from transcriptor4ai.application.pipeline.components.file_filters import determine_target_mode
+from transcriptor4ai.application.pipeline.components.file_writer import append_entry
+from transcriptor4ai.application.pipeline.components.metrics_helper import increment_mode_counters
 from transcriptor4ai.application.pipeline.stages.worker import process_file_task
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
-from transcriptor4ai.domain.ports.cache_port import ICacheRepository
-
-# NOTE: These will be imported from their final locations (file_writer.py / metrics_helper.py)
-# for now, the calls remain in the logic to maintain the orchestration flow.
+from transcriptor4ai.domain import ICacheRepository
 
 # Global logger initialization
 logger = logging.getLogger(__name__)
@@ -99,18 +99,28 @@ def execute_parallel_workers(
                     if cached_entry is not None:
                         content, t_count = cached_entry
 
-                        # DELEGATION: Writing and metrics are handled by external helpers
-                        # These calls will be resolved when helpers are moved to shared/components
-                        _write_cached_content(
-                            content, file_data, locks, output_paths,
-                            processing_depth, process_tests, process_resources
+                        # 1. ROUTING: Determine target destination based on domain policy
+                        target_mode = determine_target_mode(
+                            file_data["file_name"],
+                            processing_depth,
+                            process_tests,
+                            process_resources
                         )
 
+                        if target_mode != "skip":
+                            lock = locks.get(target_mode)
+                            out_path = output_paths.get(target_mode)
+
+                            if lock and out_path:
+                                with lock:
+                                    append_entry(out_path, file_data["rel_path"], content)
+
+                        # 2. METRICS: Update global counters
                         results["processed"] += 1
                         results["cached"] += 1
                         results["total_tokens"] += t_count
 
-                        _increment_mode_counters(
+                        increment_mode_counters(
                             file_data, results, processing_depth,
                             process_tests, process_resources
                         )

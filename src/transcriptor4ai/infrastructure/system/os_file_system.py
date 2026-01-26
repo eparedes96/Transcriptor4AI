@@ -16,7 +16,7 @@ import shutil
 import subprocess
 import zipfile
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any, Dict
 
 from transcriptor4ai.domain.ports.system_port import IFileSystem
 from transcriptor4ai.shared import constants as const
@@ -39,6 +39,55 @@ class FileSystemAdapter(IFileSystem):
     """
     Adapter for OS-level file, directory, and archive operations.
     """
+
+    # --------------------------------------------------------------------------
+    # PATH MANIPULATION & ARTIFACT MAPPING
+    # --------------------------------------------------------------------------
+
+    def get_expected_filenames(self, cfg: dict[str, Any], prefix: str) -> list[str]:
+        """
+        Determine the standard filenames that the pipeline expects to generate
+        based on the provided configuration flags.
+        """
+        files: list[str] = []
+
+        # 1. PROCESS: Map individual categorized artifacts
+        if cfg.get("create_individual_files"):
+            if cfg.get("process_modules"):
+                files.append(f"{prefix}_modules.txt")
+            if cfg.get("process_tests"):
+                files.append(f"{prefix}_tests.txt")
+            if cfg.get("process_resources"):
+                files.append(f"{prefix}_resources.txt")
+            if cfg.get("generate_tree"):
+                files.append(f"{prefix}_tree.txt")
+
+        # 2. PROCESS: Map aggregate artifacts
+        if cfg.get("create_unified_file"):
+            files.append(f"{prefix}_full_context.txt")
+
+        if cfg.get("save_error_log"):
+            files.append(f"{prefix}_errors.txt")
+
+        return files
+
+    def build_staging_paths(
+            self,
+            staging_dir: str,
+            prefix: str,
+            tree_override: Optional[str] = None
+    ) -> dict[str, str]:
+        """
+        Construct absolute filesystem paths for all pipeline staging artifacts.
+        """
+        return {
+            "modules": os.path.join(staging_dir, f"{prefix}_modules.txt"),
+            "tests": os.path.join(staging_dir, f"{prefix}_tests.txt"),
+            "resources": os.path.join(staging_dir, f"{prefix}_resources.txt"),
+            "tree": tree_override or os.path.join(staging_dir, f"{prefix}_tree.txt"),
+            "errors": os.path.join(staging_dir, f"{prefix}_errors.txt"),
+            "unified": os.path.join(staging_dir, f"{prefix}_full_context.txt"),
+        }
 
     # --------------------------------------------------------------------------
     # DIRECTORY RESOLUTION
@@ -115,6 +164,19 @@ class FileSystemAdapter(IFileSystem):
                 existing.append(full)
         return existing
 
+    def file_exists(self, path: str) -> bool:
+        """Verify if a specific path points to an existing file."""
+        return os.path.isfile(path)
+
+    def read_file_content(self, path: str) -> str:
+        """Read the entire content of a file with encoding resilience."""
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+
+    def path_join(self, *args: str) -> str:
+        """Encapsulate OS-specific path concatenation."""
+        return os.path.join(*args)
+
     def safe_mkdir(self, path: str) -> Tuple[bool, Optional[str]]:
         """Attempt to recursively create a directory structure safely."""
         try:
@@ -138,6 +200,83 @@ class FileSystemAdapter(IFileSystem):
         except OSError as e:
             logger.error(f"FileSystem: Failed to delete '{path}': {e}")
             return False
+
+    def move_file(self, src: str, dst: str) -> bool:
+        """
+        Perform an atomic file move operation across the filesystem.
+        """
+        try:
+            if os.path.exists(dst):
+                os.remove(dst)
+            shutil.move(src, dst)
+            return True
+        except OSError as e:
+            logger.error(f"FileSystem: Failed to move '{src}' to '{dst}': {e}")
+            return False
+
+    # --------------------------------------------------------------------------
+    # PIPELINE ARTIFACT ORCHESTRATION
+    # --------------------------------------------------------------------------
+
+    def generate_unified_file(
+        self,
+        output_path: str,
+        base_path: str,
+        tree_path: Optional[str],
+        category_paths: Dict[str, str]
+    ) -> bool:
+        """
+        Stream and concatenate multiple staging files into a single context.
+        """
+        try:
+            with open(output_path, "w", encoding="utf-8") as outfile:
+                # 1. WRITE: Root Header
+                base_name = os.path.basename(base_path)
+                outfile.write(f"PROJECT CONTEXT: {base_name}\n" + "=" * 80 + "\n\n")
+
+                # 2. WRITE: Directory Tree Section
+                if tree_path and os.path.exists(tree_path):
+                    outfile.write("PROJECT STRUCTURE:\n" + "-" * 50 + "\n")
+                    with open(tree_path, "r", encoding="utf-8") as infile:
+                        shutil.copyfileobj(infile, outfile)
+                    outfile.write("\n\n")
+
+                # 3. WRITE: Categorized Content Sections
+                for key in ["modules", "tests", "resources"]:
+                    path = category_paths.get(key)
+                    if path and os.path.exists(path):
+                        with open(path, "r", encoding="utf-8") as infile:
+                            shutil.copyfileobj(infile, outfile)
+                        outfile.write("\n\n")
+
+            return True
+        except OSError as e:
+            logger.error(f"FileSystem: Failed to aggregate unified file: {e}")
+            return False
+
+    def deploy_pipeline_artifacts(
+        self,
+        staging_paths: Dict[str, str],
+        final_dir: str,
+        prefix: str,
+        unified_ok: bool,
+        results_map: Dict[str, str]
+    ) -> None:
+        """
+        Transition processed files from staging area to the final user directory.
+        """
+        # 1. PROCESS: Unified Context deployment
+        if unified_ok:
+            dest_unified = os.path.join(final_dir, f"{prefix}_full_context.txt")
+            if self.move_file(staging_paths["unified"], dest_unified):
+                results_map["unified"] = dest_unified
+
+        # 2. PROCESS: Error log deployment (only if generated in different area)
+        err_staging = staging_paths.get("errors")
+        if err_staging and os.path.exists(err_staging):
+            dest_errors = os.path.join(final_dir, f"{prefix}_errors.txt")
+            if os.path.abspath(err_staging) != os.path.abspath(dest_errors):
+                self.move_file(err_staging, dest_errors)
 
     # --------------------------------------------------------------------------
     # ARCHIVE MANAGEMENT

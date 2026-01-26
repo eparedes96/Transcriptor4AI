@@ -1,97 +1,104 @@
 from __future__ import annotations
 
 """
-Output Orchestration and Formatting.
+Pipeline Output Persistence Component.
 
-Handles the physical persistence of the transcription entries. Manages 
-the lazy-evaluation pipeline for code transformations (minification, 
-masking, and sanitization) to maintain a low memory footprint.
+Responsible for the physical writing and visual formatting of transcription 
+artifacts. It ensures a consistent look-and-feel across all output files by 
+standardizing headers, separators, and atomic entry appending.
 """
 
-from typing import Iterator
+import logging
+from typing import Final
 
-from transcriptor4ai.application.transformation.code_minifier import minify_code_stream
-from transcriptor4ai.application.transformation.privacy_sanitizer import sanitize_text_stream, mask_local_paths_stream
+# Global logger initialization
+logger = logging.getLogger(__name__)
 
-# -----------------------------------------------------------------------------
-# FILE OUTPUT MANAGEMENT
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# VISUAL FORMATTING CONSTANTS
+# ==============================================================================
+
+# Standard separator used to distinguish between different file entries
+_ENTRY_SEPARATOR: Final[str] = "-" * 200
+
+
+# ==============================================================================
+# PUBLIC WRITING API
+# ==============================================================================
 
 def append_entry(
         output_path: str,
         rel_path: str,
-        line_iterator: Iterator[str],
-        extension: str = "",
-        enable_sanitizer: bool = False,
-        mask_user_paths: bool = False,
-        minify_output: bool = False,
+        content: str
 ) -> None:
     """
-    Append a processed file entry to a consolidated text file.
+    Append a processed entry to a consolidated text file with standard formatting.
 
-    Chains multiple transformation generators to the input stream.
-    Transformations are applied on-the-fly as the lines are written,
-    ensuring that large files do not exhaust system memory.
+    This function expects 'content' to be already transformed (sanitized,
+    minified, etc.). It applies the visual block structure required for
+    LLM context clarity.
 
-    Output Format:
-    -------------------- (200 char separator)
-    <relative_path_header>
+    Format:
+    -------------------- (Separator)
+    <relative_path>
     <processed_content>
 
     Args:
-        output_path: Target consolidated file.
-        rel_path: Source file identifier (header).
-        line_iterator: Source content generator.
-        extension: File extension for syntax-aware minification.
-        enable_sanitizer: Redact sensitive keys and network info.
-        mask_user_paths: Anonymize local environment paths.
-        minify_output: Strip non-essential code characters.
+        output_path: Absolute path to the destination .txt file.
+        rel_path: Relative identifier of the source file for the header.
+        content: The final string content to persist.
 
     Raises:
-        OSError: If filesystem write permissions are denied.
+        OSError: If the filesystem denies write access.
     """
-    # 1. Pipeline Assembly (Lazy Transformation Chain)
-    processed_stream = line_iterator
+    # 1. FORMAT: Construct the visual block
+    # We use a leading newline to ensure separation from the previous block
+    entry_block = (
+        f"{_ENTRY_SEPARATOR}\n"
+        f"{rel_path}\n"
+        f"{content}\n"
+    )
 
-    if minify_output:
-        processed_stream = minify_code_stream(processed_stream, extension)
-
-    if enable_sanitizer:
-        processed_stream = sanitize_text_stream(processed_stream)
-
-    if mask_user_paths:
-        processed_stream = mask_local_paths_stream(processed_stream)
-
-    # 2. Synchronous Disk Persistence
-    separator = "-" * 200
-
+    # 2. PERSIST: Atomic-like append operation
     try:
         with open(output_path, "a", encoding="utf-8") as out:
-            out.write(f"{separator}\n")
-            out.write(f"{rel_path}\n")
-
-            # Iterate through the chained generator and write directly
-            for processed_line in processed_stream:
-                out.write(processed_line)
-
-            # Ensure separation between entries
-            out.write("\n")
+            out.write(entry_block)
 
     except OSError as e:
-        # Propagate error to worker/manager level
-        raise e
+        logger.error(f"FileWriter: Failed to append entry for {rel_path}: {e}")
+        raise
 
 
 def initialize_output_file(file_path: str, header: str) -> None:
     """
-    Perform a clean initialization of an output file.
-
-    Creates or overwrites the file with a descriptive header to
-    set the context for the transcription content.
+    Perform a clean initialization of an output file with a section header.
 
     Args:
-        file_path: Target file path.
-        header: Introductory text for the file.
+        file_path: Destination file path (will be overwritten).
+        header: Descriptive text to identify the category (e.g., 'TESTS:').
     """
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(f"{header}\n")
+    try:
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(f"{header}\n")
+
+    except OSError as e:
+        logger.error(f"FileWriter: Failed to initialize {file_path}: {e}")
+        raise
+
+
+# ==============================================================================
+# CACHE-SPECIFIC WRITERS
+# ==============================================================================
+
+def append_cache_entry(
+        output_path: str,
+        rel_path: str,
+        content: str
+) -> None:
+    """
+    Technical wrapper for writing cache hits.
+
+    Maintains semantic parity with the normal 'append_entry' but allows
+    future differentiation in formatting if cache hits need specific markers.
+    """
+    append_entry(output_path, rel_path, content)

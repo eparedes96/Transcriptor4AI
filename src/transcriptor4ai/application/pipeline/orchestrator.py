@@ -3,10 +3,12 @@ from __future__ import annotations
 """
 Core Pipeline Orchestrator.
 
-Acts as the central Facade for the transcription engine. It coordinates the 
-entire workflow lifecycle: configuration validation, environment setup, 
-parallel task execution (scanning and transcription), and final assembly 
-of results into a unified AI context.
+Acts as the central coordinator for the transcription engine. It implements 
+the system's primary use case by sequencing configuration validation, 
+environment setup, parallel task execution, and final context assembly.
+
+This orchestrator is infrastructure-agnostic, depending strictly on Domain 
+Ports for I/O and Persistence.
 """
 
 import logging
@@ -14,21 +16,32 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
-from transcriptor4ai.application.analysis.tree_generator import generate_directory_tree
+# Domain Ports and Entities
+from transcriptor4ai.domain.entities.pipeline_results import PipelineResult, create_error_result
+from transcriptor4ai.domain.ports.cache_port import ICacheRepository
+from transcriptor4ai.domain.ports.system_port import IFileSystem
+
+# Application Stages
 from transcriptor4ai.application.pipeline.stages.assembler import assemble_and_finalize
 from transcriptor4ai.application.pipeline.stages.setup import prepare_environment
 from transcriptor4ai.application.pipeline.stages.transcriber import transcribe_code
 from transcriptor4ai.application.pipeline.stages.validator import validate_config
-from transcriptor4ai.domain.entities.pipeline_results import PipelineResult, create_error_result
 
+# Application Services
+from transcriptor4ai.application.analysis.tree_generator import generate_directory_tree
+from transcriptor4ai.application.services.project_scanner import ProjectScannerService
+
+# Global logger initialization
 logger = logging.getLogger(__name__)
 
 
-# -----------------------------------------------------------------------------
+# ==============================================================================
 # PIPELINE ORCHESTRATION
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def run_pipeline(
+        fs: IFileSystem,
+        cache: ICacheRepository,
         config: Optional[Dict[str, Any]],
         *,
         overwrite: bool = False,
@@ -39,49 +52,51 @@ def run_pipeline(
     """
     Execute the full project transcription pipeline.
 
-    Orchestrates specialized stages in parallel using a ThreadPoolExecutor
-    to optimize I/O and CPU-bound operations. Aggregates results into a
-    standardized domain model.
-
     Args:
-        config: Raw configuration parameters.
-        overwrite: Permission to overwrite existing files at destination.
-        dry_run: Simulation mode (calculates tokens, skips file deployment).
-        tree_output_path: Optional path override for the structure tree.
-        cancellation_event: Optional event to signal process termination.
+        fs: Concrete implementation of the FileSystem port.
+        cache: Concrete implementation of the Cache repository port.
+        config: Raw configuration parameters (untrusted).
+        overwrite: Permission to overwrite existing files.
+        dry_run: Simulation mode flag.
+        tree_output_path: Optional path override for the tree file.
+        cancellation_event: Signal to abort long-running tasks.
 
     Returns:
-        PipelineResult: Final execution result containing metrics and summary.
+        PipelineResult: Standardized result object with metrics and artifact info.
     """
-    logger.info("Pipeline execution sequence started.")
+    logger.info("Pipeline: Execution sequence initiated.")
 
-    # 1. Validation Stage: Schema enforcement
+    # 1. VALIDATION: Sanitize and normalize input configuration
+    # Note: validator logic resides in application but uses domain factories
     cfg, warnings = validate_config(config, strict=False)
 
-    if warnings:
-        for warning in warnings:
-            logger.warning(f"Configuration Constraint: {warning}")
+    for warning in warnings:
+        logger.warning(f"Pipeline: Configuration constraint -> {warning}")
 
-    # 2. Setup Stage: Environment initialization and safety checks
-    error_result, env_context = prepare_environment(cfg, overwrite, dry_run, tree_output_path)
+    # 2. SETUP: Prepare filesystem environment and detect collisions
+    error_result, env_context = prepare_environment(fs, cfg, overwrite, dry_run, tree_output_path)
 
     if error_result:
+        # Abort if environment is invalid or naming collisions occur
         return error_result
 
-    # Extraction of environment parameters for parallel execution
+    # Extract execution parameters from the resolved context
     paths = env_context["paths"]
     base_path = env_context["base_path"]
     final_output_path = env_context["final_output_path"]
     temp_dir_obj = env_context["temp_dir_obj"]
 
-    # 3. Execution Stage: Parallel processing of Tree and Transcription
+    # 3. SERVICES: Initialize required application services
+    scanner_service = ProjectScannerService(fs)
+
+    # 4. EXECUTION: Run heavy I/O and Analysis tasks in parallel
+    # max_workers=2 balances Tree Generation (CPU/IO) and Transcription (IO)
     tree_lines: List[str] = []
     trans_res: Dict[str, Any] = {}
 
-    # Parallelization of I/O heavy tasks
     with ThreadPoolExecutor(max_workers=2, thread_name_prefix="PipelineExecutor") as executor:
 
-        # Sub-Task: Structural Tree Generation (Static Analysis)
+        # 4.1 TASK: Structural Tree Generation (Static Analysis)
         future_tree = executor.submit(
             generate_directory_tree,
             input_path=base_path,
@@ -97,9 +112,12 @@ def run_pipeline(
             save_path=paths["tree"] if cfg["generate_tree"] else "",
         )
 
-        # Sub-Task: Sequential Transcription (Transformation Pipeline)
+        # 4.2 TASK: Categorized Transcription (Parallel File Processing)
         future_trans = executor.submit(
             transcribe_code,
+            fs=fs,
+            scanner_service=scanner_service,
+            cache_repo=cache,
             input_path=base_path,
             modules_output_path=paths["modules"],
             tests_output_path=paths["tests"],
@@ -119,18 +137,21 @@ def run_pipeline(
             cancellation_event=cancellation_event,
         )
 
-        # Synchronize and collect task results
+        # 5. SYNCHRONIZATION: Collect results from parallel tasks
         if cfg["generate_tree"]:
             tree_lines = future_tree.result()
 
         trans_res = future_trans.result()
 
-    # 4. Error Management Phase
+    # 6. QUALITY CHECK: Verify transcription success
     if not trans_res.get("ok"):
         if temp_dir_obj:
             temp_dir_obj.cleanup()
-        err_msg = trans_res.get('error', 'Critical transcription failure.')
+
+        err_msg = trans_res.get('error', 'Unknown transcription failure.')
+        logger.error(f"Pipeline: Aborted due to engine failure -> {err_msg}")
         return create_error_result(f"Pipeline error: {err_msg}", cfg, base_path, final_output_path)
 
-    # 5. Finalization Stage: Assembly and Deployment
-    return assemble_and_finalize(cfg, trans_res, tree_lines, env_context, dry_run)
+    # 7. FINALIZATION: Assemble artifacts, count tokens and deploy
+    # All I/O operations are delegated to the 'fs' port within this stage
+    return assemble_and_finalize(fs, cfg, trans_res, tree_lines, env_context, dry_run)

@@ -84,7 +84,7 @@ def create_error_result(
         base_path: str,
         final_output_path: str = "",
         existing_files: Optional[List[str]] = None,
-        summary_extra: Optional[Dict[str, Any]] = None
+        summary_extra: Optional[Dict[str, Any]] = None,
 ) -> PipelineResult:
     """
     Create a failed pipeline result instance.
@@ -100,6 +100,14 @@ def create_error_result(
     Returns:
         PipelineResult: An immutable error result object.
     """
+    # 1. SETUP: Construct basic summary for error state
+    summary = {
+        "existing_files": list(existing_files) if existing_files else [],
+        "status": "failed",
+    }
+    if summary_extra:
+        summary.update(summary_extra)
+
     return PipelineResult(
         ok=False,
         error=error,
@@ -118,22 +126,25 @@ def create_error_result(
         minify_output=cfg.get("minify_output", False),
         final_output_path=final_output_path,
         existing_files=existing_files or [],
-        summary=summary_extra or {},
+        summary=summary,
     )
+
 
 def create_success_result(
         cfg: Dict[str, Any],
         base_path: str,
         final_output_path: str,
         existing_files: List[str],
-        trans_res: Optional[Dict[str, Any]] = None,
-        tree_lines: Optional[List[str]] = None,
+        trans_res: Dict[str, Any],
+        tree_lines: List[str],
         tree_path: str = "",
         token_count: int = 0,
-        summary_extra: Optional[Dict[str, Any]] = None
+        generated_files: Optional[Dict[str, str]] = None,
+        dry_run: bool = False,
+        summary_extra: Optional[Dict[str, Any]] = None,
 ) -> PipelineResult:
     """
-    Create a successful pipeline result instance.
+    Create a successful pipeline result instance with automated metrics generation.
 
     Args:
         cfg: Final configuration used during execution.
@@ -141,14 +152,44 @@ def create_success_result(
         final_output_path: Absolute artifact directory.
         existing_files: Collision artifacts (if any were permitted).
         trans_res: Metadata from worker execution.
-        tree_lines: Generated ASCII tree content.
+        tree_lines: visual lines representing the project structure.
         tree_path: Path to the structural tree file.
         token_count: Final token count metrics.
-        summary_extra: Final execution metrics.
+        generated_files: Map of artifact types to final paths.
+        dry_run: Whether the execution was a simulation.
+        summary_extra: Additional manual metrics.
 
     Returns:
         PipelineResult: An immutable success result object.
     """
+    # 1. PROCESS: Aggregate counters and performance metrics
+    counters = trans_res.get("counters", {})
+
+    summary = {
+        "final_output_path": final_output_path,
+        "processed": int(counters.get("processed", 0)),
+        "skipped": int(counters.get("skipped", 0)),
+        "errors": int(counters.get("errors", 0)),
+        "token_count": token_count,
+        "generated_files": generated_files or {},
+        "tree": {
+            "generated": bool(cfg.get("generate_tree")),
+            "path": tree_path if (cfg.get("create_individual_files") and not dry_run) else None,
+            "lines": len(tree_lines),
+        },
+        "existing_files_before_run": list(existing_files),
+        "dry_run": dry_run,
+        "V2.1_performance": {
+            "sanitizer": bool(cfg.get("enable_sanitizer")),
+            "minifier": bool(cfg.get("minify_output")),
+            "cache_hits": int(counters.get("cached", 0))
+        }
+    }
+
+    if summary_extra:
+        summary.update(summary_extra)
+
+    # 2. EMIT: Construct the immutable domain object
     return PipelineResult(
         ok=True,
         error="",
@@ -167,9 +208,9 @@ def create_success_result(
         minify_output=cfg.get("minify_output", False),
         final_output_path=final_output_path,
         existing_files=existing_files,
-        transcription_res=trans_res or {},
-        tree_lines=tree_lines or [],
+        transcription_res=trans_res,
+        tree_lines=tree_lines,
         tree_path=tree_path,
         token_count=token_count,
-        summary=summary_extra or {},
+        summary=summary,
     )

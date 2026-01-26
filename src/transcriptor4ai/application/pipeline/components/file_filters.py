@@ -5,63 +5,47 @@ File Filtering and Classification Engine.
 
 Implements regex-based inclusion/exclusion logic and provides heuristic 
 classification to distinguish between source modules, test suites, and 
-project resources. Supports integration with .gitignore glob patterns.
+project resources. Centralizes the domain policies for file categorization 
+to ensure consistency across scanning and transcription phases.
 """
 
 import fnmatch
 import os
 import re
-from typing import List, Set
+from typing import Final, List, Set
 
-# -----------------------------------------------------------------------------
-# REGEX AND FILENAME CONSTANTS
-# -----------------------------------------------------------------------------
+# ==============================================================================
+# CLASSIFICATION CONSTANTS
+# ==============================================================================
 
-_RESOURCE_EXTENSIONS: Set[str] = {
+_RESOURCE_EXTENSIONS: Final[Set[str]] = {
     ".md", ".markdown", ".rst", ".txt",
     ".json", ".yaml", ".yml", ".toml", ".xml", ".csv", ".ini", ".cfg", ".conf", ".properties",
     ".dockerignore", ".editorconfig", ".css", ".env"
 }
 
-_RESOURCE_FILENAMES: Set[str] = {
+_RESOURCE_FILENAMES: Final[Set[str]] = {
     "Dockerfile", "Makefile", "LICENSE", "CHANGELOG", "README", "Gemfile", "Procfile",
     ".dockerignore", ".editorconfig", ".env", ".gitignore"
 }
 
-# -----------------------------------------------------------------------------
-# CONFIGURATION DEFAULTS
-# -----------------------------------------------------------------------------
+
+# ==============================================================================
+# PIPELINE CONFIGURATION DEFAULTS
+# ==============================================================================
 
 def default_extensions() -> List[str]:
-    """
-    Get the default list of targeted file extensions.
-
-    Returns:
-        List[str]: List containing standard source file extensions.
-    """
+    """Get the default list of targeted file extensions."""
     return [".py"]
 
 
 def default_include_patterns() -> List[str]:
-    """
-    Get the default inclusion regex list.
-
-    Returns:
-        List[str]: List of regex strings that match everything by default.
-    """
+    """Get the default inclusion regex list (match all)."""
     return [".*"]
 
 
 def default_exclude_patterns() -> List[str]:
-    """
-    Get the system-level exclusion patterns.
-
-    Identifies common development noise, compiled artifacts, and
-    environment-specific directories that should be skipped by default.
-
-    Returns:
-        List[str]: List of regex patterns for common exclusions.
-    """
+    """Get the system-level exclusion patterns for noise reduction."""
     return [
         r"^__init__\.py$",
         r".*\.pyc$",
@@ -69,22 +53,15 @@ def default_exclude_patterns() -> List[str]:
         r"^\.",
     ]
 
-# -----------------------------------------------------------------------------
+
+# ==============================================================================
 # PATTERN COMPILATION AND MATCHING
-# -----------------------------------------------------------------------------
+# ==============================================================================
 
 def compile_patterns(patterns: List[str]) -> List[re.Pattern]:
     """
     Transform raw regex strings into compiled Pattern objects.
-
-    Provides a fail-safe mechanism that discards malformed regex strings
-    to prevent pipeline crashes during execution.
-
-    Args:
-        patterns: List of raw regex strings.
-
-    Returns:
-        List[re.Pattern]: Compiled regex objects.
+    Discards malformed regex strings to prevent execution crashes.
     """
     compiled: List[re.Pattern] = []
     for p in patterns:
@@ -96,51 +73,60 @@ def compile_patterns(patterns: List[str]) -> List[re.Pattern]:
 
 
 def matches_any(name: str, compiled_patterns: List[re.Pattern]) -> bool:
-    """
-    Verify if a string matches at least one compiled regex pattern.
-
-    Args:
-        name: Filename or directory name to evaluate.
-        compiled_patterns: Pre-compiled regex objects.
-
-    Returns:
-        bool: True if any match is found, False otherwise.
-    """
+    """Verify if a string matches at least one compiled regex pattern."""
     return any(rx.search(name) for rx in compiled_patterns)
 
 
 def matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
-    """
-    Verify if a string satisfies the inclusion whitelist.
-
-    Args:
-        name: Filename to evaluate.
-        include_patterns: Compiled inclusion regex objects.
-
-    Returns:
-        bool: True if matched, False if the list is empty or no match occurs.
-    """
+    """Verify if a string satisfies the inclusion whitelist."""
     if not include_patterns:
         return False
     return any(rx.search(name) for rx in include_patterns)
 
-# -----------------------------------------------------------------------------
-# FILE CLASSIFICATION LOGIC
-# -----------------------------------------------------------------------------
 
-def is_test(file_name: str) -> bool:
+# ==============================================================================
+# DOMAIN POLICY: FILE CLASSIFICATION
+# ==============================================================================
+
+def determine_target_mode(
+    file_name: str,
+    depth: str,
+    process_tests: bool,
+    process_resources: bool
+) -> str:
     """
-    Classify a file as a test suite based on polyglot naming conventions.
-
-    Supports Python (test_*), Java/C# (Test*), JS/TS (*.spec), and Go
-    patterns across common development languages.
+    Apply domain policies to categorize a file for the transcription pipeline.
 
     Args:
-        file_name: Target filename.
+        file_name: Base name of the file to classify.
+        depth: Current processing depth ('full', 'skeleton', 'tree_only').
+        process_tests: Whether tests are enabled in config.
+        process_resources: Whether non-code resources are enabled.
 
     Returns:
-        bool: True if the filename matches common test patterns.
+        str: Target category ('module', 'test', 'resource', 'skip').
     """
+    # 1. DEPTH CHECK: If depth is tree-only, skip all content processing
+    if depth == "tree_only":
+        return "skip"
+
+    # 2. TYPE EVALUATION: Identify the nature of the file
+    file_is_test = is_test(file_name)
+    file_is_resource = is_resource_file(file_name)
+
+    # 3. ROUTING: Map file type to destination mode based on user flags
+    if file_is_test:
+        return "test" if process_tests else "skip"
+
+    if file_is_resource:
+        return "resource" if process_resources else "module"
+
+    # Default fallback for logic modules
+    return "module"
+
+
+def is_test(file_name: str) -> bool:
+    """Classify a file as a test suite based on polyglot naming conventions."""
     pattern = (
         r"^(test_.*|.*_test|Test.*|.*Test|.*Tests|.*TestCase|.*\.spec|.*\.test|.*\.e2e|.*\.cy)"
         r"\.(py|js|ts|jsx|tsx|java|kt|go|rs|cs|cpp|c|h|hpp|swift|php)$"
@@ -149,40 +135,20 @@ def is_test(file_name: str) -> bool:
 
 
 def is_resource_file(file_name: str) -> bool:
-    """
-    Classify a file as a non-code project resource.
-
-    Evaluates both explicit filenames (like Dockerfile) and specific
-    extensions commonly used for documentation and configuration.
-
-    Args:
-        file_name: Target filename.
-
-    Returns:
-        bool: True if the file is identified as a resource.
-    """
-    # High-priority check for explicit filenames
+    """Classify a file as a non-code project resource (Docs/Config/Data)."""
     if file_name in _RESOURCE_FILENAMES:
         return True
 
-    # Extension-based classification
     _, ext = os.path.splitext(file_name)
     return ext.lower() in _RESOURCE_EXTENSIONS
 
-# -----------------------------------------------------------------------------
-# GITIGNORE INTEGRATION
-# -----------------------------------------------------------------------------
+
+# ==============================================================================
+# INFRASTRUCTURE INTEGRATION: GITIGNORE
+# ==============================================================================
 
 def load_gitignore_patterns(root_path: str) -> List[str]:
-    """
-    Parse a .gitignore file and translate its glob rules into Python regexes.
-
-    Args:
-        root_path: Parent directory containing the .gitignore file.
-
-    Returns:
-        List[str]: List of equivalent regex strings.
-    """
+    """Parse .gitignore and translate glob rules into Python regexes."""
     gitignore_path = os.path.join(root_path, ".gitignore")
     if not os.path.exists(gitignore_path):
         return []
@@ -198,22 +164,14 @@ def load_gitignore_patterns(root_path: str) -> List[str]:
                 regex = _gitignore_to_regex(line)
                 if regex:
                     regex_patterns.append(regex)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Filters: Gitignore parse error in {root_path}: {e}")
 
     return regex_patterns
 
 
 def _gitignore_to_regex(glob_pattern: str) -> str:
-    """
-    Helper to translate gitignore/shell glob syntax to Python regex.
-
-    Args:
-        glob_pattern: Raw glob pattern from .gitignore.
-
-    Returns:
-        str: Valid Python regex string.
-    """
+    """Helper to translate gitignore/shell glob syntax to Python regex."""
     if glob_pattern.endswith("/"):
         glob_pattern = glob_pattern.rstrip("/")
 

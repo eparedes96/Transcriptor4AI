@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 """
-Parallel Transcription Orchestrator.
+Parallel Transcription Orchestrator Stage.
 
-Manages the multi-threaded transcription lifecycle. It coordinates
-initialization, concurrent task dispatching via the Scanner service,
+Manages the multi-threaded transcription lifecycle. Coordinates environment 
+initialization, concurrent task dispatching via the Scanner service, 
 thread-safe writing, and final error aggregation.
-Integrates CacheService to skip processing of unchanged files.
-Migration to 'processing_depth' strategy for AST-based 
-skeletonization routing.
+
+Features:
+- Port-based Cache Integration to skip unchanged files.
+- Thread-safe output categorization (Modules/Tests/Resources).
+- AST-based Skeleton Mode routing for Python files.
 """
 
 import logging
@@ -17,54 +19,60 @@ import threading
 from typing import Any, Dict, List, Optional
 
 from transcriptor4ai.application.pipeline.components.file_filters import default_extensions
-from transcriptor4ai.application.pipeline.stages.transcriber_context import initialize_env, generate_config_hash
+from transcriptor4ai.application.pipeline.stages.transcriber_context import (
+    generate_config_hash,
+    initialize_env,
+)
 from transcriptor4ai.application.pipeline.stages.transcriber_engine import execute_parallel_workers
-from transcriptor4ai.application.services.project_scanner import prepare_filtering_rules, finalize_error_reporting
-from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import CacheService
+from transcriptor4ai.application.services.project_scanner import ProjectScannerService
+from transcriptor4ai.domain.ports.cache_port import ICacheRepository
+from transcriptor4ai.domain.ports.system_port import IFileSystem
 
+# Global logger initialization
 logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
-# PUBLIC API
+# STAGE: PARALLEL TRANSCRIBER
 # ==============================================================================
 
 def transcribe_code(
-        input_path: str,
-        modules_output_path: str,
-        tests_output_path: str,
-        resources_output_path: str,
-        error_output_path: str,
-        processing_depth: str = "full",
-        process_tests: bool = True,
-        process_resources: bool = False,
-        extensions: Optional[List[str]] = None,
-        include_patterns: Optional[List[str]] = None,
-        exclude_patterns: Optional[List[str]] = None,
-        respect_gitignore: bool = True,
-        save_error_log: bool = True,
-        enable_sanitizer: bool = True,
-        mask_user_paths: bool = True,
-        minify_output: bool = False,
-        cancellation_event: Optional[threading.Event] = None
+    fs: IFileSystem,
+    scanner_service: ProjectScannerService,
+    cache_repo: ICacheRepository,
+    input_path: str,
+    modules_output_path: str,
+    tests_output_path: str,
+    resources_output_path: str,
+    error_output_path: str,
+    processing_depth: str = "full",
+    process_tests: bool = True,
+    process_resources: bool = False,
+    extensions: Optional[List[str]] = None,
+    include_patterns: Optional[List[str]] = None,
+    exclude_patterns: Optional[List[str]] = None,
+    respect_gitignore: bool = True,
+    save_error_log: bool = True,
+    enable_sanitizer: bool = True,
+    mask_user_paths: bool = True,
+    minify_output: bool = False,
+    cancellation_event: Optional[threading.Event] = None,
 ) -> Dict[str, Any]:
     """
     Execute parallel transcription of project files into categorized text files.
 
-    Acts as the high-level orchestrator. It prepares the environment,
-    delegates file discovery to the Scanner service, manages worker threads,
-    and handles the caching strategy to optimize re-runs.
-
     Args:
+        scanner_service: Service responsible for discovery and filtering.
+        cache_repo: Implementation of the ICacheRepository port.
         input_path: Source directory to scan.
         modules_output_path: Target path for source logic transcription.
         tests_output_path: Target path for test suites transcription.
-        resources_output_path: Target path for configuration/documentation files.
+        resources_output_path: Target path for resource files.
         error_output_path: Target path for the operation error log.
         processing_depth: Content depth strategy ("full", "skeleton", "tree_only").
         process_tests: Enable test file processing.
         process_resources: Enable resource file processing.
-        extensions: Filter by specific file extensions.
+        extensions: Allowed file extensions.
         include_patterns: Whitelist regex patterns.
         exclude_patterns: Blacklist regex patterns.
         respect_gitignore: Enable automatic .gitignore parsing.
@@ -75,21 +83,23 @@ def transcribe_code(
         cancellation_event: Optional event to signal process termination.
 
     Returns:
-        Dict[str, Any]: Execution summary containing status, generated paths, and counters.
+        Dict[str, Any]: Summary containing status, paths, and execution counters.
     """
-    logger.info(f"Initiating parallel transcription in: {input_path}")
+    logger.info(f"Transcriber: Initiating parallel execution in: {input_path}")
 
-    # 1. Delegate filtering rule preparation to Scanner
-    include_rx, exclude_rx = prepare_filtering_rules(
+    # 1. SETUP: Prepare filtering context via the Scanner service
+    include_rx, exclude_rx = scanner_service.prepare_filtering_rules(
         input_path, include_patterns, exclude_patterns, respect_gitignore
     )
 
-    # 2. Setup output files and thread synchronization locks
+    # 2. CONTEXT: Initialize output headers and thread synchronization locks
     locks, output_paths = initialize_env(
+        fs,
         modules_output_path, tests_output_path, resources_output_path,
         error_output_path, processing_depth, process_tests, process_resources
     )
 
+    # Accumulator for metrics and errors
     results: Dict[str, Any] = {
         "processed": 0,
         "cached": 0,
@@ -101,35 +111,35 @@ def transcribe_code(
         "errors": []
     }
 
-    # Initialize Cache Service and compute config hash
-    cache_service = CacheService()
+    # 3. CACHE: Fingerprint the current configuration for hit detection
     config_hash = generate_config_hash(
         processing_depth, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output
     )
 
+    # 4. EXECUTION: Dispatch parallel tasks through the engine
     execute_parallel_workers(
-        input_path, extensions or default_extensions(), include_rx, exclude_rx,
-        processing_depth, process_tests, process_resources,
+        scanner_service, input_path, extensions or default_extensions(),
+        include_rx, exclude_rx, processing_depth, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output,
         locks, output_paths, results,
-        cache_service, config_hash,
+        cache_repo, config_hash,
         cancellation_event
     )
 
+    # 5. VALIDATION: Check for early termination signals
     if cancellation_event and cancellation_event.is_set():
-        logger.warning("Parallel Transcription aborted by user signal.")
+        logger.warning("Transcriber: Operation aborted by user signal.")
         return {"ok": False, "error": "Operation cancelled by user."}
 
-    # 4. Delegate final reporting to Scanner
-    actual_error_path = finalize_error_reporting(
+    # 6. REPORTING: Persist collected errors via the Scanner service
+    actual_error_path = scanner_service.finalize_error_reporting(
         save_error_log, error_output_path, results["errors"]
     )
 
     logger.info(
-        f"Parallel Transcription finalized. "
-        f"Processed: {results['processed']} (Cached: {results['cached']}). "
-        f"Errors: {len(results['errors'])}"
+        f"Transcriber: Finalized. Processed: {results['processed']} "
+        f"(Cached: {results['cached']}). Errors: {len(results['errors'])}"
     )
 
     return {

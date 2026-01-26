@@ -3,9 +3,9 @@ from __future__ import annotations
 """
 Configuration Domain Entities.
 
-Defines the default data structures and schemas for the application state
-and session configuration. This module is pure data definition and does
-not handle I/O or persistence.
+Defines the core data structures and integrity rules for the application 
+state and session configuration. This module implements the "Domain Model" 
+pattern, centralizing business logic validation.
 """
 
 import os
@@ -19,8 +19,9 @@ from transcriptor4ai.shared import constants as const
 DEFAULT_OUTPUT_SUBDIR = "transcript"
 
 # ==============================================================================
-# CONFIGURATION FACTORIES
+# CONFIGURATION FACTORIES (PUBLIC API)
 # ==============================================================================
+
 def get_default_config(base_path: str) -> Dict[str, Any]:
     """
     Generate the default execution configuration for a transcription session.
@@ -42,8 +43,8 @@ def get_default_config(base_path: str) -> Dict[str, Any]:
         "output_prefix": const.DEFAULT_OUTPUT_PREFIX,
 
         # Scope Settings (v2.1+ Schema)
-        "process_modules": True,  # Kept for backward compatibility
-        "processing_depth": "full",  # Options: "full", "skeleton", "tree_only"
+        "process_modules": True,  # Legacy toggle
+        "processing_depth": "full",  # Strategy: "full", "skeleton", "tree_only"
         "process_tests": True,
         "process_resources": True,
 
@@ -79,6 +80,7 @@ def get_default_config(base_path: str) -> Dict[str, Any]:
         "save_error_log": False
     }
 
+
 def get_default_app_state(base_path: str) -> Dict[str, Any]:
     """
     Generate the complete root application state structure.
@@ -105,3 +107,31 @@ def get_default_app_state(base_path: str) -> Dict[str, Any]:
         "saved_profiles": {},
         "custom_stacks": {}
     }
+
+
+# ==============================================================================
+# DOMAIN LOGIC: INTEGRITY RULES
+# ==============================================================================
+
+def apply_config_integrity(cfg: Dict[str, Any]) -> None:
+    """
+    Enforce business rules to ensure logical consistency within the config.
+
+    This function modifies the dictionary in-place to prevent invalid
+    combinations of processing flags.
+
+    Rules:
+    1. If source logic (modules) is disabled, depth must be 'tree_only'.
+    2. If depth is 'tree_only', the modules flag must be False.
+    """
+    # 1. PROCESS: Evaluate module targeting against processing depth
+    process_modules = cfg.get("process_modules", True)
+    depth = cfg.get("processing_depth", "full")
+
+    # Rule A: modules=False forces depth='tree_only'
+    if not process_modules and depth != "tree_only":
+        cfg["processing_depth"] = "tree_only"
+
+    # Rule B: depth='tree_only' forces modules=False
+    if depth == "tree_only":
+        cfg["process_modules"] = False

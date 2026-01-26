@@ -104,7 +104,7 @@ class PricingController:
             preserve_selection: Optional model ID to maintain if available.
         """
         # 1. RETRIEVE: Get current catalog from the Model Registry port
-        discovered = self.main.registry.get_available_models()
+        discovered = self.main.get_model_registry().get_available_models()
 
         # 2. FILTER: Extract models belonging to the target provider
         models: List[str] = sorted([

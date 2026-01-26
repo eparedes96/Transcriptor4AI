@@ -167,6 +167,10 @@ class FileSystemAdapter(IFileSystem):
         """Verify if a specific path points to an existing file."""
         return os.path.isfile(path)
 
+    def directory_exists(self, path: str) -> bool:
+        """Verify if a specific path points to an existing directory."""
+        return os.path.isdir(path)
+
     def read_file_content(self, path: str) -> str:
         """Read the entire content of a file with encoding resilience."""
         with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -254,12 +258,12 @@ class FileSystemAdapter(IFileSystem):
             return False
 
     def deploy_pipeline_artifacts(
-        self,
-        staging_paths: Dict[str, str],
-        final_dir: str,
-        prefix: str,
-        unified_ok: bool,
-        results_map: Dict[str, str]
+            self,
+            staging_paths: Dict[str, str],
+            final_dir: str,
+            prefix: str,
+            unified_ok: bool,
+            results_map: Dict[str, str]
     ) -> None:
         """
         Transition processed files from staging area to the final user directory.
@@ -267,10 +271,16 @@ class FileSystemAdapter(IFileSystem):
         # 1. PROCESS: Unified Context deployment
         if unified_ok:
             dest_unified = os.path.join(final_dir, f"{prefix}_full_context.txt")
-            if self.move_file(staging_paths["unified"], dest_unified):
+            src_unified = staging_paths["unified"]
+
+            if os.path.abspath(src_unified) != os.path.abspath(dest_unified):
+                if self.move_file(src_unified, dest_unified):
+                    results_map["unified"] = dest_unified
+            else:
+                # File is already at destination (common when staging_dir == final_dir)
                 results_map["unified"] = dest_unified
 
-        # 2. PROCESS: Error log deployment (only if generated in different area)
+        # 2. PROCESS: Error log deployment
         err_staging = staging_paths.get("errors")
         if err_staging and os.path.exists(err_staging):
             dest_errors = os.path.join(final_dir, f"{prefix}_errors.txt")

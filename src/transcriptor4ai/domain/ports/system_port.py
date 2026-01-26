@@ -49,6 +49,11 @@ class IFileSystem(ABC):
         pass
 
     @abstractmethod
+    def directory_exists(self, path: str) -> bool:
+        """Check if a path exists and is a directory."""
+        pass
+
+    @abstractmethod
     def unpack_executable_from_zip(self, zip_path: str, extract_to: str) -> Optional[str]:
         """Extract the application binary from a compressed update."""
         pass

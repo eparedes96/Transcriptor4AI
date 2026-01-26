@@ -17,7 +17,7 @@ import threading
 from typing import Any, Dict, Optional
 
 from transcriptor4ai.domain.ports.model_port import IModelRegistry
-from transcriptor4ai.infrastructure import network
+from transcriptor4ai.infrastructure.network.pricing_api_client import PricingApiClient
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 from transcriptor4ai.shared import constants as const
 
@@ -106,7 +106,8 @@ class ModelRegistryRepository(IModelRegistry):
         logger.debug("Registry: Starting remote discovery cycle...")
 
         # Depends on the Network Adapter
-        raw_data = network.fetch_external_model_data(const.MODEL_DATA_URL)
+        client = PricingApiClient()
+        raw_data = client.fetch_external_model_data(const.MODEL_DATA_URL)
 
         if not raw_data:
             return False

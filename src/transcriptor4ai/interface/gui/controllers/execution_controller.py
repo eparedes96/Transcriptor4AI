@@ -59,7 +59,7 @@ class ExecutionController:
         fs = self.main.get_filesystem()
         input_path: str = self.main.config.get("input_path", "")
 
-        if not fs.file_exists(input_path):
+        if not fs.directory_exists(input_path):
             mb.showerror(
                 i18n.t("gui.dialogs.error_title"),
                 i18n.t("gui.dialogs.invalid_input")

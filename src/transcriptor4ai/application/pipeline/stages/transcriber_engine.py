@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from transcriptor4ai.application import PrivacySanitizerService
-
 """
 Transcription Execution Engine.
 
@@ -22,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from transcriptor4ai.application.pipeline.components.file_filters import determine_target_mode
 from transcriptor4ai.application.pipeline.components.file_writer import append_entry
 from transcriptor4ai.application.pipeline.components.metrics_helper import increment_mode_counters
+from transcriptor4ai.application.transformation.privacy_sanitizer import PrivacySanitizerService
 from transcriptor4ai.application.pipeline.stages.worker import process_file_task
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError

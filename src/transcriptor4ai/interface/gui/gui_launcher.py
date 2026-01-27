@@ -27,6 +27,7 @@ from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConf
 from transcriptor4ai.infrastructure.persistence.model_registry_repo import ModelRegistryRepository
 from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
+from transcriptor4ai.infrastructure.system.user_context_adapter import UserContextAdapter
 from transcriptor4ai.infrastructure.network.github_release_client import GithubReleaseClient
 
 # Application Services
@@ -82,6 +83,7 @@ def main() -> None:
     config_repo = JsonConfigRepository(fs_adapter)
     cache_repo = SqliteCacheRepository(fs_adapter)
     model_registry = ModelRegistryRepository(fs_adapter)
+    user_adapter = UserContextAdapter()
     network_client = GithubReleaseClient()
 
     # --- PHASE 3: PERSISTENT STATE RECOVERY ---
@@ -141,7 +143,8 @@ def main() -> None:
         fs=fs_adapter,
         cache=cache_repo,
         config_repo=config_repo,
-        registry=model_registry
+        registry=model_registry,
+        user_context=user_adapter
     )
     controller.register_views(dashboard_frame, settings_frame, logs_frame, sidebar_frame)
 

@@ -22,6 +22,7 @@ from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.config_port import IConfigRepository
 from transcriptor4ai.domain.ports.model_port import IModelRegistry
 from transcriptor4ai.domain.ports.system_port import IFileSystem
+from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # Application Services
 from transcriptor4ai.application.services.cost_calculator import CostCalculatorService
@@ -60,7 +61,8 @@ class AppController:
             fs: IFileSystem,
             cache: ICacheRepository,
             config_repo: IConfigRepository,
-            registry: IModelRegistry
+            registry: IModelRegistry,
+            user_context: IUserContext
     ) -> None:
         """
         Initialize the Hub with injected infrastructure implementations.
@@ -75,6 +77,7 @@ class AppController:
         self._cache = cache
         self._config_repo = config_repo
         self._registry = registry
+        self._user_context = user_context
 
         # 3. SERVICES: Instantiate application-level logic
         self.binder = FormBinder()
@@ -120,6 +123,10 @@ class AppController:
     def get_model_registry(self) -> IModelRegistry:
         """Access the injected Model Registry."""
         return self._registry
+
+    def get_user_context(self) -> IUserContext:
+        """Access the injected User Context port."""
+        return self._user_context
 
     # ==========================================================================
     # CONFIGURATION BINDING & SYNC

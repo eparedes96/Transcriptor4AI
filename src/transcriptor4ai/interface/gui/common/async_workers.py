@@ -19,6 +19,7 @@ from transcriptor4ai.application.services.update_service import UpdateManager
 # Domain Ports (for DI type hinting)
 from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.system_port import IFileSystem
+from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # Global logger initialization
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 def run_pipeline_task(
         fs: IFileSystem,
         cache: ICacheRepository,
+        user_context: IUserContext,
         config: Dict[str, Any],
         overwrite: bool,
         dry_run: bool,
@@ -49,6 +51,7 @@ def run_pipeline_task(
         result = run_pipeline(
             fs=fs,
             cache=cache,
+            user_context=user_context,
             config=config,
             overwrite=overwrite,
             dry_run=dry_run,

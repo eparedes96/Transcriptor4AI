@@ -80,6 +80,7 @@ class ExecutionController:
             args=(
                 fs,  # Injected Filesystem Port
                 self.main.get_cache(),  # Injected Cache Port
+                self.main.get_user_context(),
                 self.main.config,  # Current configuration
                 overwrite,
                 dry_run,

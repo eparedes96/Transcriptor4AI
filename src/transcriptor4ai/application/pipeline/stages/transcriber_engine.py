@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from transcriptor4ai.application import PrivacySanitizerService
+
 """
 Transcription Execution Engine.
 
@@ -23,7 +25,7 @@ from transcriptor4ai.application.pipeline.components.metrics_helper import incre
 from transcriptor4ai.application.pipeline.stages.worker import process_file_task
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
-from transcriptor4ai.domain import ICacheRepository
+from transcriptor4ai.domain import ICacheRepository, IUserContext
 
 # Global logger initialization
 logger = logging.getLogger(__name__)
@@ -50,15 +52,17 @@ def execute_parallel_workers(
         results: Dict[str, Any],
         cache_repo: ICacheRepository,
         config_hash: str,
+        user_context: IUserContext,
         cancellation_event: Optional[threading.Event] = None,
 ) -> None:
     """
     Orchestrate the transcription process by coordinating scanner data,
     caching checks, and parallel task execution.
     """
-    tasks = []
-
     # 1. SETUP: Initialize the parallel execution pool
+    sanitizer = PrivacySanitizerService(user_context)
+
+    tasks = []
     with ThreadPoolExecutor(thread_name_prefix="TranscriptionWorker") as executor:
 
         # Modules processing flag based on current depth strategy
@@ -89,8 +93,8 @@ def execute_parallel_workers(
                 try:
                     stat = os.stat(f_path)
                     # We use the persistence implementation's utility for hash consistency
-                    from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
-                    comp_hash = SqliteCacheRepository.compute_composite_hash(
+                    from transcriptor4ai.shared.hashing import compute_composite_hash
+                    comp_hash = compute_composite_hash(
                         f_path, stat.st_mtime, stat.st_size, config_hash
                     )
 
@@ -144,6 +148,7 @@ def execute_parallel_workers(
                     minify_output=minify_output,
                     locks=locks,
                     output_paths=output_paths,
+                    sanitizer_service=sanitizer,
                     composite_hash=comp_hash
                 ))
 

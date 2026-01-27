@@ -51,7 +51,6 @@ class PricingController:
         # 2. UI UPDATE: Reflect network status in the Dashboard
         dashboard = self.main.dashboard_view
         if dashboard and hasattr(dashboard, "set_pricing_status"):
-            # Note: Success implies live data; failure defaults to cached
             dashboard.set_pricing_status(is_live=success)
 
         # 3. REFRESH: Re-populate views to reflect new models/prices

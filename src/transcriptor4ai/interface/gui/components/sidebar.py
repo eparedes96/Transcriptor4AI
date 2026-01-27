@@ -136,8 +136,6 @@ class SidebarFrame(ctk.CTkFrame):
             state="disabled",
             text_color="white"
         )
-        # Note: The 'grid' call for the badge is deferred to the UpdateController
-        # when a new release is actually detected.
 
     def _setup_footer(self) -> None:
         """Construct the bottom-aligned utilities."""

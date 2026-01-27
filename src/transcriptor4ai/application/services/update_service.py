@@ -135,7 +135,7 @@ class UpdateManager:
             # 4. INTEGRITY: Verify cryptographic checksum (SHA-256)
             expected_sha = res.get("sha256")
             if expected_sha:
-                from transcriptor4ai.infrastructure.network.common import calculate_sha256
+                from transcriptor4ai.shared.hashing import calculate_sha256
                 actual_sha = calculate_sha256(download_path)
 
                 if actual_sha.lower() != expected_sha.lower():

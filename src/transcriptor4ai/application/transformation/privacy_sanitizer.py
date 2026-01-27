@@ -49,6 +49,9 @@ _COMPILED_ASSIGNMENTS: Final[re.Pattern] = re.compile(_GENERIC_SECRET_PATTERN)
 class PrivacySanitizerService:
     """
     Application service responsible for PII and Secret redaction.
+
+    This service requires an explicit implementation of IUserContext to
+    perform environment-aware masking.
     """
 
     def __init__(self, user_context: IUserContext) -> None:
@@ -65,14 +68,30 @@ class PrivacySanitizerService:
     # --------------------------------------------------------------------------
 
     def sanitize(self, text: str) -> str:
-        """Redact secrets and PII from a full string."""
+        """
+        Redact secrets and PII from a full string.
+
+        Args:
+            text: Raw input text.
+
+        Returns:
+            str: Sanitized text.
+        """
         if not text:
             return ""
         line_iter = iter(text.splitlines(keepends=True))
         return "".join(list(self.sanitize_stream(line_iter)))
 
     def sanitize_stream(self, lines: Iterator[str]) -> Iterator[str]:
-        """Process a text stream to redact sensitive patterns on-the-fly."""
+        """
+        Process a text stream to redact sensitive patterns on-the-fly.
+
+        Args:
+            lines: Iterator of source code lines.
+
+        Yields:
+            str: Redacted lines.
+        """
         for line in lines:
             if not line.strip():
                 yield line
@@ -80,11 +99,11 @@ class PrivacySanitizerService:
 
             processed = line
 
-            # 1. REDACT: Static hardcoded signatures
+            # 1. REDACT: Static hardcoded signatures (OpenAI, AWS, IP, Email)
             for pattern in _COMPILED_SECRETS:
                 processed = pattern.sub("[[REDACTED_SENSITIVE]]", processed)
 
-            # 2. REDACT: Generic variable assignments
+            # 2. REDACT: Generic variable assignments using back-reference replacement
             processed = _COMPILED_ASSIGNMENTS.sub(
                 lambda m: m.group(0).replace(m.group(1), "[[REDACTED_SECRET]]"),
                 processed
@@ -96,66 +115,53 @@ class PrivacySanitizerService:
     # --------------------------------------------------------------------------
 
     def mask_paths(self, text: str) -> str:
-        """Replace local filesystem paths with anonymous placeholders."""
+        """
+        Replace local filesystem paths with anonymous placeholders.
+
+        Args:
+            text: Raw input text.
+
+        Returns:
+            str: Anonymized text.
+        """
         if not text:
             return ""
         line_iter = iter(text.splitlines(keepends=True))
         return "".join(list(self.mask_paths_stream(line_iter)))
 
     def mask_paths_stream(self, lines: Iterator[str]) -> Iterator[str]:
-        """Process a text stream to mask local environment identifiers."""
-        # 1. PREPARE: Retrieve OS metadata and compile dynamic patterns
+        """
+        Process a text stream to mask local environment identifiers.
+
+        Args:
+            lines: Iterator of source code lines.
+
+        Yields:
+            str: Anonymized lines.
+        """
+        # 1. PREPARE: Retrieve OS metadata from the injected port
         user_name = self._user_context.get_username()
         home_dir = self._user_context.get_home_directory()
 
         dynamic_patterns: List[Tuple[re.Pattern, str]] = []
 
+        # 2. COMPILE: Generate dynamic regex based on current system context
         if home_dir:
             dynamic_patterns.append(
                 (re.compile(re.escape(home_dir), re.IGNORECASE), "<USER_HOME>")
             )
         if user_name:
-            # Matches username only when surrounded by path separators
+            # Matches username only when surrounded by path separators to avoid false positives
             dynamic_patterns.append(
                 (re.compile(rf"([\\/]){re.escape(user_name)}([\\/])"), r"\1<USER>\2")
             )
 
-        # 2. PROCESS: Apply masking to each line
+        # 3. PROCESS: Apply masking to each line in the stream
         for line in lines:
-            # Force forward slashes to unify path style before replacement
+            # Force forward slashes to unify path style before replacement for cross-platform safety
             processed = line.replace("\\", "/")
 
             for pattern, replacement in dynamic_patterns:
                 processed = pattern.sub(replacement, processed)
 
             yield processed
-
-
-# ==============================================================================
-# LEGACY COMPATIBILITY SHIMS
-# ==============================================================================
-
-def _get_default_service() -> PrivacySanitizerService:
-    """Instantiate the service using the production infrastructure adapter."""
-    from transcriptor4ai.infrastructure.system.user_context_adapter import UserContextAdapter
-    return PrivacySanitizerService(UserContextAdapter())
-
-
-def sanitize_text(text: str) -> str:
-    """Legacy wrapper for PrivacySanitizerService.sanitize."""
-    return _get_default_service().sanitize(text)
-
-
-def sanitize_text_stream(lines: Iterator[str]) -> Iterator[str]:
-    """Legacy wrapper for PrivacySanitizerService.sanitize_stream."""
-    return _get_default_service().sanitize_stream(lines)
-
-
-def mask_local_paths(text: str) -> str:
-    """Legacy wrapper for PrivacySanitizerService.mask_paths."""
-    return _get_default_service().mask_paths(text)
-
-
-def mask_local_paths_stream(lines: Iterator[str]) -> Iterator[str]:
-    """Legacy wrapper for PrivacySanitizerService.mask_paths_stream."""
-    return _get_default_service().mask_paths_stream(lines)

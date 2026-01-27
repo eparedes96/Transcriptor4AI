@@ -97,7 +97,6 @@ def run_pricing_sync_task(
     Synchronize model data from the remote repository.
     """
     try:
-        # Note: This usually delegates to CostCalculatorService.sync_remote_data()
         success = pricing_service.sync_remote_data()
         # In a real scenario, we might return the fetched data or just a signal
         on_complete(None)

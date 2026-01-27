@@ -8,7 +8,7 @@ the system's primary use case by sequencing configuration validation,
 environment setup, parallel task execution, and final context assembly.
 
 This orchestrator is infrastructure-agnostic, depending strictly on Domain 
-Ports for I/O and Persistence.
+Ports for I/O, Caching, and User Identity.
 """
 
 import logging
@@ -16,10 +16,15 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
+# ==============================================================================
+# IMPORTS
+# ==============================================================================
+
 # Domain Ports and Entities
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult, create_error_result
 from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.system_port import IFileSystem
+from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # Application Stages
 from transcriptor4ai.application.pipeline.stages.assembler import assemble_and_finalize
@@ -42,6 +47,7 @@ logger = logging.getLogger(__name__)
 def run_pipeline(
         fs: IFileSystem,
         cache: ICacheRepository,
+        user_context: IUserContext,
         config: Optional[Dict[str, Any]],
         *,
         overwrite: bool = False,
@@ -55,6 +61,7 @@ def run_pipeline(
     Args:
         fs: Concrete implementation of the FileSystem port.
         cache: Concrete implementation of the Cache repository port.
+        user_context: Concrete implementation of the User Context port.
         config: Raw configuration parameters (untrusted).
         overwrite: Permission to overwrite existing files.
         dry_run: Simulation mode flag.
@@ -67,7 +74,6 @@ def run_pipeline(
     logger.info("Pipeline: Execution sequence initiated.")
 
     # 1. VALIDATION: Sanitize and normalize input configuration
-    # Note: validator logic resides in application but uses domain factories
     cfg, warnings = validate_config(config, strict=False)
 
     for warning in warnings:
@@ -118,6 +124,7 @@ def run_pipeline(
             fs=fs,
             scanner_service=scanner_service,
             cache_repo=cache,
+            user_context=user_context,
             input_path=base_path,
             modules_output_path=paths["modules"],
             tests_output_path=paths["tests"],

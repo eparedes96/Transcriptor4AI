@@ -27,6 +27,7 @@ from transcriptor4ai.application.pipeline.stages.transcriber_engine import execu
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.system_port import IFileSystem
+from transcriptor4ai.domain import IUserContext
 
 # Global logger initialization
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ def transcribe_code(
     fs: IFileSystem,
     scanner_service: ProjectScannerService,
     cache_repo: ICacheRepository,
+    user_context: IUserContext,
     input_path: str,
     modules_output_path: str,
     tests_output_path: str,
@@ -124,6 +126,7 @@ def transcribe_code(
         enable_sanitizer, mask_user_paths, minify_output,
         locks, output_paths, results,
         cache_repo, config_hash,
+        user_context,
         cancellation_event
     )
 

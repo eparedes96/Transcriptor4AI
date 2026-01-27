@@ -62,8 +62,6 @@ def increment_mode_counters(
         return
 
     # Default: Source Modules
-    # Note: Resources are treated as modules if resources flag is OFF
-    # but the file still passed the scanner filter.
     results["modules_written"] = results.get("modules_written", 0) + 1
 
 

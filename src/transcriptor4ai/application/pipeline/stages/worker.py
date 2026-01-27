@@ -10,20 +10,19 @@ sanitization in a memory-efficient streaming pipeline.
 
 import logging
 import threading
-from typing import Any, Dict, Iterator
+from typing import Any, Dict, Iterator, TYPE_CHECKING
 
-# Analysis & Transformation Services
+# 1. IMPORTS: Solo servicios de aplicación y utilidades de dominio
 from transcriptor4ai.application.analysis.ast_parser import generate_skeleton_code
 from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
-
-# Pipeline Components
 from transcriptor4ai.application.pipeline.components.file_reader import stream_file_content
 from transcriptor4ai.application.pipeline.components.file_writer import append_entry
 from transcriptor4ai.application.pipeline.components.file_filters import determine_target_mode
 
-# Global logger initialization
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from transcriptor4ai.application.transformation.privacy_sanitizer import PrivacySanitizerService
 
+logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # WORKER: ATOMIC FILE PROCESSING
@@ -42,13 +41,11 @@ def process_file_task(
         minify_output: bool,
         locks: Dict[str, threading.Lock],
         output_paths: Dict[str, str],
+        sanitizer_service: PrivacySanitizerService,  # Inyectado desde el motor
         composite_hash: str = ""
 ) -> Dict[str, Any]:
     """
     Execute the full processing lifecycle for a single file unit.
-
-    Designed to run within a ThreadPoolExecutor. It coordinates extraction,
-    transformation, and thread-safe persistence.
 
     Args:
         file_path: Absolute filesystem path.
@@ -63,6 +60,7 @@ def process_file_task(
         minify_output: Strip comments and white-space.
         locks: Thread synchronization locks map.
         output_paths: Destination paths map.
+        sanitizer_service: Pre-configured service for privacy tasks.
         composite_hash: Fingerprint for cache tracking.
 
     Returns:
@@ -98,16 +96,12 @@ def process_file_task(
             minifier = CodeMinifierService()
             processed_stream = minifier.minify_stream(processed_stream, ext)
 
-        # 3.3 Security: Sanitizer Service
+        # 3.3 Security: Sanitizer Service (Usa la instancia inyectada)
         if enable_sanitizer or mask_user_paths:
-            # Note: Implementation expects these to be injected or available via shim
-            from transcriptor4ai.application.transformation.privacy_sanitizer import _get_default_service
-            sanitizer = _get_default_service()
-
             if enable_sanitizer:
-                processed_stream = sanitizer.sanitize_stream(processed_stream)
+                processed_stream = sanitizer_service.sanitize_stream(processed_stream)
             if mask_user_paths:
-                processed_stream = sanitizer.mask_paths_stream(processed_stream)
+                processed_stream = sanitizer_service.mask_paths_stream(processed_stream)
 
         # 4. MATERIALIZE: Join stream for atomic persistence and cache storage
         processed_content = "".join(list(processed_stream))

@@ -51,8 +51,6 @@ class UpdateController:
     def run_silent_cycle(self, manual: bool = False) -> None:
         """
         Execute a non-interactive update check and staging process.
-
-        Note: This method is designed to be executed within a background thread.
         """
         try:
             # 1. PROCESS: Invoke the application service to check remote versions

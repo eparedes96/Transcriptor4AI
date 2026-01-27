@@ -196,8 +196,6 @@ class SqliteCacheRepository(ICacheRepository):
     ) -> str:
         """
         Helper to generate the SHA-256 identity key.
-        Note: This is a static utility provided by the repo for convenience,
-        used by the pipeline before calling get/set.
         """
         raw_key = f"{file_path}|{mtime}|{file_size}|{config_hash}"
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()

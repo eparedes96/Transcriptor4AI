@@ -105,6 +105,7 @@ def run_pipeline(
         # 4.1 TASK: Structural Tree Generation (Static Analysis)
         future_tree = executor.submit(
             generate_directory_tree,
+            fs=fs,
             input_path=base_path,
             mode="all",
             extensions=cfg["extensions"],

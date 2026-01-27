@@ -2,6 +2,10 @@ from __future__ import annotations
 
 """
 FileSystem Port Definition.
+
+Defines the abstract interface for OS-level file, directory, and shell 
+operations. This contract ensures the Application layer remains agnostic 
+of specific library implementations (os, pathlib, shutil).
 """
 
 from abc import ABC, abstractmethod
@@ -51,6 +55,21 @@ class IFileSystem(ABC):
     @abstractmethod
     def directory_exists(self, path: str) -> bool:
         """Check if a path exists and is a directory."""
+        pass
+
+    # ==========================================================================
+    # I/O OPERATIONS
+    # ==========================================================================
+
+    @abstractmethod
+    def write_text_file(self, path: str, content: str) -> None:
+        """
+        Persist a string to a file using UTF-8 encoding.
+
+        Args:
+            path: Absolute filesystem destination.
+            content: The text data to persist.
+        """
         pass
 
     @abstractmethod

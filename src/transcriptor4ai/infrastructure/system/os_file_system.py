@@ -176,6 +176,21 @@ class FileSystemAdapter(IFileSystem):
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
 
+    def write_text_file(self, path: str, content: str) -> None:
+        """Persist a string to a file using UTF-8 encoding."""
+        # 1. VALIDATION: Ensure parent directory exists for the target file
+        parent = os.path.dirname(os.path.abspath(path))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+
+        # 2. PROCESS: Atomic write operation
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except OSError as e:
+            logger.error(f"FileSystem: Failed to write text file at '{path}': {e}")
+            raise
+
     def path_join(self, *args: str) -> str:
         """Encapsulate OS-specific path concatenation."""
         return os.path.join(*args)

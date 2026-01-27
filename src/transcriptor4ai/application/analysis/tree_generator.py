@@ -26,6 +26,7 @@ from transcriptor4ai.application.pipeline.components.file_filters import (
     matches_include,
 )
 from transcriptor4ai.domain.entities.file_node import FileNode, Tree
+from transcriptor4ai.domain import IFileSystem
 
 # Global logger initialization
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 
 def generate_directory_tree(
+        fs: IFileSystem,
         input_path: str,
         mode: str = "all",
         extensions: Optional[List[str]] = None,
@@ -106,7 +108,10 @@ def generate_directory_tree(
         logger.info("TreeGenerator: Previewing results:\n" + "\n".join(lines))
 
     if save_path:
-        _save_tree_to_disk(save_path, lines)
+        # 5.1 PERSISTENCE: Delegar la escritura física al puerto de sistema
+        content = "\n".join(lines) + "\n"
+        fs.write_text_file(save_path, content)
+        logger.info(f"TreeGenerator: Persistence delegated to FileSystem for {save_path}")
 
     return lines
 
@@ -135,19 +140,6 @@ def _setup_tree_filters(
     final_inclusions = inc or default_include_patterns()
 
     return compile_patterns(final_inclusions), compile_patterns(final_exclusions)
-
-
-def _save_tree_to_disk(save_path: str, lines: List[str]) -> None:
-    """Safely persist the generated tree lines to the filesystem."""
-    try:
-        target = Path(save_path).resolve()
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        logger.info(f"TreeGenerator: Persistence successful at {save_path}")
-
-    except OSError as e:
-        logger.error(f"TreeGenerator: Failed to save tree to '{save_path}': {e}")
 
 
 # ==============================================================================

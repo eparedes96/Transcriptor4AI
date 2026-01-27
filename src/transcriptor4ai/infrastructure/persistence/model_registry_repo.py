@@ -20,6 +20,7 @@ from transcriptor4ai.domain.ports.model_port import IModelRegistry
 from transcriptor4ai.infrastructure.network.pricing_api_client import PricingApiClient
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 from transcriptor4ai.shared import constants as const
+from transcriptor4ai.domain.services.model_curator import curate_model_list
 
 logger = logging.getLogger(__name__)
 
@@ -112,13 +113,10 @@ class ModelRegistryRepository(IModelRegistry):
         if not raw_data:
             return False
 
-        normalized = self._normalize_and_filter(raw_data)
-        if not normalized:
-            return False
+        normalized = curate_model_list(raw_data)
 
         with self._lock:
             self._models.update(normalized)
-            self._is_live_synced = True
             self._save_to_cache(normalized)
 
         logger.info(f"Registry: Live discovery complete. {len(normalized)} models curated.")

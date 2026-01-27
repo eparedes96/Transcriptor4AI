@@ -19,6 +19,7 @@ from transcriptor4ai.infrastructure.network.common import (
     DEFAULT_TIMEOUT,
     USER_AGENT,
 )
+from transcriptor4ai.shared.versioning import is_newer
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ class GithubReleaseClient(IUpdateClient):
 
             latest_tag = data.get("tag_name", "").lstrip("v")
 
-            if self._is_newer(current_version, latest_tag):
+            if is_newer(current_version, latest_tag):
                 result.update({
                     "has_update": True,
                     "latest_version": latest_tag,
@@ -149,23 +150,6 @@ class GithubReleaseClient(IUpdateClient):
     # ==========================================================================
     # INTERNAL HELPERS
     # ==========================================================================
-    @staticmethod
-    def _is_newer(current: str, latest: str) -> bool:
-        """
-        Perform semantic version comparison (Latest > Current).
-        """
-        try:
-            def parse(v: str) -> Tuple[int, ...]:
-                # Extract digits only to handle "v2.0.0-beta" cleanly
-                parts = v.split(".")
-                return tuple(
-                    int("".join(filter(str.isdigit, p)) or 0) for p in parts
-                )
-
-            return parse(latest) > parse(current)
-        except (ValueError, AttributeError):
-            logger.warning(f"UpdateClient: Version parsing failed ({current} vs {latest})")
-            return False
 
     @staticmethod
     def _fetch_checksum(

@@ -5,8 +5,9 @@ Domain Layer Facade.
 
 Centralizes access to the core business logic components:
 1. ENTITIES: Immutable data structures (Value Objects/DTOs).
-2. PORTS: Abstract interfaces defining infrastructure contracts.
-3. EXCEPTIONS: Domain-specific error hierarchy.
+2. SERVICES: Pure business logic and curation rules.
+3. PORTS: Abstract interfaces defining infrastructure contracts.
+4. EXCEPTIONS: Domain-specific error hierarchy.
 """
 
 # ==============================================================================
@@ -19,6 +20,11 @@ from transcriptor4ai.domain.entities.app_config import (
 from transcriptor4ai.domain.entities.file_node import FileNode, Tree
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
+
+# ==============================================================================
+# SERVICES (PURE BUSINESS LOGIC)
+# ==============================================================================
+from transcriptor4ai.domain.services.model_curator import curate_model_list
 
 # ==============================================================================
 # PORTS (INFRASTRUCTURE CONTRACTS)
@@ -48,6 +54,8 @@ __all__ = [
     "Tree",
     "PipelineResult",
     "TranscriptionError",
+    # Services
+    "curate_model_list",
     # Ports
     "ICacheRepository",
     "IConfigRepository",

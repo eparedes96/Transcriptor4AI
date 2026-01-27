@@ -1,88 +1,88 @@
 from __future__ import annotations
 
 """
-Semantic Versioning Utilities.
+Semantic Versioning Precedence Service.
 
-Provides robust comparison logic for application versions following the 
-SemVer pattern. This module centralizes version parsing to ensure 
-consistency across update checks and configuration migrations.
+Provides deterministic logic to evaluate application version precedence following 
+the SemVer pattern. Centralizes version parsing and normalization to ensure 
+consistency across update management and state migration components.
 """
 
 import logging
 from typing import Tuple
 
-# Global logger initialization
+# Standardized logger for the shared utilities domain
 logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
-# PUBLIC API
+# PUBLIC API: PRECEDENCE LOGIC
 # ==============================================================================
 
 def is_newer(current: str, latest: str) -> bool:
     """
-    Determine if the latest version string is semantically higher than current.
+    Evaluate if the latest version string has precedence over the current one.
 
-    Supports versions with or without 'v' prefix (e.g., 'v2.1.0' vs '2.0.5').
+    Implements a robust comparison that handles 'v' prefixes and discards
+    non-numeric metadata for the primary comparison.
 
     Args:
-        current: The currently running version string.
-        latest: The version string discovered from a remote source.
+        current: The version string of the running application.
+        latest: The version string discovered from remote sources.
 
     Returns:
-        bool: True if latest > current, False otherwise or if parsing fails.
+        bool: True if latest > current based on integer segment comparison.
     """
-    # 1. VALIDACIÓN: Evitar comparaciones innecesarias si son idénticas
-    if current.strip() == latest.strip():
+    # 1. VALIDATION: Quick exit if strings are identical or empty
+    if not current or not latest or current.strip() == latest.strip():
         return False
 
     try:
-        # 2. PROCESAMIENTO: Normalizar ambos strings a tuplas de enteros
+        # 2. PROCESS: Transform raw strings into comparable numeric sequences
         current_tuple = _parse_version(current)
         latest_tuple = _parse_version(latest)
 
-        # 3. RETORNO: Comparación nativa de tuplas de Python (léxica por posición)
+        # 3. COMPARISON: Leverage Python's lexical tuple comparison (segment by segment)
         return latest_tuple > current_tuple
 
     except (ValueError, TypeError, IndexError) as e:
-        logger.warning(f"Versioning: Failed to compare '{current}' and '{latest}': {e}")
+        logger.warning(f"Versioning: Deterministic comparison failed for '{current}' vs '{latest}': {e}")
         return False
 
 
 # ==============================================================================
-# PRIVATE HELPERS
+# PRIVATE HELPERS: PARSING & NORMALIZATION
 # ==============================================================================
 
 def _parse_version(version_str: str) -> Tuple[int, ...]:
     """
-    Convert a version string into a comparable tuple of integers.
+    Convert a semantic version string into a comparable tuple of integers.
 
-    Example: "v2.1.0-alpha" -> (2, 1, 0)
+    Strips common prefixes and handles segments containing alphanumeric
+    metadata (e.g., '2.1.0-beta' -> (2, 1, 0)).
 
     Args:
-        version_str: Raw version string.
+        version_str: Raw version identifier.
 
     Returns:
-        Tuple[int, ...]: Integer sequence representing Major, Minor, Patch.
+        Tuple[int, ...]: Sequence representing (Major, Minor, Patch, ...).
     """
-    # Limpiar prefijo 'v' y espacios
+    # 1. CLEAN: Remove 'v' prefix and whitespace, then segment by period
     clean_str = version_str.lower().lstrip("v").strip()
-
-    # Dividir por puntos y extraer solo la parte numérica de cada segmento
-    # Esto ignora sufijos como '-beta' o '+build' para la comparación básica
     parts = clean_str.split(".")
 
-    numeric_parts = []
-    for p in parts:
-        # Extraer solo dígitos iniciales del segmento
-        numeric_val = "".join(filter(str.isdigit, p))
-        if numeric_val:
-            numeric_parts.append(int(numeric_val))
-        else:
-            # Si un segmento no tiene números (ej: "v.x"), se asume 0
-            numeric_parts.append(0)
+    numeric_parts: list[int] = []
 
-    # Asegurar al menos 3 componentes (Major, Minor, Patch)
+    # 2. EXTRACT: Isolate numeric values from each segment
+    for p in parts:
+        # Filter only digits from the segment to handle pre-release suffixes
+        digit_str = "".join(filter(str.isdigit, p))
+
+        # Fallback to 0 if the segment contains no digits to prevent ValueError
+        numeric_parts.append(int(digit_str) if digit_str else 0)
+
+    # 3. CONFORM: Ensure at least Major.Minor.Patch structure exists
+    # Append trailing zeros to prevent tuple length mismatch in comparison
     while len(numeric_parts) < 3:
         numeric_parts.append(0)
 

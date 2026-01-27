@@ -1,16 +1,12 @@
 from __future__ import annotations
 
 """
-Parallel Transcription Orchestrator Stage.
+Parallel Transcription Management Stage.
 
-Manages the multi-threaded transcription lifecycle. Coordinates environment 
-initialization, concurrent task dispatching via the Scanner service, 
-thread-safe writing, and final error aggregation.
-
-Features:
-- Port-based Cache Integration to skip unchanged files.
-- Thread-safe output categorization (Modules/Tests/Resources).
-- AST-based Skeleton Mode routing for Python files.
+Coordinates the multi-threaded transcription lifecycle by initializing 
+filtering contexts, managing thread-safe I/O synchronization, and 
+aggregating execution metrics. Acts as a bridge between the pipeline 
+orchestrator and the concurrent execution engine.
 """
 
 import logging
@@ -18,6 +14,7 @@ import os
 import threading
 from typing import Any, Dict, List, Optional
 
+# Local imports
 from transcriptor4ai.application.pipeline.components.file_filters import default_extensions
 from transcriptor4ai.application.pipeline.stages.transcriber_context import (
     generate_config_hash,
@@ -27,14 +24,14 @@ from transcriptor4ai.application.pipeline.stages.transcriber_engine import execu
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 from transcriptor4ai.domain.ports.cache_port import ICacheRepository
 from transcriptor4ai.domain.ports.system_port import IFileSystem
-from transcriptor4ai.domain import IUserContext
+from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # Global logger initialization
 logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
-# STAGE: PARALLEL TRANSCRIBER
+# PUBLIC API: TRANSCRIPTION ENTRANCE
 # ==============================================================================
 
 def transcribe_code(
@@ -61,47 +58,52 @@ def transcribe_code(
     cancellation_event: Optional[threading.Event] = None,
 ) -> Dict[str, Any]:
     """
-    Execute parallel transcription of project files into categorized text files.
+    Orchestrate parallel file transcription into categorized artifacts.
+
+    Sequences environment bootstrapping, configuration fingerprinting for
+    cache validation, and dispatching of atomic worker tasks.
 
     Args:
-        scanner_service: Service responsible for discovery and filtering.
-        cache_repo: Implementation of the ICacheRepository port.
-        input_path: Source directory to scan.
-        modules_output_path: Target path for source logic transcription.
-        tests_output_path: Target path for test suites transcription.
-        resources_output_path: Target path for resource files.
-        error_output_path: Target path for the operation error log.
-        processing_depth: Content depth strategy ("full", "skeleton", "tree_only").
-        process_tests: Enable test file processing.
-        process_resources: Enable resource file processing.
-        extensions: Allowed file extensions.
-        include_patterns: Whitelist regex patterns.
-        exclude_patterns: Blacklist regex patterns.
-        respect_gitignore: Enable automatic .gitignore parsing.
-        save_error_log: Enable error persistence to disk.
-        enable_sanitizer: Enable secret redaction.
-        mask_user_paths: Enable local path anonymization.
-        minify_output: Enable code minification.
-        cancellation_event: Optional event to signal process termination.
+        fs: Abstracted file system implementation.
+        scanner_service: Service for project discovery and classification.
+        cache_repo: Persistent cache provider for incremental processing.
+        user_context: OS-agnostic user metadata provider.
+        input_path: Root project directory to process.
+        modules_output_path: Destination for logic source code.
+        tests_output_path: Destination for test suites.
+        resources_output_path: Destination for documentation and config.
+        error_output_path: Destination for technical failure reports.
+        processing_depth: Level of detail (full, skeleton, tree_only).
+        process_tests: Toggle for test inclusion.
+        process_resources: Toggle for resource file inclusion.
+        extensions: Whitelist of file extensions to process.
+        include_patterns: List of regex strings for inclusion.
+        exclude_patterns: List of regex strings for exclusion.
+        respect_gitignore: Native .gitignore compliance flag.
+        save_error_log: Persist failures to disk if True.
+        enable_sanitizer: Execute PII and Secret redaction.
+        mask_user_paths: Execute local path anonymization.
+        minify_output: Strip code comments and redundant whitespace.
+        cancellation_event: Signal to interrupt the active worker pool.
 
     Returns:
-        Dict[str, Any]: Summary containing status, paths, and execution counters.
+        Dict[str, Any]: Consolidated summary containing artifacts and metrics.
     """
     logger.info(f"Transcriber: Initiating parallel execution in: {input_path}")
 
-    # 1. SETUP: Prepare filtering context via the Scanner service
+    # 1. DISCOVERY: Prepare filtering context via the Project Scanner
     include_rx, exclude_rx = scanner_service.prepare_filtering_rules(
         input_path, include_patterns, exclude_patterns, respect_gitignore
     )
 
-    # 2. CONTEXT: Initialize output headers and thread synchronization locks
+    # 2. ENVIRONMENT: Bootstrap output files and thread-safe locks
     locks, output_paths = initialize_env(
         fs,
         modules_output_path, tests_output_path, resources_output_path,
         error_output_path, processing_depth, process_tests, process_resources
     )
 
-    # Accumulator for metrics and errors
+    # 3. INITIALIZATION: Setup metrics accumulator
     results: Dict[str, Any] = {
         "processed": 0,
         "cached": 0,
@@ -113,13 +115,13 @@ def transcribe_code(
         "errors": []
     }
 
-    # 3. CACHE: Fingerprint the current configuration for hit detection
+    # 4. CACHING: Generate deterministic config fingerprint
     config_hash = generate_config_hash(
         processing_depth, process_tests, process_resources,
         enable_sanitizer, mask_user_paths, minify_output
     )
 
-    # 4. EXECUTION: Dispatch parallel tasks through the engine
+    # 5. EXECUTION: Dispatch workload to parallel worker pool
     execute_parallel_workers(
         scanner_service, input_path, extensions or default_extensions(),
         include_rx, exclude_rx, processing_depth, process_tests, process_resources,
@@ -130,19 +132,20 @@ def transcribe_code(
         cancellation_event
     )
 
-    # 5. VALIDATION: Check for early termination signals
+    # 6. INTEGRITY: Verify early termination signals
     if cancellation_event and cancellation_event.is_set():
-        logger.warning("Transcriber: Operation aborted by user signal.")
+        logger.warning("Transcriber: Process interrupted by cancellation event.")
         return {"ok": False, "error": "Operation cancelled by user."}
 
-    # 6. REPORTING: Persist collected errors via the Scanner service
+    # 7. PERSISTENCE: Finalize technical error reporting
     actual_error_path = scanner_service.finalize_error_reporting(
         save_error_log, error_output_path, results["errors"]
     )
 
+    # 8. SUMMARY: Compile execution statistics
     logger.info(
-        f"Transcriber: Finalized. Processed: {results['processed']} "
-        f"(Cached: {results['cached']}). Errors: {len(results['errors'])}"
+        f"Transcriber: Cycle complete. [Processed: {results['processed']}] "
+        f"[Cached: {results['cached']}] [Errors: {len(results['errors'])}]"
     )
 
     return {

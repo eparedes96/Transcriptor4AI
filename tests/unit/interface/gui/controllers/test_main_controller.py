@@ -13,7 +13,7 @@ Tests the mapping between UI toggle switches and the internal
 
 from unittest.mock import MagicMock, patch
 
-from transcriptor4ai.interface.gui.controllers.main_controller import AppController
+from transcriptor4ai.interface.gui.controllers.coordinator import AppController
 
 
 def test_controller_depth_routing_logic() -> None:

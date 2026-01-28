@@ -16,7 +16,7 @@ from transcriptor4ai.interface.gui.dialogs.feedback_modal import show_feedback_w
 
 # Use TYPE_CHECKING to prevent circular imports with the Hub Controller
 if TYPE_CHECKING:
-    from transcriptor4ai.interface.gui.controllers.main_controller import AppController
+    from transcriptor4ai.interface.gui.controllers.coordinator import AppController
 
 # Standard logger initialization
 logger = logging.getLogger(__name__)

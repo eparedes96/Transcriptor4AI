@@ -40,7 +40,7 @@ from transcriptor4ai.interface.gui.components.logs_console import LogsFrame
 from transcriptor4ai.interface.gui.components.main_window import create_main_window
 from transcriptor4ai.interface.gui.components.settings import SettingsFrame
 from transcriptor4ai.interface.gui.components.sidebar import SidebarFrame
-from transcriptor4ai.interface.gui.controllers.main_controller import AppController
+from transcriptor4ai.interface.gui.controllers.coordinator import AppController
 from transcriptor4ai.interface.gui.controllers.update_controller import UpdateController
 from transcriptor4ai.interface.gui.dialogs.feedback_modal import show_feedback_window
 

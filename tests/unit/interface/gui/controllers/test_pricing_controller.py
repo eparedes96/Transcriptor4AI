@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from transcriptor4ai.interface.gui.controllers.main_controller import AppController
+from transcriptor4ai.interface.gui.controllers.coordinator import AppController
 
 
 @pytest.mark.gui

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from transcriptor4ai.interface.gui.controllers.main_controller import AppController
+    from transcriptor4ai.interface.gui.controllers.coordinator import AppController
 
 
 # ==============================================================================

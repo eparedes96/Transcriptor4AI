@@ -80,14 +80,29 @@ class FileSystemAdapter(IFileSystem):
     # PIPELINE SPECIFIC IO
     # --------------------------------------------------------------------------
 
-    def build_staging_paths(self, s_dir: str, pref: str, tree: Optional[str] = None) -> Dict[str, str]:
-        return pipe.build_staging_paths(s_dir, pref, tree)
+    def build_staging_paths(self, staging_dir: str, prefix: str, tree_override: Optional[str] = None) -> Dict[
+        str, str]:
+        return pipe.build_staging_paths(staging_dir, prefix, tree_override)
 
-    def generate_unified_file(self, out: str, base: str, tree: Optional[str], cats: Dict[str, str]) -> bool:
-        return pipe.generate_unified_file(out, base, tree, cats)
+    def generate_unified_file(
+            self,
+            output_path: str,
+            base_path: str,
+            tree_path: Optional[str],
+            category_paths: Dict[str, str]
+    ) -> bool:
+        """Standardized call to match the Application Layer expectation."""
+        return pipe.generate_unified_file(output_path, base_path, tree_path, category_paths)
 
-    def deploy_pipeline_artifacts(self, s_paths: Dict[str, str], f_dir: str, pref: str, ok: bool, res_map: Dict[str, str]) -> None:
-        return pipe.deploy_pipeline_artifacts(s_paths, f_dir, pref, ok, res_map)
+    def deploy_pipeline_artifacts(
+            self,
+            staging_paths: Dict[str, str],
+            final_dir: str,
+            prefix: str,
+            unified_ok: bool,
+            results_map: Dict[str, str]
+    ) -> None:
+        return pipe.deploy_pipeline_artifacts(staging_paths, final_dir, prefix, unified_ok, results_map)
 
     # --------------------------------------------------------------------------
     # ARCHIVE & SHELL INTEGRATION

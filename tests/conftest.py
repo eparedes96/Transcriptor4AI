@@ -1,76 +1,102 @@
 from __future__ import annotations
 
 """
-Global Pytest Configuration and Fixtures.
+Global Pytest Configuration and Shared Fixtures.
 
-This module sets up the testing environment, including:
-1. Path manipulation to ensure the 'src' directory is importable.
-2. Shared fixtures for configuration dictionaries used across unit tests.
+Defines common data structures and mock objects for the Transcriptor4AI 
+testing suite, ensuring consistency across Unit and Integration levels.
 """
 
-import os
-import sys
+import pytest
 from typing import Any, Dict
 
-import pytest
 
-# -----------------------------------------------------------------------------
-# Path Configuration
-# -----------------------------------------------------------------------------
-_SRC_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-if _SRC_PATH not in sys.path:
-    sys.path.insert(0, _SRC_PATH)
+# ==============================================================================
+# CONFIGURATION FIXTURES (DOMAIN ENTITIES)
+# ==============================================================================
 
-
-# -----------------------------------------------------------------------------
-# Shared Fixtures
-# -----------------------------------------------------------------------------
 @pytest.fixture
 def mock_config_dict() -> Dict[str, Any]:
     """
-    Return a valid, complete configuration dictionary for testing.
+    Returns a complete and valid configuration dictionary for v2.1.
 
-    Reflects the structure defined in 'transcriptor4ai.domain.config',
-    ensuring all keys expected by the components are present.
-
-    Returns:
-        Dict[str, Any]: A sample configuration dictionary.
+    Reflects the domain entity structure used in the pipeline and 
+    configuration repositories.
     """
     return {
-        # IO Paths
-        "input_path": "/tmp/test_input",
-        "output_base_dir": "/tmp/test_output",
+        # Path Configuration
+        "input_path": "/tmp/fake_project",
+        "output_base_dir": "/tmp/output",
         "output_subdir_name": "transcript",
-        "output_prefix": "test_output",
+        "output_prefix": "test_prefix",
 
-        # Content Selection
+        # Processing Logic
+        "processing_depth": "full",  # Options: "full", "skeleton", "tree_only"
         "process_modules": True,
         "process_tests": True,
         "process_resources": False,
 
-        # Output Format
+        # Output Strategies
         "create_individual_files": True,
         "create_unified_file": True,
 
-        # Filtering
-        "extensions": [".py"],
+        # Filters & Regex
+        "extensions": [".py", ".js"],
         "include_patterns": [".*"],
-        "exclude_patterns": [],
+        "exclude_patterns": [r"__pycache__", r"\.git"],
         "respect_gitignore": True,
-        "target_model": "GPT-4o / GPT-5",
 
-        # Tree & AST
-        "generate_tree": False,
+        # AI & Economic Metrics
+        "target_model": "gpt-4o",
+
+        # Static Analysis (AST)
+        "generate_tree": True,
         "show_functions": False,
         "show_classes": False,
         "show_methods": False,
         "print_tree": False,
 
-        # Optimization & Security
+        # Optimization & Privacy
         "enable_sanitizer": False,
         "mask_user_paths": False,
         "minify_output": False,
 
-        # Diagnostics
+        # Logging & Diagnostics
         "save_error_log": True
     }
+
+
+@pytest.fixture
+def mock_app_state(mock_config_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Simulates the global application state structure (config.json).
+    """
+    return {
+        "version": "2.1.0",
+        "app_settings": {
+            "theme": "System",
+            "locale": "en",
+            "allow_telemetry": False,
+            "auto_check_updates": False
+        },
+        "last_session": mock_config_dict,
+        "saved_profiles": {
+            "Default": mock_config_dict
+        },
+        "custom_stacks": {}
+    }
+
+
+# ==============================================================================
+# INFRASTRUCTURE MOCKS (PORTS)
+# ==============================================================================
+
+@pytest.fixture
+def mock_user_context(mocker: Any) -> Any:
+    """
+    Mock for the IUserContext port to provide deterministic paths.
+    """
+    mock = mocker.Mock()
+    mock.get_username.return_value = "test_user"
+    mock.get_home_directory.return_value = "/home/test_user"
+    return mock

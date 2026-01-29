@@ -68,8 +68,8 @@ def extract_definitions(
 
     # 3. TRAVERSE: Extract symbols based on configuration flags
     for node in tree.body:
-        # Process global functions
-        if show_functions and isinstance(node, ast.FunctionDef):
+        # Process global functions (Sync and Async)
+        if show_functions and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             results.append(f"Function: {node.name}()")
 
         # Process class definitions and their internal methods
@@ -77,8 +77,11 @@ def extract_definitions(
             results.append(f"Class: {node.name}")
 
             if show_methods:
-                # Filter internal body for function definitions only
-                methods = [n.name for n in node.body if isinstance(n, ast.FunctionDef)]
+                # Filter internal body for function definitions only (Sync and Async)
+                methods = [
+                    n.name for n in node.body
+                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                ]
                 for m in methods:
                     results.append(f"  Method: {m}()")
 
@@ -121,7 +124,7 @@ def generate_skeleton_code(source: str) -> str:
 
     except SyntaxError as e:
         logger.warning(f"Skeletonization failed (SyntaxError): {e}")
-        return f"# [SKIPPING SKELETON] File has syntax errors: {e}\n"
+        return f"# [SKIPPING SKELETON] File has SyntaxError: {e}\n"
     except Exception as e:
         logger.error(f"Unexpected error during skeletonization: {e}")
         return f"# [ERROR] AST skeletonization failed: {str(e)}\n"

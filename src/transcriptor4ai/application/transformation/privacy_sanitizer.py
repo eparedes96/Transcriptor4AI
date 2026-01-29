@@ -143,17 +143,20 @@ class PrivacySanitizerService:
         user_name = self._user_context.get_username()
         home_dir = self._user_context.get_home_directory()
 
+        safe_home = home_dir.replace("\\", "/") if home_dir else None
+        safe_user = user_name.replace("\\", "/") if user_name else None
+
         dynamic_patterns: List[Tuple[re.Pattern, str]] = []
 
         # 2. COMPILE: Generate dynamic regex based on current system context
-        if home_dir:
+        if safe_home:
             dynamic_patterns.append(
-                (re.compile(re.escape(home_dir), re.IGNORECASE), "<USER_HOME>")
+                (re.compile(re.escape(safe_home), re.IGNORECASE), "<USER_HOME>")
             )
-        if user_name:
+        if safe_user:
             # Matches username only when surrounded by path separators to avoid false positives
             dynamic_patterns.append(
-                (re.compile(rf"([\\/]){re.escape(user_name)}([\\/])"), r"\1<USER>\2")
+                (re.compile(rf"([\\/]){re.escape(safe_user)}([\\/])"), r"\1<USER>\2")
             )
 
         # 3. PROCESS: Apply masking to each line in the stream

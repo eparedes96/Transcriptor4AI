@@ -61,7 +61,7 @@ class CostCalculatorService:
         # 1. ARBITRATION: Select between raw density or precalculated cache hits
         # Cache hits are prioritized to maintain financial consistency between runs.
         effective_tokens = (
-            precalculated_tokens if precalculated_tokens is not None else token_count
+            precalculated_tokens if precalculated_tokens is not None else (token_count or 0)
         )
 
         if effective_tokens <= 0:

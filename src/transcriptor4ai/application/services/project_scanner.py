@@ -75,9 +75,6 @@ class ProjectScannerService:
         """
         Traverse the filesystem and yield files compliant with current filters.
 
-        Uses an optimized walk that prunes excluded directories early to
-        prevent unnecessary disk I/O.
-
         Args:
             input_path: Absolute project root path.
             extensions: Allowed extensions whitelist.
@@ -114,22 +111,33 @@ class ProjectScannerService:
                     continue
 
                 # 4. CLASSIFICATION: Determine processing eligibility based on type
+                # --------------------------------------------------------------
                 should_process = False
+                file_is_test = is_test(file_name)
+                file_is_resource = is_resource_file(file_name)
 
-                if process_resources and is_resource_file(file_name):
-                    should_process = True
-                elif process_tests and is_test(file_name):
-                    should_process = True
-                elif process_modules:
-                    # Target modules by extension or exact filename (e.g. Dockerfile)
+                if file_is_test:
+                    if process_tests:
+                        should_process = True
+                    else:
+                        yield {"status": "skipped", "rel_path": rel_path}
+                        continue
+
+                elif file_is_resource:
+                    if process_resources:
+                        should_process = True
+
+                # If not explicitly marked yet, check if it qualifies as a source module
+                if not should_process and process_modules:
                     if ext in extensions or file_name in extensions:
                         should_process = True
 
+                # 5. DECISION
                 if not should_process:
                     yield {"status": "skipped", "rel_path": rel_path}
                     continue
 
-                # 5. EMIT: Return metadata for valid file
+                # 6. EMIT
                 yield {
                     "status": "process",
                     "file_path": file_path,
@@ -199,11 +207,12 @@ class ProjectScannerService:
             return actual_error_path
 
         try:
-            # Force parent directory creation using the port
-            error_dir = os.path.dirname(os.path.abspath(error_output_path))
+            # Normalize path to ensure consistency across OS (fixes test assertions)
+            abs_error_path = os.path.abspath(error_output_path)
+            error_dir = os.path.dirname(abs_error_path)
             self._fs.safe_mkdir(error_dir)
 
-            with open(error_output_path, "w", encoding="utf-8") as f:
+            with open(abs_error_path, "w", encoding="utf-8") as f:
                 f.write("TRANSCRIPTION ERRORS REPORT:\n")
                 f.write("=" * 80 + "\n")
 

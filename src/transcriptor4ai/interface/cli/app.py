@@ -26,6 +26,7 @@ from transcriptor4ai.infrastructure.logging import LoggingConfig, configure_logg
 from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConfigRepository
 from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
+from transcriptor4ai.infrastructure import UserContextAdapter
 
 # Application Pipeline
 from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
@@ -74,6 +75,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # 4. INFRASTRUCTURE: Instantiate concrete implementation adapters
     fs = FileSystemAdapter()
     cache = SqliteCacheRepository(fs)
+    user_context = UserContextAdapter()
     config_repo = JsonConfigRepository(fs)
 
     # 5. CONFIGURATION: Resolve final state through merging layers
@@ -114,6 +116,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         result = run_pipeline(
             fs=fs,
             cache=cache,
+            user_context=user_context,
             config=clean_conf,
             overwrite=bool(args.overwrite),
             dry_run=bool(args.dry_run),

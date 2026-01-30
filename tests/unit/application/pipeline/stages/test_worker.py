@@ -14,6 +14,7 @@ def mock_locks(mocker):
     """
     Provides a thread-safe lock map where each lock is a mock
     supporting the context manager protocol via MagicMock.
+    Crucial to verify that the worker acquires the *correct* lock.
     """
     return {
         "module": mocker.MagicMock(),
@@ -35,7 +36,10 @@ def mock_paths():
 
 @pytest.fixture
 def mock_sanitizer(mocker):
-    """Mock for the PrivacySanitizerService."""
+    """
+    Mock for the PrivacySanitizerService.
+    Bypasses expensive regex operations for unit testing flow logic.
+    """
     service = mocker.Mock()
     # Streaming mock: returns the same lines it receives
     service.sanitize_stream.side_effect = lambda lines: lines
@@ -72,8 +76,10 @@ def test_worker_full_pipeline_happy_path(mocker, mock_locks, mock_paths, mock_sa
     assert result["mode"] == "module"
     assert result["processed_content"] == "def run(): pass\n"
 
-    # Ensures the module lock was used and append_entry called
+    # Ensures the module lock was acquired (Context Manager used)
     mock_locks["module"].__enter__.assert_called_once()
+
+    # Verify physical write delegation
     m_writer.assert_called_once_with(
         output_path="/out/modules.txt",
         rel_path=rel_path,
@@ -85,7 +91,7 @@ def test_worker_full_pipeline_happy_path(mocker, mock_locks, mock_paths, mock_sa
 def test_worker_routes_to_skeleton_mode_for_python(mocker, mock_locks, mock_paths, mock_sanitizer):
     """
     TC-02: Verifies that in 'skeleton' depth, Python files are
-    diverted to the AST skeletonizer.
+    diverted to the AST skeletonizer service.
     """
     # 1. ARRANGE
     mocker.patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content",
@@ -136,7 +142,7 @@ def test_worker_identifies_and_locks_tests(mocker, mock_locks, mock_paths, mock_
 def test_worker_skips_when_depth_is_tree_only(mocker, mock_locks, mock_paths, mock_sanitizer):
     """
     TC-04: Verifies that 'tree_only' depth results in no I/O operations
-    and returns a 'skip' status.
+    and returns a 'skip' status immediately.
     """
     # 1. ARRANGE
     m_reader = mocker.patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content")
@@ -152,6 +158,7 @@ def test_worker_skips_when_depth_is_tree_only(mocker, mock_locks, mock_paths, mo
     # 3. ASSERT
     assert result["ok"] is False
     assert result["mode"] == "skip"
+    # Ensure expensive I/O was bypassed
     m_reader.assert_not_called()
 
 
@@ -159,7 +166,7 @@ def test_worker_skips_when_depth_is_tree_only(mocker, mock_locks, mock_paths, mo
 def test_worker_handles_io_error_gracefully(mocker, mock_locks, mock_paths, mock_sanitizer):
     """
     TC-05: Verifies that if reading fails (e.g. Permission Denied),
-    the worker returns 'ok=False' instead of crashing the pool.
+    the worker returns 'ok=False' instead of crashing the thread pool.
     """
     # 1. ARRANGE
     mocker.patch("transcriptor4ai.application.pipeline.stages.worker.stream_file_content",

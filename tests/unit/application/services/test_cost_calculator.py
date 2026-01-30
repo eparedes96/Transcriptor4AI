@@ -10,10 +10,13 @@ from transcriptor4ai.application.services.cost_calculator import CostCalculatorS
 
 @pytest.fixture
 def mock_registry(mocker):
-    """Provides a mock implementation of the IModelRegistry port."""
+    """
+    Provides a mock implementation of the IModelRegistry port.
+    Uses side_effect to simulate a dictionary lookup behavior akin to the real repo.
+    """
     registry = mocker.Mock()
 
-    # Default behavior for known models using side_effect
+    # Default behavior for known models using side_effect to simulate DB lookup
     registry.get_model_info.side_effect = lambda name: {
         "gpt-4o": {"input_cost_1k": 0.005, "context_window": 128000},
         "claude-3-5-sonnet": {"input_cost_1k": 0.003, "context_window": 200000},
@@ -43,6 +46,7 @@ def test_calculate_cost_standard_precision(calculator):
     result = calculator.calculate_cost(tokens, model)
 
     # 3. ASSERT
+    # Using approx is mandatory for floating point currency calculations
     assert result == pytest.approx(expected_usd)
 
 
@@ -70,7 +74,7 @@ def test_calculate_cost_uses_precalculated_override(calculator):
 def test_calculate_cost_returns_zero_on_unknown_model(calculator, mock_registry):
     """
     Safety check: If the registry returns None for a model, the cost must
-    be 0.0 instead of raising a KeyError or TypeError.
+    be 0.0 instead of raising a KeyError or TypeError (crashing the UI).
     """
     # 1. ARRANGE
     # We use a name that the side_effect lambda won't find in its dict
@@ -89,11 +93,9 @@ def test_calculate_cost_handles_invalid_token_counts(calculator, tokens):
     """
     Validates that zero, negative or null token counts result in
     zero cost without crashing the service.
-
-    NOTE: For this test to pass with 'None', the SUT (cost_calculator.py)
-    must sanitize the input (e.g., tokens or 0).
     """
     # 2. ACT
+    # Type ignore used because we are intentionally testing bad input resilience
     result = calculator.calculate_cost(tokens, "gpt-4o")  # type: ignore
 
     # 3. ASSERT
@@ -115,10 +117,10 @@ def test_get_context_window_returns_correct_limit(calculator):
 def test_get_context_window_fallback_on_missing_data(calculator, mock_registry):
     """
     Ensures a safe default context window (4096) is returned if the model
-    info is missing or corrupted.
+    info is missing or corrupted to prevent buffer overflows in logic.
     """
     # 1. ARRANGE
-    # Ensure side_effect is None so we can return a specific value
+    # Ensure side_effect is cleared so we can return a specific None value
     mock_registry.get_model_info.side_effect = None
     mock_registry.get_model_info.return_value = None
 
@@ -149,12 +151,12 @@ def test_sync_remote_data_delegation(calculator, mock_registry):
 @pytest.mark.unit
 def test_calculate_cost_resilience_to_malformed_prices(calculator, mock_registry):
     """
-    Ensures that if the price in the registry is not a valid number,
-    the calculator fails gracefully returning 0.0 cost.
+    Ensures that if the price in the registry is not a valid number (string or garbage),
+    the calculator fails gracefully returning 0.0 cost instead of ValueError.
     """
     # 1. ARRANGE
     # CRITICAL: We must clear the side_effect from the fixture to allow
-    # the return_value to take effect.
+    # the return_value to take effect for this specific test case.
     mock_registry.get_model_info.side_effect = None
     mock_registry.get_model_info.return_value = {"input_cost_1k": "free_tier"}
 

@@ -84,8 +84,13 @@ def get_user_data_dir() -> str:
         home = os.path.expanduser("~")
         path = os.path.join(home, UNIX_APP_DIR_NAME)
 
-    # Uses exist_ok=True to ensure the path is usable immediately
-    os.makedirs(path, exist_ok=True)
+    try:
+        os.makedirs(path, exist_ok=True)
+    except FileExistsError:
+        # Final safety check: if it's already a directory, we can proceed
+        if not os.path.isdir(path):
+            raise
+
     return os.path.abspath(path)
 
 

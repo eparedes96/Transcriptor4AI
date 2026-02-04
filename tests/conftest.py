@@ -8,7 +8,9 @@ mocks for the Transcriptor4AI testing suite. Ensures isolation from
 external systems (I/O, Network, OS) for Unit Tests.
 """
 
+import os
 import pytest
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 
@@ -173,3 +175,29 @@ def mock_tokenizer_service(mocker: Any) -> Any:
 
     mock.count.side_effect = fake_count
     return mock
+
+
+# ==============================================================================
+# PATHS & ASSETS (INTEGRATION HELPERS)
+# ==============================================================================
+
+@pytest.fixture(scope="session")
+def static_assets_path() -> Path:
+    """
+    Resolves the absolute path to the static test data directory.
+    This fixture ensures consistency regardless of where pytest is invoked.
+
+    Returns:
+        Path: The absolute path to 'tests/data'.
+    """
+    # Assumes conftest.py is located directly inside 'tests/'
+    return Path(__file__).parent / "data"
+
+
+@pytest.fixture(scope="session")
+def sample_project_source(static_assets_path: Path) -> Path:
+    """
+    Shortcut to the 'sample_project' ground-truth directory.
+    Use this source to copy files into 'tmp_path' for destructive tests.
+    """
+    return static_assets_path / "sample_project"

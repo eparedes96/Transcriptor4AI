@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "app_settings": {
+    "theme": "System",
+    "broken_json_structure": [
+      "missing_closing_bracket_here"
+    ,
+    "last_session": "This string allows JSON to parse partially but fails logic check if expected dict"
+}

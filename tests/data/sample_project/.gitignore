@@ -1,0 +1,9 @@
+# Ignorar logs
+*.log
+
+# Ignorar carpetas temporales
+temp/
+
+# Ignorar secretos del sistema
+.env
+__pycache__/

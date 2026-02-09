@@ -16,7 +16,8 @@ def test_calculate_sha256_should_hash_real_binary_file_correctly(static_assets_p
     containing non-UTF8 binary data.
     """
     # 1. ARRANGE: Use the binary simulation asset
-    target_file = static_assets_path / "edge_cases" / "binary_simulation.py"
+    target_file = tmp_path / "binary_simulation.bin"
+    target_file.write_bytes(b"print('Hello')\n\x80\xff\xfe\x00\n")
 
     # Calculate expected hash manually to verify the function's logic
     sha256_hash = hashlib.sha256()

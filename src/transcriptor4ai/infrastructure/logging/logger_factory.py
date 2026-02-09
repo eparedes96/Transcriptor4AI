@@ -59,8 +59,8 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
     Execute idempotent configuration of the root logger using non-blocking I/O.
 
     Implements a QueueListener architecture to prevent main thread blocking during
-    file writes. Checks internal flags to avoid redundant handler attachments
-    unless explicit re-configuration is requested.
+    file writes. Checks internal flags and handler presence to avoid redundant
+    attachments unless explicit re-configuration is requested.
 
     Args:
         cfg: Structural configuration for the logging system.
@@ -72,24 +72,23 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
     root = logging.getLogger()
 
     try:
-        # 1. VALIDATION: Idempotency Check
+        # 1. VALIDATION: Strict Idempotency Check
         already_configured = bool(getattr(root, _CONFIGURED_FLAG_ATTR, False))
-        if already_configured and not force:
+
+        # Check if our QueueHandler is actually present to handle test environment resets
+        has_handler = any(isinstance(h, QueueHandler) and _is_our_handler(h) for h in root.handlers)
+
+        if already_configured and has_handler and not force:
             return root
 
+        # 2. PREPARATION: Resolve levels and formatters
         level_int = _parse_level(cfg.level)
-        root.setLevel(level_int)
-
-        # Cleanup existing infrastructure to prevent handler leakage
-        _remove_our_handlers(root)
-        _stop_existing_listener(root)
-
-        # 2. SETUP: Handler Definition
         console_formatter = logging.Formatter(cfg.console_fmt)
         file_formatter = logging.Formatter(cfg.file_fmt, datefmt=cfg.datefmt)
 
         handlers_list: List[logging.Handler] = []
 
+        # Setup Physical Handlers (Those behind the Queue)
         if cfg.console:
             sh = logging.StreamHandler(sys.stderr)
             sh.setLevel(level_int)
@@ -111,37 +110,42 @@ def configure_logging(cfg: LoggingConfig, *, force: bool = False) -> logging.Log
         if not handlers_list:
             return root
 
-        # 3. ORCHESTRATION: Queue-Based Non-blocking I/O
+        # 3. RECONFIGURATION: Teardown old infrastructure
+        _stop_existing_listener(root)
+        _remove_our_handlers(root)
+
+        # 4. ORCHESTRATION: Start Non-blocking Async Logging
         log_queue: queue.Queue[logging.LogRecord] = queue.Queue(-1)
 
-        queue_handler = QueueHandler(log_queue)
-        _tag_handler(queue_handler)
-
+        # Create the listener that processes the queue in a background thread
         listener = QueueListener(log_queue, *handlers_list, respect_handler_level=True)
         listener.start()
 
-        # Attach single QueueHandler to the root to intercept all logs
-        root.addHandler(queue_handler)
+        # The QueueHandler is the only one attached to root. It's our "Proxy".
+        proxy_handler = QueueHandler(log_queue)
+        _tag_handler(proxy_handler)
+        root.addHandler(proxy_handler)
+        root.setLevel(level_int)
 
-        # Persistence of listener state for future lifecycle management
+        # Persistence of state
         setattr(root, _QUEUE_LISTENER_ATTR, listener)
         setattr(root, _CONFIGURED_FLAG_ATTR, True)
 
-        # Register cleanup to ensure logs are flushed on shutdown
+        # Ensure shutdown cleanup
         atexit.register(_safe_stop_listener, listener)
 
         return root
 
-    # Fallback to emergency console logging if the infrastructure fails
-    except Exception:
+    except Exception as e:
+        # Fallback to direct emergency console logging
+        sys.stderr.write(f"CRITICAL: Logging system initialization failed: {e}\n")
         try:
             fallback = logging.getLogger()
             fallback.setLevel(logging.INFO)
             _remove_our_handlers(fallback)
-            _stop_existing_listener(fallback)
 
             sh = logging.StreamHandler(sys.stderr)
-            sh.setFormatter(logging.Formatter("CRITICAL FALLBACK | %(levelname)s | %(message)s"))
+            sh.setFormatter(logging.Formatter("FALLBACK | %(levelname)s | %(message)s"))
             _tag_handler(sh)
             fallback.addHandler(sh)
 
@@ -229,6 +233,7 @@ def _safe_stop_listener(listener: Optional[QueueListener]) -> None:
         return
 
     try:
+        # Check if the internal thread is alive before attempting to stop
         if hasattr(listener, "_thread") and listener._thread is not None:
             listener.stop()
     except Exception:

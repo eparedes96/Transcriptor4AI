@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 # ==============================================================================
-# TEST GROUP: PRIVACY SANITIZER SERVICE
+# TEST GROUP: PRIVACY SANITIZER SERVICE (UNIT)
 # ==============================================================================
 
 import pytest
@@ -12,7 +12,7 @@ from transcriptor4ai.application.transformation.privacy_sanitizer import Privacy
 def mock_user_context(mocker):
     """
     Creates a configurable mock for the UserContext Port.
-    Default behavior mimics a standard Linux environment.
+    Simulates a standard developer environment to provide ground truth for redaction.
     """
     mock = mocker.Mock()
     mock.get_username.return_value = "testuser"
@@ -23,21 +23,24 @@ def mock_user_context(mocker):
 @pytest.fixture
 def sanitizer(mock_user_context) -> PrivacySanitizerService:
     """
-    Injects the mock context into the service, bypassing OS calls.
+    Injects the mock context into the service, bypassing real OS calls.
     """
     return PrivacySanitizerService(mock_user_context)
 
 
-@pytest.mark.unit
-def test_sanitize_redacts_specific_provider_keys(sanitizer):
+# ------------------------------------------------------------------------------
+# SCENARIO: SECRET REDACTION (REGEX ENGINE)
+# ------------------------------------------------------------------------------
+
+def test_sanitize_should_redact_high_entropy_provider_keys(sanitizer):
     """
-    Verifies that known high-entropy patterns (OpenAI, AWS) are
-    detected and redacted securely.
+    Ensures that known API key patterns (OpenAI, AWS) are detected
+    and replaced by a generic sensitive tag.
     """
     # 1. ARRANGE
     openai_key = "sk-7n9s8d7f6g5h4j3k2l1m0n9b8v7c6x5z4a3s2d1f"
     aws_key = "AKIA0987654321ABCDEF"
-    text = f"Connect: {openai_key} | AWS: {aws_key}"
+    text = f"CRITICAL: key={openai_key}, access={aws_key}"
 
     # 2. ACT
     result = sanitizer.sanitize(text)
@@ -48,39 +51,30 @@ def test_sanitize_redacts_specific_provider_keys(sanitizer):
     assert "[[REDACTED_SENSITIVE]]" in result
 
 
-@pytest.mark.unit
-def test_sanitize_redacts_generic_secret_assignments(sanitizer):
+@pytest.mark.parametrize("assignment, expected", [
+    ('db_password = "SuperSecretPassword123"', 'db_password = "[[REDACTED_SECRET]]"'),
+    ("api_token: 'abcdef1234567890'", "api_token: '[[REDACTED_SECRET]]'"),
+    ("auth_key = 'x-live-12345678'", "auth_key = '[[REDACTED_SECRET]]'"),
+    ("PWD: \"MyHiddenPassword\"", "PWD: \"[[REDACTED_SECRET]]\""),
+])
+def test_sanitize_should_redact_generic_secret_assignments(sanitizer, assignment, expected):
     """
-    Verifies the heuristic logic that detects assignments of
-    sensitive variables (passwords, tokens) regardless of language.
+    Validates the heuristic assignment detection for various naming
+    conventions and languages.
     """
-    # 1. ARRANGE
-    cases = [
-        ('db_password = "SuperSecretPassword123"', 'db_password = "[[REDACTED_SECRET]]"'),
-        ("api_token: 'abcdef1234567890'", "api_token: '[[REDACTED_SECRET]]'"),
-        ("auth_key = 'x-live-12345678'", "auth_key = '[[REDACTED_SECRET]]'")
-    ]
+    # 2. ACT
+    result = sanitizer.sanitize(assignment)
 
-    for raw_input, expected in cases:
-        # 2. ACT
-        result = sanitizer.sanitize(raw_input)
-
-        # 3. ASSERT
-        assert result == expected
+    # 3. ASSERT
+    assert result == expected
 
 
-@pytest.mark.unit
-def test_sanitize_ignores_false_positives(sanitizer):
+def test_sanitize_should_ignore_short_or_safe_assignments(sanitizer):
     """
-    Ensures that common, safe strings or short variable assignments
-    are NOT flagged as secrets.
+    Prevents over-redaction (False Positives) on common non-sensitive assignments.
     """
     # 1. ARRANGE
-    safe_text = (
-        "env = 'production'\n"
-        "timeout = '30s'\n"
-        "public_key = 'short'\n"  # Too short to be a real secret
-    )
+    safe_text = "env='prod'\ntimeout=30\npublic_key='short'"
 
     # 2. ACT
     result = sanitizer.sanitize(safe_text)
@@ -90,76 +84,93 @@ def test_sanitize_ignores_false_positives(sanitizer):
     assert "[[REDACTED" not in result
 
 
-@pytest.mark.unit
-def test_sanitize_redacts_network_info(sanitizer):
+def test_sanitize_should_redact_network_identifiers(sanitizer):
     """
-    Verifies redaction of PII like IP addresses and Emails.
+    Verifies that IP addresses and Emails (PII) are masked to prevent identity leaks.
     """
     # 1. ARRANGE
-    text = "Server at 192.168.1.50, contact admin@corp.com"
+    text = "Inbound from 192.168.1.1, contact: support@transcriptor.ai"
 
     # 2. ACT
     result = sanitizer.sanitize(text)
 
     # 3. ASSERT
-    assert "192.168.1.50" not in result
-    assert "admin@corp.com" not in result
+    assert "192.168.1.1" not in result
+    assert "support@transcriptor.ai" not in result
     assert result.count("[[REDACTED_SENSITIVE]]") == 2
 
 
-@pytest.mark.unit
-def test_mask_paths_uses_injected_context_linux(sanitizer, mock_user_context):
+# ------------------------------------------------------------------------------
+# SCENARIO: PATH MASKING (ENVIRONMENT AWARENESS)
+# ------------------------------------------------------------------------------
+
+def test_mask_paths_should_anonymize_injected_linux_context(sanitizer, mock_user_context):
     """
-    Simulates a Unix environment via the Port Mock and verifies
-    path anonymization.
+    Simulates a Linux environment and verifies that local paths are
+    transformed into platform-agnostic tags.
     """
-    # 1. ARRANGE: Configure mock for Linux
+    # 1. ARRANGE
     mock_user_context.get_home_directory.return_value = "/home/dev"
     mock_user_context.get_username.return_value = "dev"
-
-    input_text = "Logs located at /home/dev/projects/app.log"
+    input_text = "Config saved in /home/dev/workspace/app.json"
 
     # 2. ACT
     result = sanitizer.mask_paths(input_text)
 
     # 3. ASSERT
     assert "/home/dev" not in result
-    assert "<USER_HOME>/projects/app.log" in result
+    assert "<USER_HOME>/workspace/app.json" in result
 
 
-@pytest.mark.unit
-def test_mask_paths_uses_injected_context_windows(sanitizer, mock_user_context):
+def test_mask_paths_should_anonymize_injected_windows_context(sanitizer, mock_user_context):
     """
-    Simulates a Windows environment via the Port Mock.
-    Crucial for verifying cross-platform logic without needing a Windows runner.
+    Ensures Windows-style backslashes are handled and normalized during masking.
     """
-    # 1. ARRANGE: Configure mock for Windows
+    # 1. ARRANGE
     mock_user_context.get_home_directory.return_value = r"C:\Users\Admin"
     mock_user_context.get_username.return_value = "Admin"
-
-    # Input uses Windows backslashes
-    input_text = r"Error in C:\Users\Admin\Documents\secret.txt"
+    input_text = r"Error at C:\Users\Admin\AppData\Local\Temp\log.txt"
 
     # 2. ACT
     result = sanitizer.mask_paths(input_text)
 
     # 3. ASSERT
-    # The sanitizer usually normalizes to forward slashes for Regex simplicity
     assert "Admin" not in result
-    assert "<USER_HOME>/Documents/secret.txt" in result
+    # Sanitizer normalizes to forward slashes internally for consistency
+    assert "<USER_HOME>/AppData/Local/Temp/log.txt" in result
 
 
-@pytest.mark.unit
-def test_mask_paths_resilience_to_missing_context(sanitizer, mock_user_context):
+def test_mask_paths_with_real_deeply_nested_asset(sanitizer, mock_user_context, static_assets_path):
     """
-    Verifies fail-safe behavior: If OS context cannot be resolved (None),
-    the sanitizer should return the text unaltered instead of crashing.
+    EDGE CASE: Validates that even deeply nested real paths from the project
+    data are masked if they are passed as text.
+    """
+    # 1. ARRANGE
+    real_file_path = static_assets_path / "edge_cases" / "deeply_nested" / "level_1" / "level_2" / "level_3" / "level_4" / "deep_file.txt"
+
+    # We simulate that the 'static_assets_path' is actually part of the user's home
+    home_path = str(static_assets_path.parent)
+    mock_user_context.get_home_directory.return_value = home_path
+
+    input_text = f"Processing physical file: {real_file_path}"
+
+    # 2. ACT
+    result = sanitizer.mask_paths(input_text)
+
+    # 3. ASSERT
+    assert home_path not in result
+    assert "<USER_HOME>/data/edge_cases/deeply_nested" in result.replace("\\", "/")
+
+
+def test_mask_paths_should_fail_safely_when_context_is_missing(sanitizer, mock_user_context):
+    """
+    Ensures the application doesn't crash if OS identity cannot be
+    resolved; it should return the original text.
     """
     # 1. ARRANGE
     mock_user_context.get_home_directory.return_value = None
     mock_user_context.get_username.return_value = None
-
-    text = "Path /usr/bin/python"
+    text = "System path: /etc/hosts"
 
     # 2. ACT
     result = sanitizer.mask_paths(text)
@@ -168,16 +179,19 @@ def test_mask_paths_resilience_to_missing_context(sanitizer, mock_user_context):
     assert result == text
 
 
-@pytest.mark.unit
-def test_sanitize_stream_consistency(sanitizer):
+# ------------------------------------------------------------------------------
+# SCENARIO: STREAMING INTEGRITY
+# ------------------------------------------------------------------------------
+
+def test_sanitize_stream_should_match_string_logic(sanitizer):
     """
-    Validates that the streaming implementation produces identical
-    results to the full-string method.
+    Verifies that the streaming (generator) implementation maintains
+    semantic parity with the full-string method.
     """
     # 1. ARRANGE
     lines = [
-        "API_KEY = '1234567890abcdef'\n",
-        "print('clean')\n"
+        "SECRET_KEY = 'secret_val_12345'\n",
+        "DEBUG_LOG: User john_doe connected.\n"
     ]
     iterator = iter(lines)
 
@@ -187,5 +201,5 @@ def test_sanitize_stream_consistency(sanitizer):
 
     # 3. ASSERT
     assert "[[REDACTED_SECRET]]" in joined_result
-    assert "clean" in joined_result
+    assert "john_doe" in joined_result
     assert len(stream_result) == 2

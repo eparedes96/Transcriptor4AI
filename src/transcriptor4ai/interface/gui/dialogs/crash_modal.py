@@ -6,7 +6,7 @@ Critical Crash Reporting Dialog.
 Constructs a high-priority modal window to intercept and display unhandled 
 exceptions. Provides diagnostic information including stack traces and local 
 logs, allowing the user to submit detailed bug reports via an asynchronous 
-background task.
+background task using the generic telemetry worker.
 """
 
 import logging
@@ -18,11 +18,11 @@ from typing import Any, Dict, Optional, Tuple
 import customtkinter as ctk
 
 from transcriptor4ai.infrastructure.logging import get_recent_logs
+from transcriptor4ai.infrastructure.network.telemetry_api_client import TelemetryApiClient
 from transcriptor4ai.interface.gui.common import async_workers
 from transcriptor4ai.shared import constants as const
 from transcriptor4ai.shared.i18n import i18n
 
-# Global logger initialization
 logger = logging.getLogger(__name__)
 
 # ==============================================================================
@@ -43,13 +43,14 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     Instantiate and display the crash reporting interface.
 
     Handles the UI lifecycle and orchestrates background telemetry submission.
+    Implements a fail-safe root creation if the application crashed during bootstrap.
 
     Args:
         error_msg: The primary exception message.
         stack_trace: Full Python traceback string.
         parent: Optional reference to the main application window.
     """
-    # 1. INITIALIZATION: Setup window context
+    # INITIALIZATION: Setup window context
     is_root_created = False
     if parent is None:
         parent = ctk.CTk()
@@ -59,37 +60,37 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     toplevel = ctk.CTkToplevel(parent)
     toplevel.title(i18n.t("gui.crash.title"))
     toplevel.geometry("700x650")
-    toplevel.grab_set()  # Force user attention by blocking parent interaction
+    toplevel.grab_set()
 
     # ==========================================================================
     # UI CONSTRUCTION
     # ==========================================================================
 
-    # 2. HEADER: Branding and urgent notice
+    # HEADER: Branding and urgent notice
     ctk.CTkLabel(
         toplevel,
         text=i18n.t("gui.crash.header"),
-        font=ctk.CTkFont(size=20, weight="bold"),
+        font=("Any", 20, "bold"),
         text_color=COLOR_DANGER
     ).pack(pady=(20, 10))
 
     ctk.CTkLabel(
         toplevel,
         text="A critical error occurred. Technical details have been captured.",
-        font=ctk.CTkFont(size=13)
+        font=("Any", 13)
     ).pack(pady=(0, 10))
 
-    # 3. DIAGNOSTICS: Read-only traceback display
+    # DIAGNOSTICS: Read-only traceback display
     textbox = ctk.CTkTextbox(toplevel, font=("Consolas", 11), height=250)
     textbox.insert("1.0", f"CRITICAL ERROR: {error_msg}\n\n{stack_trace}")
     textbox.configure(state="disabled")
     textbox.pack(fill="both", expand=True, padx=20, pady=10)
 
-    # 4. INPUT: Optional qualitative user context
+    # USER CONTEXT: Optional qualitative input
     ctk.CTkLabel(
         toplevel,
         text="What were you doing when this happened? (Optional):",
-        font=ctk.CTkFont(weight="bold"),
+        font=("Any", 12, "bold"),
         anchor="w"
     ).pack(fill="x", padx=20, pady=(10, 5))
 
@@ -121,7 +122,7 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
             mb.showerror("Submission Error", f"Could not send report:\n{message}")
 
     def _send_report() -> None:
-        """Assemble diagnostic payload and dispatch to background thread."""
+        """Assemble payload and dispatch to the generic telemetry worker."""
         btn_report.configure(state="disabled")
         status_lbl.configure(text="Transmitting diagnostics...", text_color=COLOR_ACCENT)
 
@@ -135,20 +136,25 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
             "recent_logs": get_recent_logs(150)
         }
 
-        # Threaded execution to maintain UI responsiveness
+        client = TelemetryApiClient()
         threading.Thread(
-            target=async_workers.submit_error_report_task,
-            args=(payload, lambda res: parent.after(0, lambda: _on_report_complete(res))),
+            target=async_workers.submit_telemetry_task,
+            args=(
+                client,
+                payload,
+                True,
+                lambda res: parent.after(0, lambda: _on_report_complete(res))
+            ),
             daemon=True
         ).start()
 
     def _close_app() -> None:
-        """Terminate the process after crash notification."""
+        """Terminate the process after cleanup."""
         if is_root_created:
             parent.destroy()
         else:
             toplevel.destroy()
-        # Clean exit is handled by main.py exception hook but we ensure it here
+
         import sys
         sys.exit(1)
 
@@ -158,25 +164,25 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
     btn_frame = ctk.CTkFrame(toplevel, fg_color="transparent")
     btn_frame.pack(fill="x", padx=20, pady=20)
 
-    # Utility: Allow user to copy info for manual report/debugging
+    # CLIPBOARD: Allow manual reporting
     ctk.CTkButton(
         btn_frame,
         text="Copy to Clipboard",
         command=lambda: parent.clipboard_append(f"Error: {error_msg}\n\n{stack_trace}")
     ).pack(side="left", padx=5)
 
-    # Action: Automated Telemetry
+    # TELEMETRY: Automated reporting
     btn_report = ctk.CTkButton(
         btn_frame,
         text="Submit Bug Report",
         fg_color=COLOR_DANGER,
         hover_color=COLOR_DANGER_HOVER,
-        font=ctk.CTkFont(weight="bold"),
+        font=("Any", 12, "bold"),
         command=_send_report
     )
     btn_report.pack(side="left", padx=5, expand=True)
 
-    # Action: Exit
+    # EXIT
     ctk.CTkButton(
         btn_frame,
         text="Close Application",
@@ -185,5 +191,6 @@ def show_crash_modal(error_msg: str, stack_trace: str, parent: Optional[ctk.CTk]
         command=_close_app
     ).pack(side="right", padx=5)
 
+    # If the app crashed at startup, we need to run our own loop
     if is_root_created:
         parent.mainloop()

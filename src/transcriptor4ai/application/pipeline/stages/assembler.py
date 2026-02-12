@@ -123,7 +123,7 @@ def assemble_and_finalize(
         existing_files=env_context["existing_files"],
         trans_res=trans_res,
         tree_lines=tree_lines,
-        tree_path=paths["tree"],
+        tree_path=paths.get("tree", ""),
         token_count=final_token_count,
         generated_files=gen_files_map,
         dry_run=dry_run

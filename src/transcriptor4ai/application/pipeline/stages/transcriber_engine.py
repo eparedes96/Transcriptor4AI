@@ -158,6 +158,7 @@ def execute_parallel_workers(
 
             try:
                 worker_res = future.result()
+
                 if worker_res["ok"]:
                     results["processed"] += 1
                     results["total_tokens"] += worker_res.get("token_count", 0)
@@ -184,5 +185,12 @@ def execute_parallel_workers(
                         rel_path=worker_res["rel_path"],
                         error=worker_res["error"]
                     ))
+
             except Exception as e:
-                logger.error(f"Engine: Synchronization failure in worker pool: {e}")
+                error_msg = f"System error in worker thread: {str(e)}"
+                logger.error(f"Engine: {error_msg}")
+
+                results["errors"].append(TranscriptionError(
+                    rel_path="SYSTEM/CONCURRENCY",
+                    error=error_msg
+                ))

@@ -1,5 +1,5 @@
 # ==============================================================================
-# TEST GROUP: FEEDBACK SUBMISSION WORKFLOW (FINAL VERSION)
+# TEST GROUP: FEEDBACK SUBMISSION WORKFLOW (FIXED & SYNCHRONIZED)
 # ==============================================================================
 
 import pytest
@@ -14,12 +14,14 @@ from transcriptor4ai.shared import constants as const
 @pytest.fixture
 def mock_gui_env(mocker):
     """
-    Initializes a virtualized GUI context with a real hidden root to prevent
-    Tkinter font engine crashes and mocks blocking UI elements.
+    Initializes a virtualized GUI context with a real hidden root and
+    synchronous event scheduling to allow immediate UI assertions.
     """
-    # 1. ARRANGE: Create real Tkinter context
+    # 1. ARRANGE: Create real Tkinter context to support fonts
     app = ctk.CTk()
-    app.withdraw()  # Maintain window hidden
+    app.withdraw()
+
+    mocker.patch.object(app, "after", side_effect=lambda delay, func: func())
 
     # Mocking system message boxes
     m_info = mocker.patch("tkinter.messagebox.showinfo")
@@ -39,14 +41,14 @@ def mock_gui_env(mocker):
         "error": m_error
     }
 
-    # 3. ASSERT/CLEANUP: Ensure resources are released
+    # CLEANUP: Ensure resources are released
     app.destroy()
 
 
 @pytest.mark.gui
 def test_should_show_warning_when_fields_are_empty(mocker, mock_gui_env):
     """
-    Ensures that logic prevents submission if mandatory fields are missing.
+    Ensures that validation prevents submission if mandatory fields are missing.
     """
     # 1. ARRANGE: Open the modal
     app = mock_gui_env["app"]
@@ -72,7 +74,7 @@ def test_should_show_warning_when_fields_are_empty(mocker, mock_gui_env):
 @pytest.mark.gui
 def test_should_submit_feedback_successfully(mocker, mock_gui_env):
     """
-    Happy Path: Submitting valid feedback correctly calls the generic telemetry task.
+    Happy Path: Validating that the callback triggers 'showinfo' successfully.
     """
     # 1. ARRANGE: Mock threading and provide valid user input
     app = mock_gui_env["app"]
@@ -93,10 +95,10 @@ def test_should_submit_feedback_successfully(mocker, mock_gui_env):
                 if isinstance(sub, ctk.CTkButton) and "Send" in sub.cget("text"):
                     send_btn = sub
 
-    # 2. ACT: Click Send
+    # 2. ACT: Trigger Send
     send_btn._command()
 
-    # 3. ASSERT: Verify integration with generic telemetry service
+    # 3. ASSERT: Extract arguments from the generic telemetry task call
     # thread args: (client, payload, is_error_report, on_complete)
     assert m_thread.called
     thread_args = m_thread.call_args.kwargs["args"]
@@ -106,18 +108,21 @@ def test_should_submit_feedback_successfully(mocker, mock_gui_env):
     callback = thread_args[3]
 
     assert payload["subject"] == "UI Improvement"
-    assert is_error is False  # CRITICAL: Must be false for feedback
+    assert is_error is False
     assert payload["version"] == const.CURRENT_CONFIG_VERSION
 
-    # Execute callback synchronously to verify UI response
+    # Execute callback. Because 'app.after' is patched to be sync,
+    # showinfo is called within this same line.
     callback((True, "Success"))
+
     mock_gui_env["info"].assert_called_once()
+    assert "feedback has been sent" in mock_gui_env["info"].call_args[0][1]
 
 
 @pytest.mark.gui
 def test_should_handle_telemetry_failure_gracefully(mocker, mock_gui_env):
     """
-    Sad Path: Logic must catch network errors and notify the user via the Error Box.
+    Sad Path: Validating that network failures trigger 'showerror'.
     """
     # 1. ARRANGE
     app = mock_gui_env["app"]
@@ -138,11 +143,13 @@ def test_should_handle_telemetry_failure_gracefully(mocker, mock_gui_env):
     # 2. ACT: Trigger submission
     send_btn._command()
 
-    # Extract callback and simulate HTTP failure
+    # Extract callback from thread args
     callback = m_thread.call_args.kwargs["args"][3]
+
+    # Simulate HTTP failure
     callback((False, "HTTP 500: Server Error"))
 
-    # 3. ASSERT: User is alerted and modal stays open for retry
+    # 3. ASSERT: Verify the UI notified the user of the error
     mock_gui_env["error"].assert_called_once()
     assert "500" in mock_gui_env["error"].call_args[0][1]
 
@@ -150,16 +157,14 @@ def test_should_handle_telemetry_failure_gracefully(mocker, mock_gui_env):
 @pytest.mark.gui
 def test_should_redact_logs_when_user_opts_out(mocker, mock_gui_env):
     """
-    Privacy Point: Logs must be replaced by a placeholder if the checkbox is unchecked.
+    Privacy: Verify payload content when logging is disabled by user.
     """
     # 1. ARRANGE
     app = mock_gui_env["app"]
     m_thread = mocker.patch("threading.Thread")
     mocker.patch("customtkinter.CTkEntry.get", return_value="Feedback")
     mocker.patch("customtkinter.CTkTextbox.get", return_value="Msg")
-
-    # Mock checkbox to return 'unselected' state
-    m_chk = mocker.patch("customtkinter.CTkCheckBox.get", return_value=False)
+    mocker.patch("customtkinter.CTkCheckBox.get", return_value=False)  # Opt-out
 
     show_feedback_window(app)
     toplevel = [c for c in app.winfo_children() if isinstance(c, ctk.CTkToplevel)][0]
@@ -174,7 +179,7 @@ def test_should_redact_logs_when_user_opts_out(mocker, mock_gui_env):
     # 2. ACT
     send_btn._command()
 
-    # 3. ASSERT: Check payload content
+    # 3. ASSERT: Inspect the payload in thread args index 1
     payload = m_thread.call_args.kwargs["args"][1]
     assert "User opted out" in payload["logs"]
     assert "full_system_logs_mock" not in payload["logs"]

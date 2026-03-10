@@ -1,6 +1,8 @@
 import logging
-import pytest
 from dataclasses import FrozenInstanceError
+
+import pytest
+
 from transcriptor4ai.infrastructure.logging.logging_config import LoggingConfig, _LEVEL_MAP
 
 # ==============================================================================
@@ -12,10 +14,10 @@ def test_logging_config_should_initialize_with_sane_defaults():
     Verifies that a fresh instance of LoggingConfig contains the
     industrial-standard defaults defined in the specification.
     """
-    # 1. ACT
+    # 1. ARRANGE & 2. ACT
     config = LoggingConfig()
 
-    # 2. ASSERT
+    # 3. ASSERT
     assert config.level == "INFO"
     assert config.console is True
     assert config.log_file is None
@@ -23,6 +25,7 @@ def test_logging_config_should_initialize_with_sane_defaults():
     assert config.backup_count == 3
     assert "%(levelname)s" in config.console_fmt
     assert "%(asctime)s" in config.file_fmt
+
 
 def test_logging_config_should_allow_custom_values():
     """
@@ -46,6 +49,7 @@ def test_logging_config_should_allow_custom_values():
     assert config.console is False
     assert config.backup_count == 10
 
+
 def test_logging_config_is_immutable_by_design():
     """
     Ensures the dataclass is frozen. Any attempt to modify it at runtime
@@ -57,8 +61,10 @@ def test_logging_config_is_immutable_by_design():
     # 2. ACT & 3. ASSERT
     # Critical: Configuration must be read-only to prevent race conditions
     # during background logging initialization.
+    # We catch FrozenInstanceError which is raised by frozen dataclasses.
     with pytest.raises(FrozenInstanceError):
         config.level = "CRITICAL"
+
 
 @pytest.mark.parametrize("level_name, expected_const", [
     ("DEBUG", logging.DEBUG),
@@ -78,6 +84,7 @@ def test_level_map_should_contain_all_standard_python_levels(level_name, expecte
 
     # 2. ASSERT
     assert mapped_value == expected_const
+
 
 def test_level_map_integrity_should_match_all_expected_keys():
     """

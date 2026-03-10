@@ -1,7 +1,15 @@
-# --- Python ---
+# ==============================================================================
+# TRANSCRIPTOR4AI .GITIGNORE (Clean Repository Protocol)
+# ==============================================================================
+
+# --- Python Standard ---
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
 
 # --- Distribution / Build ---
 build/
@@ -10,23 +18,26 @@ dist/
 *.egg-info/
 .eggs/
 
-# --- IDEs (JetBrains/VSCode) ---
+# --- IDEs / Editors ---
 .idea/
 *.iml
 .vscode/
 
-# --- Environment ---
+# --- Environments & Logs ---
 .env
 .venv
 env/
 venv/
 *.log
 
-# --- Project Specific ---
-# User configuration (local only)
+# --- Infrastructure Cache & Local State ---
 config.json
+pricing_cache.json
+cache.db
+cache.db-journal
+cache.db-wal
 
-# Output files (do not track results)
+# --- Transcription Artifacts ---
 *_tests.txt
 *_modules.txt
 *_resources.txt
@@ -35,15 +46,10 @@ config.json
 *_full_context.txt
 transcript/
 
-# --- Testing ---
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
+# --- Internal Dev Tools & Private Test Suites ---
+tools/dev/
+tests/unit/tools/dev/
 
 # --- OS Specific ---
 .DS_Store
 Thumbs.db
-
-# --- Dev Specific ---
-Tools/Dev/

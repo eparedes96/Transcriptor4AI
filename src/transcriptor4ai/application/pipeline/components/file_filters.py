@@ -10,9 +10,15 @@ to ensure consistency across scanning and transcription phases.
 """
 
 import fnmatch
+import logging
 import os
 import re
 from typing import Final, List, Set
+
+# ==============================================================================
+# GLOBAL LOGGER CONFIGURATION
+# ==============================================================================
+logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # CLASSIFICATION CONSTANTS
@@ -89,10 +95,10 @@ def matches_include(name: str, include_patterns: List[re.Pattern]) -> bool:
 # ==============================================================================
 
 def determine_target_mode(
-    file_name: str,
-    depth: str,
-    process_tests: bool,
-    process_resources: bool
+        file_name: str,
+        depth: str,
+        process_tests: bool,
+        process_resources: bool
 ) -> str:
     """
     Apply domain policies to categorize a file for the transcription pipeline.
@@ -106,32 +112,49 @@ def determine_target_mode(
     Returns:
         str: Target category ('module', 'test', 'resource', 'skip').
     """
-    # 1. DEPTH CHECK: If depth is tree-only, skip all content processing
+    # 1. DEPTH CHECK: Early exit if processing logic is disabled
     if depth == "tree_only":
         return "skip"
 
-    # 2. TYPE EVALUATION: Identify the nature of the file
+    # 2. TYPE EVALUATION
     file_is_test = is_test(file_name)
     file_is_resource = is_resource_file(file_name)
 
-    # 3. ROUTING: Map file type to destination mode based on user flags
+    # 3. ROUTING LOGIC
     if file_is_test:
         return "test" if process_tests else "skip"
 
     if file_is_resource:
         return "resource" if process_resources else "module"
 
-    # Default fallback for logic modules
     return "module"
 
 
 def is_test(file_name: str) -> bool:
-    """Classify a file as a test suite based on polyglot naming conventions."""
-    pattern = (
-        r"^(test_.*|.*_test|Test.*|.*Test|.*Tests|.*TestCase|.*\.spec|.*\.test|.*\.e2e|.*\.cy)"
+    """
+    Classify a file as a test suite based on polyglot naming conventions.
+
+    Uses a strict pattern to avoid false positives like 'attest.py' or 'testing_utils.py'
+    by requiring logical boundaries (underscores, dots, or PascalCase).
+    """
+    # 1. test_... or ..._test (Python/Ruby snake_case)
+    # 2. Test[A-Z]... or ...Test (Java/C# PascalCase)
+    # 3. test[A-Z]... (JS/TS camelCase)
+    # 4. .spec, .test, .e2e, .cy (Web/Modern JS)
+    test_pattern = (
+        r"^(test_.*|.*_test|Test[A-Z].*|test[A-Z].*|[A-Z].*Test|"
+        r".*\.spec|.*\.test|.*\.e2e|.*\.cy)"
+    )
+
+    # Extension suffix (polyglot support)
+    extension_pattern = (
         r"\.(py|js|ts|jsx|tsx|java|kt|go|rs|cs|cpp|c|h|hpp|swift|php)$"
     )
-    return re.match(pattern, file_name, re.IGNORECASE) is not None
+
+    full_regex = f"{test_pattern}{extension_pattern}"
+
+    # Re-compiled without global IGNORECASE to maintain PascalCase/snake_case semantic precision
+    return re.match(full_regex, file_name) is not None
 
 
 def is_resource_file(file_name: str) -> bool:
@@ -148,7 +171,11 @@ def is_resource_file(file_name: str) -> bool:
 # ==============================================================================
 
 def load_gitignore_patterns(root_path: str) -> List[str]:
-    """Parse .gitignore and translate glob rules into Python regexes."""
+    """
+    Parse .gitignore and translate glob rules into Python regexes.
+
+    Handles missing files and I/O errors gracefully.
+    """
     gitignore_path = os.path.join(root_path, ".gitignore")
     if not os.path.exists(gitignore_path):
         return []
@@ -158,13 +185,15 @@ def load_gitignore_patterns(root_path: str) -> List[str]:
         with open(gitignore_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
+                # Skip comments and empty lines
                 if not line or line.startswith("#"):
                     continue
 
                 regex = _gitignore_to_regex(line)
                 if regex:
                     regex_patterns.append(regex)
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
+        # Uses module-level logger to record the failure
         logger.debug(f"Filters: Gitignore parse error in {root_path}: {e}")
 
     return regex_patterns
@@ -177,5 +206,5 @@ def _gitignore_to_regex(glob_pattern: str) -> str:
 
     try:
         return fnmatch.translate(glob_pattern)
-    except Exception:
+    except (re.error, TypeError):
         return ""

@@ -3,7 +3,7 @@
 # ==============================================================================
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from transcriptor4ai.interface.gui.common.ui_widgets import (
     parse_list_from_string,
     CTkScrollableDropdown
@@ -41,21 +41,41 @@ def test_parse_list_from_string_should_return_sanitized_list(input_str, expected
 def mock_ctk_environment(mocker):
     """
     Mocks the customtkinter library components to prevent actual
-    window rendering during tests.
+    window rendering and satisfy attribute lookups during tests.
     """
-    mocker.patch("customtkinter.CTkToplevel", MagicMock())
-    mocker.patch("customtkinter.CTkFrame", MagicMock())
-    mocker.patch("customtkinter.CTkScrollableFrame", MagicMock())
-    mocker.patch("customtkinter.CTkButton", MagicMock())
-    mocker.patch("customtkinter.CTkFont", MagicMock())
-    mocker.patch("customtkinter.ThemeManager", {"CTkFrame": {"fg_color": "gray", "border_color": "black"}})
+    # Create the structured ThemeManager mock
+    mock_theme_manager = mocker.Mock()
+    mock_theme_manager.theme = {
+        "CTkFrame": {"fg_color": "gray", "border_color": "black"}
+    }
+    mocker.patch("customtkinter.ThemeManager", mock_theme_manager)
+
+    # 100% Headless Tkinter Isolation
+    mocker.patch("customtkinter.CTkToplevel.__init__", return_value=None)
+    mocker.patch("customtkinter.CTkToplevel.withdraw")
+    mocker.patch("customtkinter.CTkToplevel.overrideredirect")
+    mocker.patch("customtkinter.CTkToplevel.attributes")
+    mocker.patch("customtkinter.CTkToplevel.bind")
+    mocker.patch("customtkinter.CTkToplevel.after")
+    mocker.patch("customtkinter.CTkToplevel.focus_set")
+    mocker.patch("customtkinter.CTkToplevel.deiconify")
+    mocker.patch("customtkinter.CTkToplevel.geometry")
+    mocker.patch("customtkinter.CTkToplevel.destroy")
+    mocker.patch("customtkinter.CTkToplevel.winfo_exists", return_value=True)
+    mocker.patch("customtkinter.CTkToplevel.focus_get")
+
+    # Mock visual components instantiated inside the dropdown
+    mocker.patch("customtkinter.CTkFrame")
+    mocker.patch("customtkinter.CTkScrollableFrame")
+    mocker.patch("customtkinter.CTkButton")
+    mocker.patch("customtkinter.CTkFont")
 
 
 @pytest.mark.unit
-def test_dropdown_initialization_should_setup_ui_structure(mocker, mock_ctk_environment):
+def test_dropdown_initialization_should_setup_ui_structure(mock_ctk_environment):
     """
     Ensures that creating a dropdown instantiates the expected
-    container hierarchy (Frame -> ScrollableFrame).
+    container hierarchy and retrieves theme attributes.
     """
     # 1. ARRANGE
     mock_attach = MagicMock()
@@ -69,13 +89,13 @@ def test_dropdown_initialization_should_setup_ui_structure(mocker, mock_ctk_envi
     )
 
     # 3. ASSERT
-    # Verify logical state, not physical UI
     assert dropdown._values == ["Model A", "Model B"]
     assert dropdown._width == 200
+    assert dropdown.overrideredirect.called
 
 
 @pytest.mark.unit
-def test_dropdown_item_click_should_trigger_command_and_close(mocker, mock_ctk_environment):
+def test_dropdown_item_click_should_trigger_command_and_close(mock_ctk_environment):
     """
     Validates that clicking an entry in the dropdown executes
     the logic provided by the controller and cleans up the UI.
@@ -84,43 +104,50 @@ def test_dropdown_item_click_should_trigger_command_and_close(mocker, mock_ctk_e
     mock_command = MagicMock()
     mock_attach = MagicMock()
 
-    # Mocking destroy since we inherited from MagicMocked Toplevel
     dropdown = CTkScrollableDropdown(attach=mock_attach, values=["Test"], command=mock_command)
-    dropdown.destroy = MagicMock()
+
+    # Reset mock since it might have been called in initialization
+    dropdown.destroy.reset_mock()
 
     # 2. ACT
     dropdown._on_item_click("Selected Value")
 
     # 3. ASSERT
-    # Ensures the controller is notified of the user's choice
     mock_command.assert_called_once_with("Selected Value")
-    # Ensures the dropdown is closed immediately after selection
     dropdown.destroy.assert_called_once()
 
 
 @pytest.mark.unit
-def test_safe_destroy_should_only_close_if_focus_is_lost(mocker, mock_ctk_environment):
+def test_safe_destroy_should_only_close_if_focus_is_lost(mock_ctk_environment):
     """
     Verifies that the dropdown doesn't close if the focus remains
-    within its own window (prevents premature closing).
+    within its own window (prevents premature closing during scrolling).
     """
     # 1. ARRANGE
     mock_attach = MagicMock()
     dropdown = CTkScrollableDropdown(attach=mock_attach, values=["A"])
-    dropdown.destroy = MagicMock()
+
+    # FIX: Inject the missing internal Tkinter identifier bypassed by headless mocking
+    # This prevents the native __str__ method from throwing an AttributeError
+    dropdown._w = ".mock_dropdown_window"
+
+    dropdown.destroy.reset_mock()
     dropdown.winfo_exists.return_value = True
 
-    # Case A: Focus is on a child widget (e.g., the internal scrollbar)
+    # Case A: Focus is on a child widget or the dropdown itself
+    # Logic: focused_widget.startswith(self) -> ".mock_dropdown_window.child".startswith(".mock_dropdown_window")
+    dropdown.focus_get.return_value = MagicMock(__str__=lambda s: ".mock_dropdown_window.child")
+
     # 2. ACT
-    dropdown.focus_get = MagicMock(return_value=MagicMock(__str__=lambda s: f"{dropdown}.child"))
     dropdown._safe_destroy()
 
     # 3. ASSERT
     dropdown.destroy.assert_not_called()
 
-    # Case B: Focus is outside the dropdown
+    # Case B: Focus is clearly outside (another window)
+    dropdown.focus_get.return_value = MagicMock(__str__=lambda s: ".main_window_entry")
+
     # 2. ACT
-    dropdown.focus_get = MagicMock(return_value=MagicMock(__str__=lambda s: ".other_window"))
     dropdown._safe_destroy()
 
     # 3. ASSERT
@@ -128,19 +155,20 @@ def test_safe_destroy_should_only_close_if_focus_is_lost(mocker, mock_ctk_enviro
 
 
 @pytest.mark.unit
-def test_on_focus_out_should_schedule_safe_destruction(mocker, mock_ctk_environment):
+def test_on_focus_out_should_schedule_safe_destruction(mock_ctk_environment):
     """
     Checks that losing focus triggers a delayed destruction
-    to allow internal event processing.
+    to allow time for item selection events to process.
     """
     # 1. ARRANGE
     mock_attach = MagicMock()
     dropdown = CTkScrollableDropdown(attach=mock_attach, values=["A"])
-    dropdown.after = MagicMock()
+
+    # Reset after mock to ignore the scheduled calls made during __init__
+    dropdown.after.reset_mock()
 
     # 2. ACT
     dropdown._on_focus_out()
 
     # 3. ASSERT
-    # Ensures a delay is used to handle click-then-focus races
     dropdown.after.assert_called_once_with(150, dropdown._safe_destroy)

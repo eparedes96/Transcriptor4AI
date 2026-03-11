@@ -8,23 +8,18 @@ Centralizes the detection of third-party tokenization libraries.
 """
 
 # 1. EXPORT BASE: (Critical to fix "Cannot find reference")
-from .base import DEFAULT_MODEL as DEFAULT_MODEL
-from .base import TokenizerStrategy as TokenizerStrategy
-
 # 2. EXPORT CONCRETE: (Expose specific implementations)
 from .anthropic import ANTHROPIC_AVAILABLE as ANTHROPIC_AVAILABLE
 from .anthropic import AnthropicApiStrategy as AnthropicApiStrategy
-
+from .base import DEFAULT_MODEL as DEFAULT_MODEL
+from .base import TokenizerStrategy as TokenizerStrategy
 from .google import GOOGLE_AVAILABLE as GOOGLE_AVAILABLE
 from .google import GoogleApiStrategy as GoogleApiStrategy
-
 from .heuristic import HeuristicStrategy as HeuristicStrategy
-
 from .local import MISTRAL_AVAILABLE as MISTRAL_AVAILABLE
 from .local import TRANSFORMERS_AVAILABLE as TRANSFORMERS_AVAILABLE
 from .local import MistralStrategy as MistralStrategy
 from .local import TransformersStrategy as TransformersStrategy
-
 from .openai import TIKTOKEN_AVAILABLE as TIKTOKEN_AVAILABLE
 from .openai import TiktokenStrategy as TiktokenStrategy
 

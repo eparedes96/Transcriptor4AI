@@ -11,7 +11,7 @@ rendering, and visual theme initialization.
 import logging
 import queue
 from logging.handlers import QueueHandler
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 # ==============================================================================
 # TEST GROUP: SKELETON GENERATOR LOGIC (UNIT)
 # ==============================================================================
-
 import pytest
-from pathlib import Path
+
 from transcriptor4ai.application.analysis.ast_parser import generate_skeleton_code
 
 

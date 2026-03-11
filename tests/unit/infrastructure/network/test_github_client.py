@@ -1,8 +1,8 @@
+
 import pytest
 import requests
-from io import BytesIO
-from transcriptor4ai.infrastructure.network.github_release_client import GithubReleaseClient
 
+from transcriptor4ai.infrastructure.network.github_release_client import GithubReleaseClient
 
 # ==============================================================================
 # TEST GROUP: GITHUB RELEASE CLIENT (UPDATE DISCOVERY)

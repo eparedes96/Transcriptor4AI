@@ -18,7 +18,6 @@ from transcriptor4ai.application.analysis.ast_parser import (
     generate_skeleton_code,
 )
 
-
 # ==============================================================================
 # TEST GROUP: AST PARSER EDGE CASES & COMPLEX SYNTAX
 # ==============================================================================

@@ -1,7 +1,10 @@
 import pytest
 import requests
-from transcriptor4ai.infrastructure.network.pricing_api_client import PricingApiClient, MODEL_DATA_TIMEOUT
 
+from transcriptor4ai.infrastructure.network.pricing_api_client import (
+    MODEL_DATA_TIMEOUT,
+    PricingApiClient,
+)
 
 # ==============================================================================
 # TEST GROUP: PRICING API CLIENT (DYNAMIC DISCOVERY)

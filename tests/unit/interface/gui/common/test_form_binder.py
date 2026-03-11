@@ -7,10 +7,10 @@ Ensures bidirectional synchronization between Domain Configuration
 and CustomTkinter UI components is consistent and fault-tolerant.
 """
 
-import pytest
-from unittest.mock import MagicMock
-from transcriptor4ai.interface.gui.common.form_binder import FormBinder
 
+import pytest
+
+from transcriptor4ai.interface.gui.common.form_binder import FormBinder
 
 # ==============================================================================
 # TEST GROUP: UI COMPONENT BINDING LOGIC

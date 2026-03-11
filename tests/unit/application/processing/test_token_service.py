@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import pytest
 import math
-from transcriptor4ai.application.processing.token_service import TokenizerService
+
+import pytest
+
 from transcriptor4ai.application.processing.strategies.heuristic import HeuristicStrategy
 from transcriptor4ai.application.processing.strategies.openai import TiktokenStrategy
-
+from transcriptor4ai.application.processing.token_service import TokenizerService
 
 # ==============================================================================
 # TEST GROUP: TOKENIZER SERVICE ORCHESTRATION
@@ -108,7 +109,6 @@ def test_tiktoken_strategy_handles_missing_encoding_with_fallback(mocker):
     """
     # 1. ARRANGE
     mocker.patch("transcriptor4ai.application.processing.strategies.openai.TIKTOKEN_AVAILABLE", True)
-    import tiktoken
 
     # First call fails, second succeeds
     mock_get = mocker.patch("tiktoken.get_encoding", side_effect=[

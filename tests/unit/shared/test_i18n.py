@@ -1,8 +1,8 @@
 import json
-import pytest
-import sys
-from transcriptor4ai.shared.i18n import I18n
 
+import pytest
+
+from transcriptor4ai.shared.i18n import I18n
 
 # ==============================================================================
 # TEST GROUP: LOCALIZATION LOGIC (I18n)

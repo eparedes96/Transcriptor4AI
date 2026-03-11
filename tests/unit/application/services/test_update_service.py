@@ -1,8 +1,8 @@
 import pytest
+
 from transcriptor4ai.application.services.update_service import UpdateManager, UpdateStatus
 from transcriptor4ai.domain.ports.network_port import IUpdateClient
 from transcriptor4ai.domain.ports.system_port import IFileSystem
-
 
 # ==============================================================================
 # TEST GROUP: UPDATE LIFECYCLE MANAGEMENT

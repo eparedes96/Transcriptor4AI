@@ -3,10 +3,11 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: PROJECT SCANNER SERVICE
 # ==============================================================================
-
 import os
 import re
+
 import pytest
+
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
 

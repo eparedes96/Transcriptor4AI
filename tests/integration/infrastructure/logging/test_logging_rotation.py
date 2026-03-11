@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
-import queue
 from pathlib import Path
 
 import pytest
 
-from transcriptor4ai.infrastructure.logging.logger_factory import configure_logging, _stop_existing_listener
+from transcriptor4ai.infrastructure.logging.logger_factory import (
+    _stop_existing_listener,
+    configure_logging,
+)
 from transcriptor4ai.infrastructure.logging.logging_config import LoggingConfig
-
 
 # ==============================================================================
 # TEST GROUP: LOGGING INFRASTRUCTURE INTEGRATION

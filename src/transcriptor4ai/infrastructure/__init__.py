@@ -15,15 +15,10 @@ including:
 # ==============================================================================
 # SYSTEM ADAPTERS (OS & FILESYSTEM)
 # ==============================================================================
-from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
-from transcriptor4ai.infrastructure.system.user_context_adapter import UserContextAdapter
-
 # ==============================================================================
-# PERSISTENCE ADAPTERS (REPOSITORIES)
+# LOGGING INFRASTRUCTURE
 # ==============================================================================
-from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConfigRepository
-from transcriptor4ai.infrastructure.persistence.model_registry_repo import ModelRegistryRepository
-from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
+from transcriptor4ai.infrastructure.logging.logger_factory import configure_logging
 
 # ==============================================================================
 # NETWORK ADAPTERS (API CLIENTS)
@@ -33,9 +28,13 @@ from transcriptor4ai.infrastructure.network.pricing_api_client import PricingApi
 from transcriptor4ai.infrastructure.network.telemetry_api_client import TelemetryApiClient
 
 # ==============================================================================
-# LOGGING INFRASTRUCTURE
+# PERSISTENCE ADAPTERS (REPOSITORIES)
 # ==============================================================================
-from transcriptor4ai.infrastructure.logging.logger_factory import configure_logging
+from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConfigRepository
+from transcriptor4ai.infrastructure.persistence.model_registry_repo import ModelRegistryRepository
+from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
+from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
+from transcriptor4ai.infrastructure.system.user_context_adapter import UserContextAdapter
 
 __all__ = [
     # System

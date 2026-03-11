@@ -12,7 +12,6 @@ from transcriptor4ai.application.pipeline.components.file_writer import (
 )
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 
-
 # ==============================================================================
 # TEST GROUP: MASTER CONTEXT INTEGRITY
 # ==============================================================================

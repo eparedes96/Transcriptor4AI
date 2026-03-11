@@ -2,8 +2,10 @@
 # TEST GROUP: CORE PIPELINE ORCHESTRATOR
 # ==============================================================================
 
-import pytest
 import threading
+
+import pytest
+
 from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
 

@@ -1,6 +1,6 @@
 import pytest
-from transcriptor4ai.shared import converters
 
+from transcriptor4ai.shared import converters
 
 # ==============================================================================
 # TEST GROUP: STRING CONVERSION (to_str)

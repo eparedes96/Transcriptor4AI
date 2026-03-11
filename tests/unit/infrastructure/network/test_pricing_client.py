@@ -1,5 +1,6 @@
 import pytest
 import requests
+
 from transcriptor4ai.infrastructure.network.telemetry_api_client import TelemetryApiClient
 
 # ==============================================================================

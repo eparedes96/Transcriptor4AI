@@ -17,20 +17,20 @@ import sys
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional
 
+# Application Pipeline
+from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
+from transcriptor4ai.application.pipeline.stages.validator import validate_config
+
 # Domain Entities & Results
 from transcriptor4ai.domain.entities.app_config import get_default_config
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.infrastructure import UserContextAdapter
 
 # Infrastructure Implementation (Concrete Adapters)
 from transcriptor4ai.infrastructure.logging import LoggingConfig, configure_logging, get_logger
 from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConfigRepository
 from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
-from transcriptor4ai.infrastructure import UserContextAdapter
-
-# Application Pipeline
-from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
-from transcriptor4ai.application.pipeline.stages.validator import validate_config
 
 # Interface Utilities
 from transcriptor4ai.interface.cli import argument_parser as cli_args

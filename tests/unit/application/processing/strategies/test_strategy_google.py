@@ -1,7 +1,8 @@
-import pytest
 import os
-from transcriptor4ai.application.processing.strategies.google import GoogleApiStrategy
 
+import pytest
+
+from transcriptor4ai.application.processing.strategies.google import GoogleApiStrategy
 
 # ==============================================================================
 # TEST GROUP: GOOGLE GEMINI TOKENIZATION STRATEGY

@@ -15,7 +15,6 @@ import pytest
 from transcriptor4ai.application.analysis.tree_renderer import render_tree_structure
 from transcriptor4ai.domain.entities.file_node import FileNode
 
-
 # ==============================================================================
 # TEST GROUP: TREE RENDERING & FORMATTING LOGIC
 # ==============================================================================

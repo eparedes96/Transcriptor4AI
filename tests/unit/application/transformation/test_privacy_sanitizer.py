@@ -3,8 +3,8 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: PRIVACY SANITIZER SERVICE (UNIT)
 # ==============================================================================
-
 import pytest
+
 from transcriptor4ai.application.transformation.privacy_sanitizer import PrivacySanitizerService
 
 

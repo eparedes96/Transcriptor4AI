@@ -1,6 +1,6 @@
 import pytest
-from transcriptor4ai.interface.cli.app import main
 
+from transcriptor4ai.interface.cli.app import main
 
 # ==============================================================================
 # TEST GROUP: CLI ERROR HANDLING AND RESILIENCE

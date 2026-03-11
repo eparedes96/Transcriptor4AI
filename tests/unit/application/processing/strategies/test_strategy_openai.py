@@ -1,6 +1,6 @@
 import pytest
-from transcriptor4ai.application.processing.strategies.openai import TiktokenStrategy
 
+from transcriptor4ai.application.processing.strategies.openai import TiktokenStrategy
 
 # ==============================================================================
 # TEST GROUP: OPENAI TIKTOKEN STRATEGY

@@ -2,8 +2,9 @@
 # TEST GROUP: GUI PROFILE CONTROLLER LOGIC
 # ==============================================================================
 
+
 import pytest
-from unittest.mock import MagicMock, patch
+
 from transcriptor4ai.interface.gui.controllers.profile_controller import ProfileController
 
 

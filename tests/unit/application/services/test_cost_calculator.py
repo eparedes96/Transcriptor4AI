@@ -3,8 +3,8 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: COST CALCULATOR SERVICE
 # ==============================================================================
-
 import pytest
+
 from transcriptor4ai.application.services.cost_calculator import CostCalculatorService
 
 

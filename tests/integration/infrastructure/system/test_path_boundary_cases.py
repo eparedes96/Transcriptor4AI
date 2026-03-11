@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
+
 import pytest
-from pathlib import Path
 
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
-
 
 # ==============================================================================
 # TEST GROUP: PATH RESOLUTION AND BOUNDARY CASES

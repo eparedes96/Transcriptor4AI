@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
+
 # ==============================================================================
 # TEST GROUP: PIPELINE RESULTS ENTITY
 # ==============================================================================
-
 import pytest
-from dataclasses import FrozenInstanceError
 
 from transcriptor4ai.domain.entities.pipeline_results import (
-    PipelineResult,
+    create_error_result,
     create_success_result,
-    create_error_result
 )
 
 

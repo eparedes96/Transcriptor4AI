@@ -10,9 +10,11 @@ background tasks with the main thread event loop.
 
 import logging
 import threading
-from typing import Any
 
 import customtkinter as ctk
+
+# Application Services & Tasks
+from transcriptor4ai.application.services.update_service import UpdateManager
 
 # Bootstrap & DI
 from transcriptor4ai.interface.gui.bootstrap.di_container import build_application_context
@@ -21,13 +23,10 @@ from transcriptor4ai.interface.gui.bootstrap.startup import (
     setup_visual_theme,
     start_log_polling,
 )
+from transcriptor4ai.interface.gui.common import async_workers
 
 # Common Helpers
 from transcriptor4ai.interface.gui.common.dialog_helpers import browse_directory
-
-# Application Services & Tasks
-from transcriptor4ai.application.services.update_service import UpdateManager
-from transcriptor4ai.interface.gui.common import async_workers
 
 # View Components
 from transcriptor4ai.interface.gui.components.dashboard import DashboardFrame

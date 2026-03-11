@@ -18,8 +18,6 @@ Categories:
 # ==============================================================================
 # PIPELINE ORCHESTRATION
 # ==============================================================================
-from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
-
 # ==============================================================================
 # ANALYSIS SERVICES (AST & STRUCTURE)
 # ==============================================================================
@@ -28,6 +26,7 @@ from transcriptor4ai.application.analysis.ast_parser import (
     generate_skeleton_code,
 )
 from transcriptor4ai.application.analysis.tree_generator import generate_directory_tree
+from transcriptor4ai.application.pipeline.orchestrator import run_pipeline
 
 # ==============================================================================
 # PROCESSING SERVICES (TOKENIZATION)
@@ -38,19 +37,19 @@ from transcriptor4ai.application.processing.token_service import (
 )
 
 # ==============================================================================
+# CROSS-CUTTING SERVICES
+# ==============================================================================
+from transcriptor4ai.application.services.cost_calculator import CostCalculatorService
+from transcriptor4ai.application.services.project_scanner import ProjectScannerService
+from transcriptor4ai.application.services.update_service import UpdateManager
+
+# ==============================================================================
 # TRANSFORMATION SERVICES (REFACTORED)
 # ==============================================================================
 from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
 from transcriptor4ai.application.transformation.privacy_sanitizer import (
     PrivacySanitizerService,
 )
-
-# ==============================================================================
-# CROSS-CUTTING SERVICES
-# ==============================================================================
-from transcriptor4ai.application.services.cost_calculator import CostCalculatorService
-from transcriptor4ai.application.services.project_scanner import ProjectScannerService
-from transcriptor4ai.application.services.update_service import UpdateManager
 
 __all__ = [
     # Pipeline

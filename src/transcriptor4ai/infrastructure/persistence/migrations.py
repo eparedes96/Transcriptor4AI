@@ -8,8 +8,8 @@ dictionaries to the latest schema version. This module contains pure logic
 transformations and does not perform I/O operations.
 """
 
-import logging
 import copy
+import logging
 from typing import Any, Dict
 
 logger = logging.getLogger(__name__)

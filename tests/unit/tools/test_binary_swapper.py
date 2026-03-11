@@ -1,9 +1,6 @@
-import os
-import sys
 import pytest
-import subprocess
-from tools.sidecar import binary_swapper
 
+from tools.sidecar import binary_swapper
 
 # ==============================================================================
 # TEST GROUP: PROCESS SYNCHRONIZATION (wait_for_pid)

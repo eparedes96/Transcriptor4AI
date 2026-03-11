@@ -11,7 +11,6 @@ Produces high-level architectural overviews optimized for LLM context density.
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 # Internal Analysis & Rendering

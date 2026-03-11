@@ -1,8 +1,9 @@
 import threading
-import pytest
 from concurrent.futures import ThreadPoolExecutor
-from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
 
+import pytest
+
+from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
 
 # ==============================================================================
 # TEST GROUP: SQLITE CACHE CONCURRENCY & STRESS

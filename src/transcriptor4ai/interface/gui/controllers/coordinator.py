@@ -10,10 +10,11 @@ infrastructure ports and application services.
 """
 
 import logging
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
     import customtkinter as ctk
+
     from transcriptor4ai.domain.ports.cache_port import ICacheRepository
     from transcriptor4ai.domain.ports.config_port import IConfigRepository
     from transcriptor4ai.domain.ports.model_port import IModelRegistry
@@ -25,12 +26,12 @@ from transcriptor4ai.application.services.cost_calculator import CostCalculatorS
 
 # Sub-Controllers (Delegates)
 from transcriptor4ai.interface.gui.controllers.config_synchronizer import ConfigSynchronizer
-from transcriptor4ai.interface.gui.controllers.session_manager import SessionManager
-from transcriptor4ai.interface.gui.controllers.view_interactions import ViewInteractionHandler
 from transcriptor4ai.interface.gui.controllers.execution_controller import ExecutionController
 from transcriptor4ai.interface.gui.controllers.feedback_controller import FeedbackController
 from transcriptor4ai.interface.gui.controllers.pricing_controller import PricingController
 from transcriptor4ai.interface.gui.controllers.profile_controller import ProfileController
+from transcriptor4ai.interface.gui.controllers.session_manager import SessionManager
+from transcriptor4ai.interface.gui.controllers.view_interactions import ViewInteractionHandler
 
 # Standardized infrastructure logger
 logger = logging.getLogger(__name__)

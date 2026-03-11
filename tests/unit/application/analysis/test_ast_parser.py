@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 # ==============================================================================
 # TEST GROUP: AST PARSER SERVICE (UNIT)
 # ==============================================================================
-
 import pytest
-from pathlib import Path
+
 from transcriptor4ai.application.analysis.ast_parser import extract_definitions
+
 
 @pytest.fixture
 def calculator_file_path(sample_project_source: Path) -> Path:

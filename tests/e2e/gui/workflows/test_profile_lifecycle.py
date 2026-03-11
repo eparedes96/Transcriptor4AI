@@ -2,9 +2,9 @@
 # TEST GROUP: PROFILE LIFECYCLE WORKFLOW (SAVE, LOAD, DELETE)
 # ==============================================================================
 
+
 import pytest
-import os
-from unittest.mock import MagicMock, patch
+
 from transcriptor4ai.interface.gui.controllers.profile_controller import ProfileController
 
 

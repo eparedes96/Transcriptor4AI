@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import pytest
@@ -11,7 +10,6 @@ from transcriptor4ai.application.pipeline.components.file_writer import (
     append_entry,
     initialize_output_file,
 )
-
 
 # ==============================================================================
 # TEST GROUP: FILE INITIALIZATION

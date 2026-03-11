@@ -2,10 +2,10 @@
 # TEST GROUP: TRANSCRIPTION ENGINE CORE FLOW
 # ==============================================================================
 
-import pytest
 import threading
-import os
-from unittest.mock import MagicMock, ANY
+
+import pytest
+
 from transcriptor4ai.application.pipeline.stages.transcriber_engine import execute_parallel_workers
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
 

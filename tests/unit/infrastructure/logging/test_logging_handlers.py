@@ -1,6 +1,5 @@
 import logging
 import os
-from logging.handlers import RotatingFileHandler
 
 import pytest
 
@@ -11,7 +10,6 @@ from transcriptor4ai.infrastructure.logging.logging_handlers import (
     _is_our_handler,
     _tag_handler,
 )
-
 
 # ==============================================================================
 # TEST GROUP: HANDLER IDENTIFICATION (TAGGING)

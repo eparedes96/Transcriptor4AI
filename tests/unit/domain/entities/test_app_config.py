@@ -3,14 +3,12 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: APP CONFIGURATION ENTITY
 # ==============================================================================
-
 import pytest
-from typing import Any, Dict
 
 from transcriptor4ai.domain.entities.app_config import (
-    get_default_config,
+    apply_config_integrity,
     get_default_app_state,
-    apply_config_integrity
+    get_default_config,
 )
 
 # 1. ARRANGE: Shared constants for the test group

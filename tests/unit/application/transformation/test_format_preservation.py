@@ -1,8 +1,9 @@
-import pytest
 import textwrap
+
+import pytest
+
 from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
 from transcriptor4ai.application.transformation.privacy_sanitizer import PrivacySanitizerService
-
 
 # ==============================================================================
 # TEST GROUP: FORMAT PRESERVATION & LOGIC INTEGRITY

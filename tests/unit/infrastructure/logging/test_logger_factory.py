@@ -1,20 +1,17 @@
 import logging
-import queue
-from logging.handlers import QueueHandler, QueueListener
-from pathlib import Path
+from logging.handlers import QueueHandler
 
 import pytest
 
 from transcriptor4ai.infrastructure.logging.logger_factory import (
+    _CONFIGURED_FLAG_ATTR,
+    _QUEUE_LISTENER_ATTR,
     configure_logging,
+    get_default_gui_log_path,
     get_logger,
     get_recent_logs,
-    get_default_gui_log_path,
-    _CONFIGURED_FLAG_ATTR,
-    _QUEUE_LISTENER_ATTR
 )
 from transcriptor4ai.infrastructure.logging.logging_config import LoggingConfig
-
 
 # ==============================================================================
 # TEST GROUP: LOGGING FACTORY CORE

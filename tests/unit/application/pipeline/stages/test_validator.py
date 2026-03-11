@@ -3,9 +3,10 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: CONFIGURATION VALIDATOR STAGE
 # ==============================================================================
-
 import pytest
+
 from transcriptor4ai.application.pipeline.stages.validator import validate_config
+
 
 @pytest.mark.unit
 def test_validate_none_returns_defaults():

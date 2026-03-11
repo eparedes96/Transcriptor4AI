@@ -3,9 +3,9 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: CLI ARGUMENT PARSER
 # ==============================================================================
-
 import pytest
-from transcriptor4ai.interface.cli.argument_parser import build_parser, args_to_overrides
+
+from transcriptor4ai.interface.cli.argument_parser import args_to_overrides, build_parser
 
 
 def parse_args(arg_list: list[str]):

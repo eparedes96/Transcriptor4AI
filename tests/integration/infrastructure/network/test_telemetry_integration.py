@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 import requests
-from transcriptor4ai.infrastructure.network.telemetry_api_client import TelemetryApiClient
 
+from transcriptor4ai.infrastructure.network.telemetry_api_client import TelemetryApiClient
 
 # ==============================================================================
 # TEST GROUP: TELEMETRY API CLIENT INTEGRATION

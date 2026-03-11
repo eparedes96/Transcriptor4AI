@@ -15,7 +15,7 @@ import threading
 from typing import Any, Dict, List, Optional
 
 # Local imports
-from transcriptor4ai.application.pipeline.components.file_filters import default_extensions
+from transcriptor4ai.application.common.file_filters import default_extensions
 from transcriptor4ai.application.pipeline.stages.transcriber_context import (
     generate_config_hash,
     initialize_env,

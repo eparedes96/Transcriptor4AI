@@ -2,9 +2,10 @@
 # TEST GROUP: SQLITE CACHE REPOSITORY (INTEGRATION)
 # ==============================================================================
 
-import os
 import sqlite3
+
 import pytest
+
 from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
 
 

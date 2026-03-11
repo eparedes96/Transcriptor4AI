@@ -14,7 +14,6 @@ from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteC
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 from transcriptor4ai.infrastructure.system.user_context_adapter import UserContextAdapter
 
-
 # ==============================================================================
 # TEST GROUP: PIPELINE RESILIENCE & CHAOS TESTING
 # ==============================================================================

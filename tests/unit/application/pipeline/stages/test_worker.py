@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from unittest.mock import ANY
+
 # ==============================================================================
 # TEST GROUP: ATOMIC TRANSCRIPTION WORKER (UNIT)
 # ==============================================================================
-
 import pytest
-from unittest.mock import MagicMock, ANY
+
 # Importamos el módulo completo para poder espiar sus funciones internas
 import transcriptor4ai.application.pipeline.stages.worker as worker_module
 from transcriptor4ai.application.pipeline.stages.worker import process_file_task

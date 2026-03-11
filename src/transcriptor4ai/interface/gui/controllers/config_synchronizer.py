@@ -8,8 +8,7 @@ Provides bidirectional data binding between the domain configuration model
 via FormBinder and handles complex field transformations (CSV parsing).
 """
 
-import os
-from typing import List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple
 
 import customtkinter as ctk
 

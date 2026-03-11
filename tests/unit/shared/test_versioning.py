@@ -8,8 +8,8 @@ by comparing version strings with different formats and metadata.
 """
 
 import pytest
-from transcriptor4ai.shared.versioning import is_newer, _parse_version
 
+from transcriptor4ai.shared.versioning import _parse_version, is_newer
 
 # ==============================================================================
 # TEST GROUP: VERSION PARSING LOGIC

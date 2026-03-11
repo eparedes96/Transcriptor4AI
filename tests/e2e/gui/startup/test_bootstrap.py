@@ -1,8 +1,10 @@
 import pytest
-import customtkinter as ctk
-from transcriptor4ai.interface.gui.bootstrap.di_container import build_application_context, ApplicationContext
-from transcriptor4ai.interface.gui.components.main_window import create_main_window
 
+from transcriptor4ai.interface.gui.bootstrap.di_container import (
+    ApplicationContext,
+    build_application_context,
+)
+from transcriptor4ai.interface.gui.components.main_window import create_main_window
 
 # ==============================================================================
 # TEST GROUP: GUI BOOTSTRAP AND DI LIFESTYLE

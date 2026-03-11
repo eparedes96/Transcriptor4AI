@@ -9,6 +9,7 @@ transcription units and error reporting within the processing domain.
 
 from dataclasses import dataclass
 
+
 # ==============================================================================
 # DOMAIN ENTITIES
 # ==============================================================================

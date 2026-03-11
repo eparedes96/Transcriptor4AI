@@ -16,25 +16,24 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
-# ==============================================================================
-# IMPORTS
-# ==============================================================================
-
-# Domain Ports and Entities
-from transcriptor4ai.domain.entities.pipeline_results import PipelineResult, create_error_result
-from transcriptor4ai.domain.ports.cache_port import ICacheRepository
-from transcriptor4ai.domain.ports.system_port import IFileSystem
-from transcriptor4ai.domain.ports.user_port import IUserContext
+# Application Services
+from transcriptor4ai.application.analysis.tree_generator import generate_directory_tree
 
 # Application Stages
 from transcriptor4ai.application.pipeline.stages.assembler import assemble_and_finalize
 from transcriptor4ai.application.pipeline.stages.setup import prepare_environment
 from transcriptor4ai.application.pipeline.stages.transcriber import transcribe_code
 from transcriptor4ai.application.pipeline.stages.validator import validate_config
-
-# Application Services
-from transcriptor4ai.application.analysis.tree_generator import generate_directory_tree
 from transcriptor4ai.application.services.project_scanner import ProjectScannerService
+
+# ==============================================================================
+# IMPORTS
+# ==============================================================================
+# Domain Ports and Entities
+from transcriptor4ai.domain.entities.pipeline_results import PipelineResult, create_error_result
+from transcriptor4ai.domain.ports.cache_port import ICacheRepository
+from transcriptor4ai.domain.ports.system_port import IFileSystem
+from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # Global logger initialization
 logger = logging.getLogger(__name__)

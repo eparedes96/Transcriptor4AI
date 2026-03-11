@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from transcriptor4ai.infrastructure.logging.logging_config import LoggingConfig, _LEVEL_MAP
+from transcriptor4ai.infrastructure.logging.logging_config import _LEVEL_MAP, LoggingConfig
 
 # ==============================================================================
 # TEST GROUP: LOGGING CONFIGURATION CONTRACT

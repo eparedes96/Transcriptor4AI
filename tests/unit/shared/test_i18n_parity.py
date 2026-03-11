@@ -1,10 +1,9 @@
 import json
 import re
 from pathlib import Path
-from typing import Dict, Set, Any
+from typing import Any, Dict, Set
 
 import pytest
-
 
 # ==============================================================================
 # TEST GROUP: I18N PARITY AND COMPLIANCE

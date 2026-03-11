@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from unittest.mock import ANY, patch
+
 # ==============================================================================
 # TEST GROUP: EXECUTION CONTROLLER (GUI LOGIC)
 # ==============================================================================
-
 import pytest
-from unittest.mock import MagicMock, patch, ANY
-from transcriptor4ai.interface.gui.controllers.execution_controller import ExecutionController
+
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.interface.gui.controllers.execution_controller import ExecutionController
 
 
 @pytest.fixture

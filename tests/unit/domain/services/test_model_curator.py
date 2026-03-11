@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from typing import Any, Dict
+
 # ==============================================================================
 # TEST GROUP: MODEL CURATOR SERVICE
 # ==============================================================================
-
 import pytest
-from typing import Any, Dict
 
 from transcriptor4ai.domain.services.model_curator import curate_model_list
 

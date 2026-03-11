@@ -2,11 +2,9 @@
 # TEST GROUP: GUI MODAL LOGIC (RESULTS, FEEDBACK, UPDATE, CRASH)
 # ==============================================================================
 
-import pytest
-import os
-import sys
-from unittest.mock import MagicMock, patch, ANY
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # ==============================================================================
 # FIXTURES: UI ISOLATION
@@ -31,8 +29,13 @@ def mock_ui_libs(mocker):
     mocker.patch("customtkinter.CTkFont", MagicMock())
 
 
-from transcriptor4ai.interface.gui.dialogs import results_modal, feedback_modal, update_modal, crash_modal
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.interface.gui.dialogs import (
+    crash_modal,
+    feedback_modal,
+    results_modal,
+    update_modal,
+)
 
 
 @pytest.fixture

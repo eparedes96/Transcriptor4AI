@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import re
+
 import pytest
 
-from transcriptor4ai.application.pipeline.components.file_filters import (
+from transcriptor4ai.application.common.file_filters import (
+    _gitignore_to_regex,
     compile_patterns,
     default_exclude_patterns,
     default_extensions,
@@ -14,9 +16,7 @@ from transcriptor4ai.application.pipeline.components.file_filters import (
     load_gitignore_patterns,
     matches_any,
     matches_include,
-    _gitignore_to_regex,
 )
-
 
 # ==============================================================================
 # TEST GROUP: DEFAULTS & COMPILATION

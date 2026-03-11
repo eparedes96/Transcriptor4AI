@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import time
+
 import pytest
-from typing import List
 
 from transcriptor4ai.infrastructure.persistence.sqlite_cache_repo import SqliteCacheRepository
-
 
 # ==============================================================================
 # TEST GROUP: SQLITE CACHE THROUGHPUT & PERFORMANCE

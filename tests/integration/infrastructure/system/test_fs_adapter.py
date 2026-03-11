@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
+
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 
 

@@ -1,7 +1,8 @@
-import pytest
 import os
-from transcriptor4ai.application.processing.strategies.anthropic import AnthropicApiStrategy
 
+import pytest
+
+from transcriptor4ai.application.processing.strategies.anthropic import AnthropicApiStrategy
 
 # ==============================================================================
 # TEST GROUP: ANTHROPIC TOKENIZATION STRATEGY

@@ -22,9 +22,14 @@ from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
 from transcriptor4ai.domain.entities.transcription_error import TranscriptionError
 
 # ==============================================================================
-# SERVICES (PURE BUSINESS LOGIC)
+# EXCEPTIONS (BUSINESS ERRORS)
 # ==============================================================================
-from transcriptor4ai.domain.services.model_curator import curate_model_list
+from transcriptor4ai.domain.exceptions import (
+    ConfigurationError,
+    DomainError,
+    InfrastructureError,
+    TranscriptionFailedError,
+)
 
 # ==============================================================================
 # PORTS (INFRASTRUCTURE CONTRACTS)
@@ -37,14 +42,9 @@ from transcriptor4ai.domain.ports.system_port import IFileSystem
 from transcriptor4ai.domain.ports.user_port import IUserContext
 
 # ==============================================================================
-# EXCEPTIONS (BUSINESS ERRORS)
+# SERVICES (PURE BUSINESS LOGIC)
 # ==============================================================================
-from transcriptor4ai.domain.exceptions import (
-    ConfigurationError,
-    DomainError,
-    InfrastructureError,
-    TranscriptionFailedError,
-)
+from transcriptor4ai.domain.services.model_curator import curate_model_list
 
 __all__ = [
     # Entities

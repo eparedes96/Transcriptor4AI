@@ -2,9 +2,10 @@
 # TEST GROUP: JSON CONFIGURATION REPOSITORY (INTEGRATION)
 # ==============================================================================
 
-import json
 import shutil
+
 import pytest
+
 from transcriptor4ai.infrastructure.persistence.json_config_repo import JsonConfigRepository
 from transcriptor4ai.shared import constants as const
 

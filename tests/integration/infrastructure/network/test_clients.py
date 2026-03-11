@@ -2,12 +2,12 @@
 # TEST GROUP: NETWORK INFRASTRUCTURE CLIENTS (INTEGRATION)
 # ==============================================================================
 
+
 import pytest
 import requests
-from io import BytesIO
-from transcriptor4ai.infrastructure.network.pricing_api_client import PricingApiClient
-from transcriptor4ai.infrastructure.network.github_release_client import GithubReleaseClient
 
+from transcriptor4ai.infrastructure.network.github_release_client import GithubReleaseClient
+from transcriptor4ai.infrastructure.network.pricing_api_client import PricingApiClient
 
 # ------------------------------------------------------------------------------
 # PRICING API CLIENT TESTS

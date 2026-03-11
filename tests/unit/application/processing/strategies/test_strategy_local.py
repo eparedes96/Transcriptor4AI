@@ -1,10 +1,10 @@
 import pytest
-from transcriptor4ai.application.processing.strategies.local import (
-    TransformersStrategy,
-    MistralStrategy,
-    _TOKENIZER_CACHE
-)
 
+from transcriptor4ai.application.processing.strategies.local import (
+    _TOKENIZER_CACHE,
+    MistralStrategy,
+    TransformersStrategy,
+)
 
 # ==============================================================================
 # TEST GROUP: LOCAL TOKENIZATION STRATEGIES (TRANSFORMERS & MISTRAL)

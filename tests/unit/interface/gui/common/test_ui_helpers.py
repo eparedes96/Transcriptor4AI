@@ -2,13 +2,14 @@
 # TEST GROUP: GUI UI HELPERS & WIDGETS
 # ==============================================================================
 
-import pytest
 from unittest.mock import MagicMock
-from transcriptor4ai.interface.gui.common.ui_widgets import (
-    parse_list_from_string,
-    CTkScrollableDropdown
-)
 
+import pytest
+
+from transcriptor4ai.interface.gui.common.ui_widgets import (
+    CTkScrollableDropdown,
+    parse_list_from_string,
+)
 
 # ==============================================================================
 # TESTS FOR: parse_list_from_string

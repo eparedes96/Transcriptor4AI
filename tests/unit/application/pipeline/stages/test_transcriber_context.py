@@ -10,7 +10,6 @@ from transcriptor4ai.application.pipeline.stages.transcriber_context import (
     initialize_env,
 )
 
-
 # ==============================================================================
 # TEST GROUP: ENVIRONMENT INITIALIZATION (LOCKS & DIRS)
 # ==============================================================================

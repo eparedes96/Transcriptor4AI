@@ -3,10 +3,11 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: FILE INTEGRITY HASHING (SHA-256)
 # ==============================================================================
-
 import hashlib
 import io
+
 import pytest
+
 from transcriptor4ai.shared.hashing import calculate_sha256, compute_composite_hash
 
 

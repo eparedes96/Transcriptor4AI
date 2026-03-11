@@ -2,8 +2,9 @@
 # TEST GROUP: GUI PRICING CONTROLLER
 # ==============================================================================
 
+
 import pytest
-from unittest.mock import MagicMock, ANY
+
 from transcriptor4ai.interface.gui.controllers.pricing_controller import PricingController
 
 

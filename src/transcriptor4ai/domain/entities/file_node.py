@@ -10,6 +10,7 @@ the static analysis subsystem to build hierarchical project maps.
 from dataclasses import dataclass
 from typing import Dict, Union
 
+
 # ==============================================================================
 # DOMAIN ENTITIES
 # ==============================================================================

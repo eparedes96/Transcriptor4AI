@@ -2,11 +2,12 @@
 # TEST GROUP: TRANSCRIPTION EXECUTION WORKFLOW (FIXED)
 # ==============================================================================
 
+from unittest.mock import ANY, MagicMock
+
 import pytest
-import threading
-from unittest.mock import MagicMock, patch, ANY
-from transcriptor4ai.interface.gui.controllers.execution_controller import ExecutionController
+
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
+from transcriptor4ai.interface.gui.controllers.execution_controller import ExecutionController
 
 
 @pytest.fixture

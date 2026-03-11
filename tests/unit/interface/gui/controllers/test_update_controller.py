@@ -2,10 +2,12 @@
 # TEST GROUP: GUI UPDATE CONTROLLER
 # ==============================================================================
 
+from unittest.mock import ANY
+
 import pytest
-from unittest.mock import MagicMock, patch, ANY
-from transcriptor4ai.interface.gui.controllers.update_controller import UpdateController
+
 from transcriptor4ai.application.services.update_service import UpdateStatus
+from transcriptor4ai.interface.gui.controllers.update_controller import UpdateController
 
 
 @pytest.fixture

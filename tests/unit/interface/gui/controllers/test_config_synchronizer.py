@@ -3,9 +3,8 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: CONFIGURATION SYNCHRONIZER
 # ==============================================================================
-
 import pytest
-from unittest.mock import MagicMock
+
 from transcriptor4ai.interface.gui.controllers.config_synchronizer import ConfigSynchronizer
 
 

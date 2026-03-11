@@ -3,6 +3,7 @@
 # ==============================================================================
 
 import pytest
+
 from transcriptor4ai.application.pipeline.stages.assembler import assemble_and_finalize
 from transcriptor4ai.domain.entities.pipeline_results import PipelineResult
 

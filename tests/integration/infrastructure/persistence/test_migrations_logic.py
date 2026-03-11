@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import pytest
 from typing import Any, Dict
 
-from transcriptor4ai.infrastructure.persistence.migrations import run_migrations
+import pytest
 
+from transcriptor4ai.infrastructure.persistence.migrations import run_migrations
 
 # ==============================================================================
 # TEST GROUP: SCHEMA MIGRATIONS LOGIC

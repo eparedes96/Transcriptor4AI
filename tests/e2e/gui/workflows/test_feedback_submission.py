@@ -2,11 +2,10 @@
 # TEST GROUP: FEEDBACK SUBMISSION WORKFLOW (FIXED & SYNCHRONIZED)
 # ==============================================================================
 
-import pytest
-import platform
-import threading
+
 import customtkinter as ctk
-from unittest.mock import MagicMock, patch
+import pytest
+
 from transcriptor4ai.interface.gui.dialogs.feedback_modal import show_feedback_window
 from transcriptor4ai.shared import constants as const
 

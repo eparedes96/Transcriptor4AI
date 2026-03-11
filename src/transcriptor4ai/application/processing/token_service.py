@@ -16,7 +16,7 @@ from transcriptor4ai.application.processing.strategies import (
     DEFAULT_MODEL,
     TIKTOKEN_AVAILABLE,
     HeuristicStrategy,
-    TiktokenStrategy
+    TiktokenStrategy,
 )
 
 # Standard logger initialization

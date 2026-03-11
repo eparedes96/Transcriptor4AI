@@ -13,7 +13,7 @@ import os
 import re
 from typing import Iterable, List, Optional, Tuple, TypedDict
 
-from transcriptor4ai.application.pipeline.components.file_filters import (
+from transcriptor4ai.application.common.file_filters import (
     compile_patterns,
     default_exclude_patterns,
     default_include_patterns,

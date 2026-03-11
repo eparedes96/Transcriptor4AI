@@ -12,7 +12,7 @@ import logging
 import os
 from typing import Any, Dict, List, Tuple
 
-from transcriptor4ai.application.pipeline.components.file_filters import (
+from transcriptor4ai.application.common.file_filters import (
     default_exclude_patterns,
     default_extensions,
     default_include_patterns,

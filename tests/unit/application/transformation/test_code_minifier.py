@@ -3,8 +3,8 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: CODE MINIFIER SERVICE
 # ==============================================================================
-
 import pytest
+
 from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
 
 

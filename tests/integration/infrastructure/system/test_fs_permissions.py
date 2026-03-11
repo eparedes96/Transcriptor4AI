@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 import pytest
-from unittest.mock import MagicMock
 
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
 

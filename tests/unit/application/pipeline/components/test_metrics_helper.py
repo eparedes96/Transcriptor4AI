@@ -9,7 +9,6 @@ from transcriptor4ai.application.pipeline.components.metrics_helper import (
     initialize_results_dict,
 )
 
-
 # ==============================================================================
 # TEST GROUP: METRICS INITIALIZATION
 # ==============================================================================

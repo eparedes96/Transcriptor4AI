@@ -3,7 +3,6 @@ from __future__ import annotations
 # ==============================================================================
 # TEST GROUP: CLI SYSTEM FLOW (E2E)
 # ==============================================================================
-
 import json
 import os
 import shutil

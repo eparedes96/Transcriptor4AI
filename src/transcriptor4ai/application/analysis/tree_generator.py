@@ -11,12 +11,11 @@ Produces high-level architectural overviews optimized for LLM context density.
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
 # Internal Analysis & Rendering
 from transcriptor4ai.application.analysis.tree_renderer import render_tree_structure
-from transcriptor4ai.application.pipeline.components.file_filters import (
+from transcriptor4ai.application.common.file_filters import (
     compile_patterns,
     default_exclude_patterns,
     default_extensions,

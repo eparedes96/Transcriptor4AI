@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, cast
 
 import customtkinter as ctk
 
-from transcriptor4ai.shared import constants as const
 from transcriptor4ai.interface.gui.common.ui_widgets import CTkScrollableDropdown
+from transcriptor4ai.shared import constants as const
 from transcriptor4ai.shared.i18n import i18n
 
 # Use TYPE_CHECKING to resolve circular dependencies in static analysis

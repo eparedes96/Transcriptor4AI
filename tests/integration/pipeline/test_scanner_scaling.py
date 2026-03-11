@@ -2,11 +2,12 @@
 # TEST GROUP: PROJECT SCANNER SCALING & PERFORMANCE
 # ==============================================================================
 
-import pytest
 import re
 import time
-from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 
+import pytest
+
+from transcriptor4ai.application.services.project_scanner import ProjectScannerService
 
 # Ensures the scanner can handle large-scale projects (10k+ files) efficiently
 # without excessive memory consumption or performance degradation.

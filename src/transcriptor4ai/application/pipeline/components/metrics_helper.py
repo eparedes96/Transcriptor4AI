@@ -11,7 +11,7 @@ interpreting file types into reporting metrics (Modules, Tests, Resources).
 import logging
 from typing import Any, Dict
 
-from transcriptor4ai.application.pipeline.components.file_filters import (
+from transcriptor4ai.application.common.file_filters import (
     is_resource_file,
     is_test,
 )

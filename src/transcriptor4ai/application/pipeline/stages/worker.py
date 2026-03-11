@@ -11,16 +11,16 @@ prior to thread-safe persistence.
 
 import logging
 import threading
-from typing import Any, Dict, Iterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Iterator
 
 # 1. LOCAL ANALYSIS & TRANSFORMATION
 from transcriptor4ai.application.analysis.ast_parser import generate_skeleton_code
-from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
 
 # 2. PIPELINE COMPONENTS
-from transcriptor4ai.application.pipeline.components.file_filters import determine_target_mode
+from transcriptor4ai.application.common.file_filters import determine_target_mode
 from transcriptor4ai.application.pipeline.components.file_reader import stream_file_content
 from transcriptor4ai.application.pipeline.components.file_writer import append_entry
+from transcriptor4ai.application.transformation.code_minifier import CodeMinifierService
 
 # 3. TYPE CHECKING HINTS
 if TYPE_CHECKING:

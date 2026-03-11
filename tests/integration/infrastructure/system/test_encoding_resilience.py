@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
+
+from transcriptor4ai.application.pipeline.components.file_reader import (
+    read_file_safely,
+    stream_file_content,
+)
 from transcriptor4ai.infrastructure.system.os_file_system import FileSystemAdapter
-from transcriptor4ai.application.pipeline.components.file_reader import stream_file_content, read_file_safely
 
 # ==============================================================================
 # TEST GROUP: FILE ENCODING AND BINARY RESILIENCE

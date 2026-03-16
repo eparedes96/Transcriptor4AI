@@ -3,8 +3,8 @@ from __future__ import annotations
 """
 Global Pytest Configuration and Shared Fixtures.
 
-Defines common data structures, domain entity factories, and infrastructure 
-mocks for the Transcriptor4AI testing suite. Ensures isolation from 
+Defines common data structures, domain entity factories, and infrastructure
+mocks for the Transcriptor4AI testing suite. Ensures isolation from
 external systems (I/O, Network, OS) for Unit Tests.
 """
 
@@ -20,7 +20,7 @@ import pytest
 @pytest.fixture
 def mock_config_dict() -> Dict[str, Any]:
     """
-    Returns a complete and valid configuration dictionary for v2.1.
+    Returns a complete and valid configuration dictionary.
 
     Reflects the domain entity structure used in the pipeline and
     configuration repositories. Acts as the 'Happy Path' config state.
@@ -39,6 +39,8 @@ def mock_config_dict() -> Dict[str, Any]:
         "process_resources": False,
 
         # Output Strategies
+        "output_format": "plaintext",
+        "custom_preamble": "",
         "create_individual_files": True,
         "create_unified_file": True,
 
@@ -75,7 +77,7 @@ def mock_app_state(mock_config_dict: Dict[str, Any]) -> Dict[str, Any]:
     Used for testing persistence and migration layers.
     """
     return {
-        "version": "2.1.0",
+        "version": "2.2.0",
         "app_settings": {
             "theme": "System",
             "locale": "en",
@@ -121,7 +123,7 @@ def mock_fs(mocker: Any) -> Any:
     # Default behaviors to avoid TypeErrors in consumers
     mock.normalize_path.side_effect = lambda p, f: p if p else f
     mock.get_user_data_dir.return_value = "/mock/user/data"
-    mock.check_existing_output_files.return_value = []
+    mock.check_existing_output_files.return_value =[]
     mock.directory_exists.return_value = True
     return mock
 
